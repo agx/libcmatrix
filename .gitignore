@@ -1,0 +1,12 @@
+_build
+*.swp
+*~
+\#*#
+.\#*
+build
+.buildconfig
+.flatpak-builder
+
+GPATH
+GTAGS
+GRTAGS
