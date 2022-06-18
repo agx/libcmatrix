@@ -1715,6 +1715,15 @@ matrix_take_red_pill_cb (GObject      *obj,
 
     json_str = cm_utils_json_object_to_string (root, FALSE);
     handle_red_pill (self, root);
+
+    /* update variables only after the result is locally parsed  */
+    if (self->sync_failed || !self->is_sync)
+      {
+        self->sync_failed = FALSE;
+        self->is_sync = TRUE;
+        g_signal_emit (self, signals[STATUS_CHANGED], 0);
+      }
+
     self->callback (self->cb_data, self, CM_RED_PILL, NULL, json_str, NULL);
   }
 
