@@ -49,7 +49,6 @@ struct _CmClient
   char           *login_user_id;
   char           *homeserver;
   char           *password;
-  char           *access_token;
   char           *device_id;
   char           *device_name;
 
@@ -80,7 +79,6 @@ struct _CmClient
   gboolean        db_loading;
   gboolean        db_loaded;
   gboolean        client_enabled;
-  gboolean        force_enable;
   gboolean        has_tried_connecting;
   gboolean        is_logging_in;
   /* Set if passsword is right/success using @access_token */
