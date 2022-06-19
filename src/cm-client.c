@@ -13,6 +13,8 @@
 # include "config.h"
 #endif
 
+#define GCRYPT_NO_DEPRECATED
+#include <gcrypt.h>
 #include <libsoup/soup.h>
 
 #include "cm-net-private.h"
@@ -158,7 +160,7 @@ client_reset_state (CmClient *self)
   self->is_sync = FALSE;
   g_clear_pointer (&self->next_batch, g_free);
   g_clear_pointer (&self->key, g_free);
-  g_clear_pointer (&self->pickle_key, g_free);
+  g_clear_pointer (&self->pickle_key, gcry_free);
   g_clear_pointer (&self->filter_id, g_free);
 
   g_hash_table_remove_all (self->direct_rooms);
@@ -429,8 +431,8 @@ cm_client_finalize (GObject *object)
   g_free (self->homeserver);
   g_free (self->device_id);
   g_free (self->device_name);
-  cm_utils_free_buffer (self->password);
-  cm_utils_free_buffer (self->pickle_key);
+  gcry_free (self->password);
+  gcry_free (self->pickle_key);
 
   G_OBJECT_CLASS (cm_client_parent_class)->finalize (object);
 }
@@ -539,7 +541,7 @@ db_load_client_cb (GObject      *obj,
                         cm_client_get_user_id (self),
                         cm_client_get_device_id (self));
   else
-    g_clear_pointer (&self->pickle_key, cm_utils_free_buffer);
+    g_clear_pointer (&self->pickle_key, gcry_free);
 
   self->next_batch = g_strdup (g_object_get_data (G_OBJECT (result), "batch"));
   matrix_start_sync (self, g_steal_pointer (&task));
@@ -949,9 +951,9 @@ cm_client_set_password (CmClient   *self,
   g_return_if_fail (!self->is_logging_in);
   g_return_if_fail (!self->login_success);
 
-  /* TODO: Use gcry_secure_malloc()? */
-  cm_utils_free_buffer (self->password);
-  self->password = g_strdup (password);
+  gcry_free (self->password);
+  self->password = gcry_malloc_secure (strlen (password) + 1);
+  strcpy (self->password, password);
 }
 
 /**
@@ -1112,7 +1114,11 @@ cm_client_set_pickle_key (CmClient   *self,
   g_return_if_fail (CM_IS_CLIENT (self));
   g_return_if_fail (!self->pickle_key);
 
-  self->pickle_key = g_strdup (pickle_key);
+  if (pickle_key && *pickle_key)
+    {
+      self->pickle_key = gcry_malloc_secure (strlen (pickle_key) + 1);
+      strcpy (self->pickle_key, pickle_key);
+    }
 }
 
 /**
