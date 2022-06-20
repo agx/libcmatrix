@@ -424,6 +424,8 @@ cm_client_finalize (GObject *object)
   g_list_store_remove_all (self->joined_rooms);
   g_clear_object (&self->joined_rooms);
 
+  g_hash_table_unref (self->direct_rooms);
+
   g_free (self->user_id);
   g_free (self->login_user_id);
   g_free (self->homeserver);
