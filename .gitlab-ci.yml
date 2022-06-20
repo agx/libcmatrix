@@ -20,7 +20,7 @@ build:
     - meson test -C _build
     - ccache --show-stats
     - mkdir -p _build/meson-logs/coveragereport
-    - ninja -C _build coverage
+    - ninja -C _build coverage-html
   coverage: '/^\s+lines\.+:\s+([\d.]+\%)\s+/'
   cache:
     key: build-cmatrix
