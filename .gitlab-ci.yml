@@ -1,0 +1,46 @@
+stages:
+  - build
+  - deploy
+
+build:
+  tags:
+    - librem5
+  image: debian:bullseye
+  stage: build
+  variables:
+    MESON_ARGS: "--buildtype=debugoptimized -Db_coverage=true"
+  before_script:
+    - apt-get update -qq && apt-get install -qq ccache meson gcovr gcc
+      libsoup2.4-dev libsqlite3-dev libjson-glib-dev libgcrypt20-dev
+      libolm-dev
+  script:
+    - meson ${MESON_ARGS} _build
+    - ccache --zero-stats
+    - meson test -C _build
+    - ccache --show-stats
+    - mkdir -p _build/meson-logs/coveragereport
+    - gcovr --root=_build --html-details --print-summary
+      -o _build/meson-logs/coveragereport/index.html
+  coverage: '/^lines:.*\s+(\S+\%).*$/'
+  cache:
+    key: build-cmatrix
+    paths:
+      - _ccache/
+  artifacts:
+    when: always
+    paths:
+      - _build
+
+pages:
+  tags:
+    - librem5
+  image: busybox:1
+  stage: deploy
+  script:
+    - mkdir public
+    - mv _build/meson-logs/coveragereport ${CI_PROJECT_DIR}/public/coverage
+  artifacts:
+    paths:
+      - public
+  only:
+    - main
