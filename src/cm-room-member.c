@@ -126,6 +126,8 @@ cm_room_member_set_json_data (CmRoomMember *self,
   g_return_if_fail (object);
 
   text = cm_utils_json_object_get_string (object, "display_name");
+  if (!text)
+      text = cm_utils_json_object_get_string (object, "displayname");
   g_free (self->display_name);
   self->display_name = g_strdup (text);
 
