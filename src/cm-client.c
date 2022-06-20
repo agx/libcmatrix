@@ -543,6 +543,21 @@ db_load_client_cb (GObject      *obj,
   else
     g_clear_pointer (&self->pickle_key, gcry_free);
 
+  if (g_object_get_data (G_OBJECT (result), "rooms"))
+    {
+      g_autoptr(GPtrArray) rooms = NULL;
+
+      rooms = g_object_steal_data (G_OBJECT (result), "rooms");
+
+      for (guint i = 0; i < rooms->len; i++)
+        {
+          CmRoom *room = rooms->pdata[i];
+          cm_room_set_client (room, self);
+        }
+
+      g_list_store_splice (self->joined_rooms, 0, 0, rooms->pdata, rooms->len);
+    }
+
   self->next_batch = g_strdup (g_object_get_data (G_OBJECT (result), "batch"));
   matrix_start_sync (self, g_steal_pointer (&task));
 }
