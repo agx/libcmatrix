@@ -1326,6 +1326,7 @@ cm_db_finalize (GObject *object)
     g_warning ("Database not closed");
 
   g_clear_pointer (&self->queue, g_async_queue_unref);
+  g_free (self->db_path);
 
   G_OBJECT_CLASS (cm_db_parent_class)->finalize (object);
 }
