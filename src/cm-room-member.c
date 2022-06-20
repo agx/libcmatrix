@@ -315,3 +315,11 @@ cm_room_member_get_user_id (CmRoomMember *self)
 
   return self->user_id;
 }
+
+const char *
+cm_room_member_get_display_name (CmRoomMember *self)
+{
+  g_return_val_if_fail (CM_IS_ROOM_MEMBER (self), NULL);
+
+  return self->display_name;
+}
