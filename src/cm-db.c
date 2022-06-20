@@ -754,6 +754,54 @@ cm_db_get_room_id (CmDb       *self,
   return 0;
 }
 
+static GPtrArray *
+cm_db_get_rooms (CmDb *self,
+                 int   account_id)
+{
+  g_autoptr(GPtrArray) rooms = NULL;
+  sqlite3_stmt *stmt;
+
+  g_assert (CM_IS_DB (self));
+  g_assert (account_id);
+
+  rooms = g_ptr_array_new_full (32, g_object_unref);
+
+  sqlite3_prepare_v2 (self->db,
+                      "SELECT room_name,prev_batch,json_data FROM rooms "
+                      "WHERE account_id=?",
+                      -1, &stmt, NULL);
+  matrix_bind_int (stmt, 1, account_id, "binding when getting rooms");
+
+  while (sqlite3_step (stmt) == SQLITE_ROW)
+    {
+      char *room_id, *prev_batch, *json_str;
+      g_autoptr(JsonObject) json = NULL;
+      JsonObject *child;
+      CmRoom *room;
+
+      room_id = (char *)sqlite3_column_text (stmt, 0);
+      prev_batch = (char *)sqlite3_column_text (stmt, 1);
+      json_str = (char *)sqlite3_column_text (stmt, 2);
+
+      room = cm_room_new (room_id);
+      cm_room_set_prev_batch (room, prev_batch);
+
+      if (json_str && *json_str)
+        json = cm_utils_string_to_json_object (json_str);
+
+      child = cm_utils_json_object_get_object (json, "local");
+      cm_room_set_name (room, cm_utils_json_object_get_string (child, "alias"));
+      cm_room_set_is_direct (room, cm_utils_json_object_get_bool (child, "direct"));
+      cm_room_set_is_encrypted (room, cm_utils_json_object_get_int (child, "encryption") > 0);
+
+      g_ptr_array_add (rooms, room);
+    }
+
+  sqlite3_finalize (stmt);
+
+  return g_steal_pointer (&rooms);
+}
+
 static void
 cm_db_load_client (CmDb  *self,
                    GTask *task)
@@ -790,9 +838,13 @@ cm_db_load_client (CmDb  *self,
   if (status == SQLITE_ROW)
     {
       GObject *object = G_OBJECT (task);
+      GPtrArray *rooms;
 
       g_object_set_data_full (object, "pickle", g_strdup ((char *)sqlite3_column_text (stmt, 0)), g_free);
       g_object_set_data_full (object, "batch", g_strdup ((char *)sqlite3_column_text (stmt, 1)), g_free);
+
+      rooms = cm_db_get_rooms (self, account_id);
+      g_object_set_data_full (object, "rooms", rooms, (GDestroyNotify)g_ptr_array_unref);
     }
 
   sqlite3_finalize (stmt);
