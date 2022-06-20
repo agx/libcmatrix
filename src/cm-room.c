@@ -231,19 +231,26 @@ cm_room_init (CmRoom *self)
 }
 
 CmRoom *
-cm_room_new (CmClient   *client,
-             const char *room_id)
+cm_room_new (const char *room_id)
 {
   CmRoom *self;
 
-  g_return_val_if_fail (CM_IS_CLIENT (client), NULL);
   g_return_val_if_fail (room_id && *room_id, NULL);
 
   self = g_object_new (CM_TYPE_ROOM, NULL);
-  self->client = g_object_ref (client);
   self->room_id = g_strdup (room_id);
 
   return self;
+}
+
+void
+cm_room_set_client (CmRoom   *self,
+                    CmClient *client)
+{
+  g_return_if_fail (CM_IS_CLIENT (client));
+  g_return_if_fail (!self->client);
+
+  self->client = g_object_ref (client);
 }
 
 /**

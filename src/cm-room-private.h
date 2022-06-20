@@ -18,8 +18,9 @@
 
 G_BEGIN_DECLS
 
-CmRoom       *cm_room_new                          (CmClient            *client,
-                                                    const char          *room_id);
+CmRoom       *cm_room_new                          (const char          *room_id);
+void          cm_room_set_client                   (CmRoom              *self,
+                                                    CmClient            *client);
 void          cm_room_set_data                     (CmRoom              *self,
                                                     JsonObject          *object);
 void          cm_room_user_changed                 (CmRoom              *self,

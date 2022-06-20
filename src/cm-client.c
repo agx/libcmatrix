@@ -1497,7 +1497,8 @@ parse_direct_rooms (CmClient   *self,
               continue;
             }
 
-          room = cm_room_new (self, room_id);
+          room = cm_room_new (room_id);
+          cm_room_set_client (room, self);
           cm_room_set_is_direct (room, TRUE);
           cm_room_set_name (room, user_id->data);
           /* cm_room_save (room); */
@@ -1606,7 +1607,8 @@ handle_room_join (CmClient   *self,
             }
           else
             {
-              room = cm_room_new (self, room_id->data);
+              room = cm_room_new (room_id->data);
+              cm_room_set_client (room, self);
               g_list_store_append (self->joined_rooms, room);
               g_object_unref (room);
             }
