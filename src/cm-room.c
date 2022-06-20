@@ -536,6 +536,20 @@ cm_room_set_is_direct (CmRoom   *self,
   self->is_direct = !!is_direct;
 }
 
+void
+cm_room_set_is_encrypted (CmRoom   *self,
+                          gboolean  encrypted)
+{
+  g_return_if_fail (CM_IS_ROOM (self));
+
+  /* If encryption is already set, don't change */
+  if (self->encryption)
+    return;
+
+  if (encrypted)
+    self->encryption = g_strdup ("encrypted");
+}
+
 static void
 send_cb (GObject      *obj,
          GAsyncResult *result,

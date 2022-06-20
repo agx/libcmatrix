@@ -36,6 +36,8 @@ guint         cm_room_get_encryption_msg_count     (CmRoom              *self);
 gboolean      cm_room_is_direct                    (CmRoom              *self);
 void          cm_room_set_is_direct                (CmRoom              *self,
                                                     gboolean             is_direct);
+void          cm_room_set_is_encrypted             (CmRoom              *self,
+                                                    gboolean             encrypted);
 void          cm_room_query_keys_async             (CmRoom              *self,
                                                     GCancellable        *cancellable,
                                                     GAsyncReadyCallback  callback,
