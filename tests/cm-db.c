@@ -23,8 +23,8 @@
 
 typedef struct _Data
 {
-  char *username;
-  char *device_id;
+  const char *username;
+  const char *device_id;
 } Data;
 
 static void
@@ -78,7 +78,7 @@ add_matrix_account (CmDb       *db,
   GTask *task;
   GError *error = NULL;
   gboolean success;
-  Data *data;
+  g_autofree Data *data = NULL;
   guint i;
 
   g_assert_true (CM_IS_DB (db));
@@ -86,8 +86,8 @@ add_matrix_account (CmDb       *db,
   g_assert_nonnull (username);
 
   data = g_new0 (Data, 1);
-  data->device_id = g_strdup (device_id);
-  data->username = g_strdup (username);
+  data->device_id = device_id;
+  data->username = username;
 
   if (g_ptr_array_find_with_equal_func (client_array, data,
                                         client_matches_user_details, &i)) {
