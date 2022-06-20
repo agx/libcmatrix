@@ -40,7 +40,7 @@ static JsonObject *
 get_nth_member (JsonObject *root,
                 guint       n)
 {
-  GList *members;
+  g_autoptr(GList) members = NULL;
 
   members = json_object_get_members (root);
 
