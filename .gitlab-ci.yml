@@ -21,7 +21,7 @@ build:
     - ccache --show-stats
     - mkdir -p _build/meson-logs/coveragereport
     - ninja -C _build coverage
-  coverage: '/^lines:.*\s+(\S+\%).*$/'
+  coverage: '/^\s+lines\.+:\s+([\d.]+\%)\s+/'
   cache:
     key: build-cmatrix
     paths:
