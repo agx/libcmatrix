@@ -96,7 +96,7 @@ cm_input_stream_read_fn (GInputStream  *stream,
                          GError       **error)
 {
   CmInputStream *self = (CmInputStream *)stream;
-  gssize n_read;
+  gssize n_read = -1;
 
   if (self->gcr_error)
     goto end;
