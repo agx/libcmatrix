@@ -319,10 +319,12 @@ cm_enc_finalize (GObject *object)
   olm_clear_utility (self->utility);
   g_free (self->utility);
 
+  g_hash_table_unref (self->enc_files);
   g_hash_table_unref (self->in_olm_sessions);
   g_hash_table_unref (self->out_olm_sessions);
   g_hash_table_unref (self->in_group_sessions);
   g_hash_table_unref (self->out_group_sessions);
+  g_hash_table_unref (self->out_group_room_session);
   g_free (self->user_id);
   g_free (self->device_id);
   gcry_free (self->pickle_key);
