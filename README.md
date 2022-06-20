@@ -10,10 +10,10 @@
   A matrix protocol library writting in GObjectified C
   <br>
 
-  <a href="https://source.puris.sm/mohammed.sadiq/libcmatrix/pipelines"><img
-     src="https://source.puris.sm/mohammed.sadiq/libcmatrix/badges/main/pipeline.svg" /></a>
-  <a href="https://source.puris.sm/mohammed.sadiq/libcmatrix/coverage"><img
-     src="https://source.puris.sm/mohammed.sadiq/libcmatrix/badges/main/coverage.svg" /></a>
+  <a href="https://source.puri.sm/mohammed.sadiq/libcmatrix/pipelines"><img
+     src="https://source.puri.sm/mohammed.sadiq/libcmatrix/badges/main/pipeline.svg" /></a>
+  <a href="https://source.puri.sm/mohammed.sadiq/libcmatrix/coverage"><img
+     src="https://source.puri.sm/mohammed.sadiq/libcmatrix/badges/main/coverage.svg" /></a>
 </div>
 
 ---
@@ -55,6 +55,6 @@ Issues and Feature Requests: [GitLab][issues]
 <!-- To be updated -->
 [matrix]: https://matrix.org
 [home]: https://puri.sm
-[coverage]: https://source.puris.sm/mohammed.sadiq/libcmatrix/coverage
-[gitlab]: https://source.puris.sm/mohammed.sadiq/libcmatrix/
-[issues]: https://source.puris.sm/mohammed.sadiq/libcmatrix/issues
+[coverage]: https://source.puri.sm/mohammed.sadiq/libcmatrix/coverage
+[gitlab]: https://source.puri.sm/mohammed.sadiq/libcmatrix/
+[issues]: https://source.puri.sm/mohammed.sadiq/libcmatrix/issues
