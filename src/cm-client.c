@@ -702,16 +702,22 @@ db_save_cb (GObject      *object,
 {
   g_autoptr(CmClient) self = user_data;
   g_autoptr(GError) error = NULL;
-  gboolean status;
+  gboolean status, save_pending;
 
   status = cm_db_save_client_finish (self->cm_db, result, &error);
   self->is_saving_client = FALSE;
+
+  save_pending = self->save_client_pending;
 
   if (error || !status)
     self->save_client_pending = TRUE;
 
   if (error)
     g_warning ("Error saving to db: %s", error->message);
+
+  /* If settings changed when we were saving the current settings, repeat. */
+  if (save_pending)
+    cm_client_save (self, FALSE);
 }
 
 /*
