@@ -9,6 +9,8 @@
 # include "config.h"
 #endif
 
+#define GCRYPT_NO_DEPRECATED
+#include <gcrypt.h>
 #include <glib.h>
 #include <glib/gstdio.h>
 #include <fcntl.h>
@@ -107,6 +109,8 @@ cm_matrix_class_init (CmMatrixClass *klass)
 static void
 cm_matrix_init (CmMatrix *self)
 {
+  if (!gcry_control (GCRYCTL_INITIALIZATION_FINISHED_P))
+    g_error ("libgcrypt has not been initialized, did you run cm_init()?");
 }
 
 static void
@@ -137,6 +141,34 @@ db_open_cb (GObject      *obj,
 
   g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_READY]);
   g_task_return_boolean (task, self->is_open);
+}
+
+/**
+ * cm_init:
+ * @init_gcrypt: Whether to initialize gcrypt
+ *
+ * This function should be called to initialize the library.
+ * You may call this in main()
+ *
+ * If you don't initialize gcrypt, you should do it yourself
+ */
+void
+cm_init (gboolean init_gcrypt)
+{
+  if (init_gcrypt)
+    {
+      /* Version check should be the very first call because it
+         makes sure that important subsystems are initialized. */
+      if (!gcry_check_version (GCRYPT_VERSION))
+        {
+          g_critical ("libgcrypt version mismatch");
+          exit (2);
+        }
+      gcry_control (GCRYCTL_SUSPEND_SECMEM_WARN);
+      gcry_control (GCRYCTL_INIT_SECMEM, 512 * 1024, 0);
+      gcry_control (GCRYCTL_RESUME_SECMEM_WARN);
+      gcry_control (GCRYCTL_INITIALIZATION_FINISHED, 0);
+    }
 }
 
 /**
