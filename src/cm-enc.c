@@ -120,7 +120,8 @@ ma_olm_encrypt (OlmSession *session,
     return NULL;
 
   rand_len = olm_encrypt_random_length (session);
-  random = gcry_random_bytes_secure (rand_len, GCRY_STRONG_RANDOM);
+  if (rand_len)
+    random = gcry_random_bytes (rand_len, GCRY_STRONG_RANDOM);
 
   length = olm_encrypt_message_length (session, strlen (plain_text));
   encrypted = g_malloc (length + 1);
@@ -158,7 +159,8 @@ ma_create_olm_out_session (CmEnc      *self,
   olm_session (session);
 
   length = olm_create_outbound_session_random_length (session);
-  buffer = gcry_random_bytes_secure (length, GCRY_STRONG_RANDOM);
+  if (length)
+    buffer = gcry_random_bytes (length, GCRY_STRONG_RANDOM);
 
   error = olm_create_outbound_session (session,
                                        self->account,
@@ -275,7 +277,8 @@ create_new_details (CmEnc *self)
   cm_utils_free_buffer (pickle_key);
 
   length = olm_create_account_random_length (self->account);
-  buffer = gcry_random_bytes_secure (length, GCRY_STRONG_RANDOM);
+  if (length)
+    buffer = gcry_random_bytes (length, GCRY_STRONG_RANDOM);
   err = olm_create_account (self->account, buffer, length);
   gcry_free (buffer);
   if (err == olm_error ())
@@ -661,7 +664,8 @@ cm_enc_create_one_time_keys (CmEnc  *self,
   count = MIN (count, olm_account_max_number_of_one_time_keys (self->account) / 2);
 
   length = olm_account_generate_one_time_keys_random_length (self->account, count);
-  buffer = gcry_random_bytes_secure (length, GCRY_STRONG_RANDOM);
+  if (length)
+    buffer = gcry_random_bytes (length, GCRY_STRONG_RANDOM);
   err = olm_account_generate_one_time_keys (self->account, count, buffer, length);
 
   if (err == olm_error ())
@@ -1349,7 +1353,8 @@ cm_enc_create_out_group_keys (CmEnc      *self,
 
   /* Feed in random bits */
   length = olm_init_outbound_group_session_random_length (session);
-  random = gcry_random_bytes_secure (length, GCRY_STRONG_RANDOM);
+  if (length)
+    random = gcry_random_bytes (length, GCRY_STRONG_RANDOM);
   error = olm_init_outbound_group_session (session, random, length);
   gcry_free (random);
 
