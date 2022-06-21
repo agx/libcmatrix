@@ -149,6 +149,7 @@ main (int   argc,
 {
   g_test_init (&argc, &argv, NULL);
 
+  cm_init (TRUE);
   g_test_add_func ("/enc-chat/new", test_enc_chat_new);
 
   return g_test_run ();
