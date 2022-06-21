@@ -694,14 +694,17 @@ cm_db_save_client (CmDb  *self,
       return;
     }
 
-  root = json_object_new ();
-  obj = json_object_new ();
-  json_object_set_object_member (root, "local", obj);
-
   if (filter && *filter)
-    json_object_set_string_member (obj, "filter-id", filter);
+    {
+      root = json_object_new ();
+      obj = json_object_new ();
+      json_object_set_object_member (root, "local", obj);
 
-  json_str = cm_utils_json_object_to_string (root, FALSE);
+      if (filter && *filter)
+        json_object_set_string_member (obj, "filter-id", filter);
+
+      json_str = cm_utils_json_object_to_string (root, FALSE);
+    }
 
   sqlite3_prepare_v2 (self->db,
                       "INSERT INTO accounts(user_device_id,pickle,"
@@ -906,15 +909,18 @@ cm_db_save_room (CmDb  *self,
       return;
     }
 
-  root = json_object_new ();
-  obj = json_object_new ();
-  json_object_set_object_member (root, "local", obj);
+  if (cm_room_has_state_sync (room))
+    {
+      root = json_object_new ();
+      obj = json_object_new ();
+      json_object_set_object_member (root, "local", obj);
 
-  json_object_set_boolean_member (obj, "direct", cm_room_is_direct (room));
-  json_object_set_string_member (obj, "alias", room_alias);
-  json_object_set_int_member (obj, "encryption", cm_room_is_encrypted (room));
+      json_object_set_boolean_member (obj, "direct", cm_room_is_direct (room));
+      json_object_set_string_member (obj, "alias", room_alias);
+      json_object_set_int_member (obj, "encryption", cm_room_is_encrypted (room));
 
-  json_str = cm_utils_json_object_to_string (root, FALSE);
+      json_str = cm_utils_json_object_to_string (root, FALSE);
+    }
 
   sqlite3_prepare_v2 (self->db,
                       "INSERT INTO rooms(account_id,room_name,prev_batch,json_data) "
