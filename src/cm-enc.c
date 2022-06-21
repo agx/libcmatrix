@@ -1205,7 +1205,10 @@ cm_enc_handle_join_room_encrypted (CmEnc      *self,
 
   ciphertext = cm_utils_json_object_get_string (object, "ciphertext");
   session_id = cm_utils_json_object_get_string (object, "session_id");
-  g_return_val_if_fail (ciphertext, NULL);
+
+  /* the ciphertext can be absent, eg: in redacted events */
+  if (!ciphertext)
+    return NULL;
 
   if (session_id)
     session = g_hash_table_lookup (self->in_group_sessions, session_id);
