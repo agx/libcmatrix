@@ -338,6 +338,9 @@ cm_upload_filter_cb (GObject      *obj,
   if (!self->filter_id)
     self->filter_id = g_strdup ("");
 
+  self->save_client_pending = TRUE;
+  cm_client_save (self, FALSE);
+
   matrix_start_sync (self, NULL);
 }
 
@@ -558,6 +561,7 @@ db_load_client_cb (GObject      *obj,
       g_list_store_splice (self->joined_rooms, 0, 0, rooms->pdata, rooms->len);
     }
 
+  self->filter_id = g_strdup (g_object_get_data (G_OBJECT (result), "filter-id"));
   self->next_batch = g_strdup (g_object_get_data (G_OBJECT (result), "batch"));
   matrix_start_sync (self, g_steal_pointer (&task));
 }
