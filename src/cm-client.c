@@ -76,6 +76,12 @@ struct _CmClient
 
   guint           resync_id;
 
+  gboolean        db_migrated;
+  gboolean        room_list_loading;
+  gboolean        room_list_loaded;
+  gboolean        direct_room_list_loading;
+  gboolean        direct_room_list_loaded;
+
   gboolean        db_loading;
   gboolean        db_loaded;
   gboolean        client_enabled;
@@ -561,6 +567,7 @@ db_load_client_cb (GObject      *obj,
       g_list_store_splice (self->joined_rooms, 0, 0, rooms->pdata, rooms->len);
     }
 
+  self->db_migrated = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (result), "db-migrated"));
   self->filter_id = g_strdup (g_object_get_data (G_OBJECT (result), "filter-id"));
   self->next_batch = g_strdup (g_object_get_data (G_OBJECT (result), "batch"));
   matrix_start_sync (self, g_steal_pointer (&task));
@@ -1524,6 +1531,10 @@ parse_direct_rooms (CmClient   *self,
           room_id = json_array_get_string_element (array, i);
 
           room = g_hash_table_lookup (self->direct_rooms, room_id);
+
+          if (!room)
+            room = client_find_room (self, room_id);
+
           if (room)
             {
               cm_room_set_name (room, user_id->data);
@@ -1539,6 +1550,7 @@ parse_direct_rooms (CmClient   *self,
           cm_room_set_name (room, user_id->data);
           /* cm_room_save (room); */
 
+          /* This eats the ref on the new room */
           g_hash_table_insert (self->direct_rooms, g_strdup (room_id), room);
         }
     }
@@ -1883,6 +1895,96 @@ cm_client_get_logged_in (CmClient *self)
 }
 
 static void
+get_joined_rooms_cb (GObject      *obj,
+                     GAsyncResult *result,
+                     gpointer      user_data)
+{
+  g_autoptr(CmClient) self = user_data;
+  g_autoptr(JsonObject) root = NULL;
+  g_autoptr(GError) error = NULL;
+
+  g_assert (CM_IS_CLIENT (self));
+  g_assert (G_IS_TASK (result));
+
+  self->room_list_loading = FALSE;
+  root = g_task_propagate_pointer (G_TASK (result), &error);
+
+  if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+    return;
+
+  if (handle_matrix_glitches (self, error))
+    return;
+
+  if (!error) {
+    JsonArray *array;
+    guint length = 0;
+
+    array = cm_utils_json_object_get_array (root, "joined_rooms");
+
+    if (array)
+      length = json_array_get_length (array);
+
+    for (guint i = 0; i < length; i++)
+      {
+        const char *room_id;
+        CmRoom *room;
+
+        room_id = json_array_get_string_element (array, i);
+        room = client_find_room (self, room_id);
+
+        if (!room)
+          {
+            room = g_hash_table_lookup (self->direct_rooms, room_id);
+            if (room)
+              {
+                g_list_store_append (self->joined_rooms, room);
+                g_hash_table_remove (self->direct_rooms, room_id);
+              }
+          }
+
+        if (!room)
+          {
+            room = cm_room_new (room_id);
+            cm_room_set_client (room, self);
+            g_list_store_append (self->joined_rooms, room);
+            g_object_unref (room);
+          }
+
+        cm_room_load_async (room, self->cancellable,
+                            room_loaded_cb,
+                            g_object_ref (self));
+      }
+
+    self->room_list_loaded = TRUE;
+    matrix_start_sync (self, NULL);
+  }
+}
+
+static void
+get_direct_rooms_cb (GObject      *obj,
+                     GAsyncResult *result,
+                     gpointer      user_data)
+{
+  g_autoptr(CmClient) self = user_data;
+  g_autoptr(JsonObject) root = NULL;
+  g_autoptr(GError) error = NULL;
+
+  g_assert (CM_IS_CLIENT (self));
+  g_assert (G_IS_TASK (result));
+
+  self->direct_room_list_loading = FALSE;
+  root = g_task_propagate_pointer (G_TASK (result), &error);
+
+  if (root)
+    parse_direct_rooms (self, root);
+
+  if (root || !error)
+    self->direct_room_list_loaded = TRUE;
+
+  matrix_start_sync (self, NULL);
+}
+
+static void
 matrix_start_sync (CmClient *self,
                    gpointer  tsk)
 {
@@ -1901,7 +2003,7 @@ matrix_start_sync (CmClient *self,
 
   cancellable = g_task_get_cancellable (task);
 
-  if (self->db_loading)
+  if (self->db_loading || self->room_list_loading || self->direct_room_list_loading)
     return;
 
   if (!self->db_loaded)
@@ -1955,6 +2057,27 @@ matrix_start_sync (CmClient *self,
       client_login_with_password_async (self, cancellable,
                                         client_password_login_cb,
                                         g_steal_pointer (&task));
+    }
+  else if (self->db_migrated && !self->direct_room_list_loaded)
+    {
+      g_autofree char *uri = NULL;
+
+      self->direct_room_list_loading = TRUE;
+
+      uri = g_strconcat ("/_matrix/client/r0/user/", self->user_id,
+                         "/account_data/m.direct", NULL);
+      cm_net_send_json_async (self->cm_net, 0, NULL, uri, SOUP_METHOD_GET,
+                              NULL, NULL, get_direct_rooms_cb,
+                              g_object_ref (self));
+    }
+  else if (self->db_migrated && !self->room_list_loaded)
+    {
+      self->room_list_loading = TRUE;
+      cm_net_send_json_async (self->cm_net, 0, NULL,
+                              "/_matrix/client/r0/joined_rooms", SOUP_METHOD_GET,
+                              NULL, NULL, get_joined_rooms_cb,
+                              g_object_ref (self));
+
     }
   else if (!self->filter_id)
     {
