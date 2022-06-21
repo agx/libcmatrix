@@ -661,6 +661,17 @@ cm_client_set_db (CmClient *self,
   self->cm_db = g_object_ref (db);
 }
 
+const char *
+cm_client_get_filter_id (CmClient *self)
+{
+  g_return_val_if_fail (CM_IS_CLIENT (self), NULL);
+
+  if (self->filter_id && *self->filter_id)
+    return self->filter_id;
+
+  return NULL;
+}
+
 /**
  * cm_client_set_enabled:
  * @self: A #CmClient

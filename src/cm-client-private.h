@@ -27,6 +27,7 @@ CmNet      *cm_client_get_net                     (CmClient            *self);
 CmEnc      *cm_client_get_enc                     (CmClient            *self);
 void        cm_client_set_db                      (CmClient            *self,
                                                    CmDb                *db);
+const char *cm_client_get_filter_id               (CmClient            *self);
 void        cm_client_save                        (CmClient            *self,
                                                    gboolean             force);
 const char *cm_client_get_next_batch              (CmClient            *self);
