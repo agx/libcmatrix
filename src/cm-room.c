@@ -1679,6 +1679,30 @@ cm_room_query_keys_finish (CmRoom        *self,
 }
 
 static void
+get_room_state_cb (GObject      *object,
+                   GAsyncResult *result,
+                   gpointer      user_data)
+{
+  g_autoptr(CmRoom) self = user_data;
+  g_autoptr(JsonObject) root = NULL;
+  g_autoptr(GError) error = NULL;
+  JsonArray *array;
+
+  array = g_task_propagate_pointer (G_TASK (result), &error);
+
+  if (error)
+    return;
+
+  root = json_object_new ();
+  json_object_set_array_member (root, "events", array);
+  cm_room_parse_events (self, root);
+  self->initial_sync_done = TRUE;
+
+  self->db_save_pending = TRUE;
+  cm_room_save (self);
+}
+
+static void
 room_load_from_db_cb (GObject      *object,
                       GAsyncResult *result,
                       gpointer      user_data)
@@ -1706,9 +1730,11 @@ room_load_from_db_cb (GObject      *object,
       g_autoptr(JsonObject) root = NULL;
       JsonObject *obj;
 
+      self->initial_sync_done = TRUE;
+      self->name_loaded = TRUE;
+
       root = cm_utils_string_to_json_object (json_str);
       obj = cm_utils_json_object_get_object (root, "local");
-      self->name_loaded = TRUE;
       if (cm_utils_json_object_get_int (obj, "encryption"))
         self->encryption = g_strdup ("encrypted");
       cm_room_set_is_direct (self, cm_utils_json_object_get_bool (obj, "direct"));
@@ -1719,6 +1745,16 @@ room_load_from_db_cb (GObject      *object,
       g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
       g_task_return_boolean (task, TRUE);
       return;
+    }
+  else
+    {
+      g_autofree char *uri = NULL;
+
+      uri = g_strconcat ("/_matrix/client/r0/rooms/", self->room_id, "/state", NULL);
+      cm_net_send_json_async (cm_client_get_net (self->client), 0, NULL,
+                              uri, SOUP_METHOD_GET,
+                              NULL, NULL, get_room_state_cb,
+                              g_object_ref (self));
     }
 }
 
