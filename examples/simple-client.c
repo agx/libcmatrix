@@ -145,6 +145,9 @@ main (void)
   GMainLoop *main_loop;
   g_autofree char *db_dir = NULL;
 
+  /* Initialize the library */
+  cm_init (TRUE);
+
   /* Create a matrix object */
   matrix = g_object_new (CM_TYPE_MATRIX, NULL);
 
