@@ -365,6 +365,9 @@ cm_utils_string_to_json_object (const char *json_str)
   g_autoptr(JsonParser) parser = NULL;
   JsonNode *node;
 
+  if (!json_str || !*json_str)
+    return NULL;
+
   parser = json_parser_new ();
   if (!json_parser_load_from_data (parser, json_str, -1, NULL))
     return NULL;
