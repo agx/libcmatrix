@@ -316,6 +316,14 @@ cm_room_set_client (CmRoom   *self,
   self->client = g_object_ref (client);
 }
 
+gboolean
+cm_room_has_state_sync (CmRoom *self)
+{
+  g_return_val_if_fail (CM_IS_ROOM (self), FALSE);
+
+  return self->initial_sync_done;
+}
+
 /**
  * cm_room_get_id:
  * @self: A #CmRoom

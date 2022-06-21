@@ -21,6 +21,7 @@ G_BEGIN_DECLS
 CmRoom       *cm_room_new                          (const char          *room_id);
 void          cm_room_set_client                   (CmRoom              *self,
                                                     CmClient            *client);
+gboolean      cm_room_has_state_sync               (CmRoom              *self);
 void          cm_room_set_data                     (CmRoom              *self,
                                                     JsonObject          *object);
 void          cm_room_user_changed                 (CmRoom              *self,
