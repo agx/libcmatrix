@@ -867,6 +867,10 @@ cm_db_load_client (CmDb  *self,
       child = cm_utils_json_object_get_object (json, "local");
       filter = cm_utils_json_object_get_string (child, "filter-id");
 
+      /* If we don't have json_data the db was just migrated from older version */
+      if (sqlite3_column_text (stmt, 2) == NULL)
+        g_object_set_data (object, "db-migrated", GINT_TO_POINTER (TRUE));
+
       if (filter && *filter)
         g_object_set_data_full (object, "filter-id", g_strdup (filter), g_free);
 
