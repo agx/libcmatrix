@@ -56,6 +56,7 @@ struct _CmRoom
    * also compare with typing_set_time and TYPING_TIMEOUT */
   gboolean   typing;
 
+  gboolean    db_save_pending;
   gboolean    is_sending_message;
   gboolean    name_loaded;
   gboolean    name_loading;
@@ -347,7 +348,12 @@ cm_room_get_name (CmRoom *self)
   g_return_val_if_fail (CM_IS_ROOM (self), NULL);
 
   if (!self->name && cm_room_is_direct (self))
-    self->name = cm_room_generate_name (self);
+    {
+      self->name = cm_room_generate_name (self);
+      if (self->name)
+        self->db_save_pending = TRUE;
+      cm_room_save (self);
+    }
 
   return self->name;
 }
@@ -438,6 +444,7 @@ cm_room_parse_events (CmRoom     *self,
           child = cm_utils_json_object_get_object (child, "content");
           value = cm_utils_json_object_get_string (child, "name");
           cm_room_set_name (self, value);
+          self->db_save_pending = TRUE;
         }
       else if (!self->encryption &&
                g_strcmp0 (type, "m.room.encryption") == 0)
@@ -445,6 +452,7 @@ cm_room_parse_events (CmRoom     *self,
           child = cm_utils_json_object_get_object (child, "content");
           value = cm_utils_json_object_get_string (child, "algorithm");
           self->encryption = g_strdup (value);
+          self->db_save_pending = TRUE;
         }
 
       if (cm_room_is_direct (self) &&
@@ -481,6 +489,7 @@ cm_room_parse_events (CmRoom     *self,
                                    g_strdup (user_id), g_steal_pointer (&member));
               /* Clear the name so that it will be regenerated when name is requested */
               g_clear_pointer (&self->name, g_free);
+              g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
             }
           else if (g_strcmp0 (membership, "invite") == 0)
             {
@@ -490,6 +499,7 @@ cm_room_parse_events (CmRoom     *self,
               g_list_store_append (self->invited_members, member);
               g_hash_table_insert (self->invited_members_table,
                                    g_strdup (user_id), g_steal_pointer (&member));
+              self->db_save_pending = TRUE;
             }
         }
     }
@@ -546,9 +556,7 @@ cm_room_set_data (CmRoom     *self,
         }
     }
 
-  if (!self->initial_sync_done)
-    cm_room_save (self);
-
+  cm_room_save (self);
   self->initial_sync_done = TRUE;
 }
 
@@ -1170,6 +1178,7 @@ room_set_encryption_cb (GObject      *obj,
       event = cm_utils_json_object_get_string (object, "event_id");
       self->encryption = g_strdup ("encrypted");
       g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_ENCRYPTED]);
+      self->db_save_pending = TRUE;
       cm_room_save (self);
       g_task_return_boolean (task, !!event);
     }
@@ -1742,11 +1751,14 @@ save_room_cb (GObject      *object,
               GAsyncResult *result,
               gpointer      user_data)
 {
-  g_autoptr(CmClient) self = user_data;
+  g_autoptr(CmRoom) self = user_data;
   g_autoptr(GError) error = NULL;
 
   if (!cm_db_save_room_finish (CM_DB (object), result, &error))
-    g_warning ("Error saving room details: %s", error->message);
+    {
+      self->db_save_pending = TRUE;
+      g_warning ("Error saving room details: %s", error->message);
+    }
 }
 
 void
@@ -1754,6 +1766,10 @@ cm_room_save (CmRoom *self)
 {
   g_return_if_fail (CM_IS_ROOM (self));
 
+  if (!self->db_save_pending)
+    return;
+
+  self->db_save_pending = FALSE;
   cm_db_save_room_async (cm_client_get_db (self->client), self->client, self,
                          save_room_cb,
                          g_object_ref (self));
