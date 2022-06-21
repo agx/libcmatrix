@@ -666,8 +666,10 @@ static void
 cm_db_save_client (CmDb  *self,
                    GTask *task)
 {
+  const char *device, *pickle, *username, *batch, *filter;
+  g_autofree char *json_str = NULL;
+  JsonObject *root, *obj;
   sqlite3_stmt *stmt;
-  const char *device, *pickle, *username, *batch;
   int status, user_device_id = 0, account_id = 0;
   gboolean enabled;
 
@@ -681,6 +683,7 @@ cm_db_save_client (CmDb  *self,
   device = g_object_get_data (G_OBJECT (task), "device");
   enabled = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (task), "enabled"));
   username = g_object_get_data (G_OBJECT (task), "username");
+  filter = g_object_get_data (G_OBJECT (task), "filter-id");
 
   account_id = matrix_db_get_account_id (self, username, device, &user_device_id, TRUE);
 
@@ -691,11 +694,21 @@ cm_db_save_client (CmDb  *self,
       return;
     }
 
+  root = json_object_new ();
+  obj = json_object_new ();
+  json_object_set_object_member (root, "local", obj);
+
+  if (filter && *filter)
+    json_object_set_string_member (obj, "filter-id", filter);
+
+  json_str = cm_utils_json_object_to_string (root, FALSE);
+
   sqlite3_prepare_v2 (self->db,
-                      "INSERT INTO accounts(user_device_id,pickle,next_batch,enabled) "
-                      "VALUES(?1,?2,?3,?4) "
+                      "INSERT INTO accounts(user_device_id,pickle,"
+                      "next_batch,enabled,json_data) "
+                      "VALUES(?1,?2,?3,?4,?5) "
                       "ON CONFLICT(user_device_id) "
-                      "DO UPDATE SET pickle=?2, next_batch=?3, enabled=?4",
+                      "DO UPDATE SET pickle=?2, next_batch=?3, enabled=?4, json_data=?5",
                       -1, &stmt, NULL);
 
   matrix_bind_int (stmt, 1, user_device_id, "binding when updating account");
@@ -703,6 +716,7 @@ cm_db_save_client (CmDb  *self,
     matrix_bind_text (stmt, 2, pickle, "binding when updating account");
   matrix_bind_text (stmt, 3, batch, "binding when updating account");
   matrix_bind_int (stmt, 4, enabled, "binding when updating account");
+  matrix_bind_text (stmt, 5, json_str, "binding when updating account");
 
   status = sqlite3_step (stmt);
   sqlite3_finalize (stmt);
@@ -828,7 +842,7 @@ cm_db_load_client (CmDb  *self,
     }
 
   status = sqlite3_prepare_v2 (self->db,
-                               "SELECT pickle,next_batch "
+                               "SELECT pickle,next_batch,json_data "
                                "FROM accounts WHERE accounts.id=?",
                                -1, &stmt, NULL);
 
@@ -837,11 +851,21 @@ cm_db_load_client (CmDb  *self,
 
   if (status == SQLITE_ROW)
     {
+      const char *filter;
       GObject *object = G_OBJECT (task);
+      g_autoptr(JsonObject) json = NULL;
+      JsonObject *child;
       GPtrArray *rooms;
 
       g_object_set_data_full (object, "pickle", g_strdup ((char *)sqlite3_column_text (stmt, 0)), g_free);
       g_object_set_data_full (object, "batch", g_strdup ((char *)sqlite3_column_text (stmt, 1)), g_free);
+
+      json = cm_utils_string_to_json_object ((char *)sqlite3_column_text (stmt, 2));
+      child = cm_utils_json_object_get_object (json, "local");
+      filter = cm_utils_json_object_get_string (child, "filter-id");
+
+      if (filter && *filter)
+        g_object_set_data_full (object, "filter-id", g_strdup (filter), g_free);
 
       rooms = cm_db_get_rooms (self, account_id);
       g_object_set_data_full (object, "rooms", rooms, (GDestroyNotify)g_ptr_array_unref);
@@ -1581,6 +1605,8 @@ cm_db_save_client_async (CmDb                *self,
                           g_strdup (cm_client_get_next_batch (client)), g_free);
   g_object_set_data_full (object, "username", g_strdup (username), g_free);
   g_object_set_data_full (object, "account", g_object_ref (client), g_object_unref);
+  g_object_set_data_full (object, "filter-id",
+                          g_strdup (cm_client_get_filter_id (client)), g_free);
 
   g_async_queue_push (self->queue, task);
 }
