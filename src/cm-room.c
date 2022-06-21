@@ -1017,6 +1017,7 @@ cm_room_send_file_async (CmRoom                *self,
                          const char            *body,
                          GFileProgressCallback  progress_callback,
                          gpointer               progress_user_data,
+                         GCancellable          *cancellable,
                          GAsyncReadyCallback    callback,
                          gpointer               user_data)
 {
@@ -1026,7 +1027,7 @@ cm_room_send_file_async (CmRoom                *self,
   g_return_val_if_fail (CM_IS_ROOM (self), NULL);
   g_return_val_if_fail (G_IS_FILE (file), NULL);
 
-  task = g_task_new (self, NULL, callback, user_data);
+  task = g_task_new (self, cancellable, callback, user_data);
   g_object_set_data (G_OBJECT (task), "progress-cb", progress_callback);
   g_object_set_data (G_OBJECT (task), "progress-cb-data", progress_user_data);
 
@@ -1400,6 +1401,7 @@ room_load_prev_batch_cb (GObject      *obj,
 
 void
 cm_room_load_prev_batch_async (CmRoom              *self,
+                               GCancellable        *cancellable,
                                GAsyncReadyCallback  callback,
                                gpointer             user_data)
 {
@@ -1410,7 +1412,7 @@ cm_room_load_prev_batch_async (CmRoom              *self,
 
   g_return_if_fail (CM_IS_ROOM (self));
 
-  task = g_task_new (self, NULL, callback, user_data);
+  task = g_task_new (self, cancellable, callback, user_data);
   prev_batch = cm_room_get_prev_batch (self);
 
   if (!prev_batch)
@@ -1432,7 +1434,7 @@ cm_room_load_prev_batch_async (CmRoom              *self,
   uri = g_strconcat ("/_matrix/client/r0/rooms/", self->room_id, "/messages", NULL);
   cm_net_send_json_async (cm_client_get_net (self->client), 0, NULL,
                           uri, SOUP_METHOD_GET,
-                          query, NULL, room_load_prev_batch_cb, task);
+                          query, cancellable, room_load_prev_batch_cb, task);
 }
 
 char *

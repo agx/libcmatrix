@@ -41,6 +41,7 @@ const char   *cm_room_send_file_async             (CmRoom                *self,
                                                    const char            *body,
                                                    GFileProgressCallback  progress_callback,
                                                    gpointer               progress_user_data,
+                                                   GCancellable          *cancellable,
                                                    GAsyncReadyCallback    callback,
                                                    gpointer               user_data);
 char         *cm_room_send_file_finish            (CmRoom                *self,
@@ -77,6 +78,7 @@ gboolean      cm_room_set_read_marker_finish      (CmRoom                *self,
                                                    GAsyncResult          *result,
                                                    GError               **error);
 void          cm_room_load_prev_batch_async       (CmRoom                *self,
+                                                   GCancellable          *cancellable,
                                                    GAsyncReadyCallback    callback,
                                                    gpointer               user_data);
 char         *cm_room_load_prev_batch_finish      (CmRoom                *self,
