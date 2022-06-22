@@ -22,7 +22,6 @@ libcmatrix_headers = [
   'cm-matrix.h',
   'cm-room.h',
   'cm-room-member.h',
-  'cm-room-message.h',
 ]
 
 cmatrix_c_args = [
