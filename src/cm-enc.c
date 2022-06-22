@@ -821,7 +821,7 @@ cm_enc_get_one_time_keys_json (CmEnc *self)
 }
 
 /**
- * cm_enc_get_one_time_keys:
+ * cm_enc_get_device_keys_json:
  * @self: A #CmEnc
  *
  * Get the signed device key JSON.  The JSON shall

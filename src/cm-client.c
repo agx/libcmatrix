@@ -916,7 +916,7 @@ cm_client_get_login_id (CmClient *self)
 }
 
 /**
- * cm_client_set_login_id:
+ * cm_client_set_homeserver:
  * @self: A #CmClient
  * @homeserver: The homserver URL
  *
