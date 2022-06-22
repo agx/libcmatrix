@@ -15,7 +15,7 @@ G_BEGIN_DECLS
 #endif
 
 #ifndef CMATRIX_USE_EXPERIMENTAL_API
-# error "Redpill API is experimental, define CMATRIX_USE_EXPERIMENTAL_API to use "
+# error "libcmatrix API is experimental, define CMATRIX_USE_EXPERIMENTAL_API to use "
 #endif
 
 #define _CMATRIX_TAKEN
