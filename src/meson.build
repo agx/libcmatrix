@@ -42,3 +42,24 @@ libcmatrix_dep = declare_dependency(
   dependencies: cmatrix_deps,
   link_with: cmatrix_lib
 )
+
+if get_option('gtk_doc')
+  libcmatrix_gir_extra_args = [
+    '-L@0@'.format(meson.current_build_dir()),
+    '--quiet',
+   ]
+
+  libcmatrix_gir = gnome.generate_gir(cmatrix_lib,
+                 sources: libcmatrix_sources + libcmatrix_headers,
+               nsversion: '0',
+               namespace: 'CM',
+         export_packages: 'cmatrix-0',
+           symbol_prefix: 'cm',
+       identifier_prefix: 'Cm',
+               link_with: cmatrix_lib,
+                includes: ['Gio-2.0', 'Soup-2.4'],
+                 install: false,
+              extra_args: libcmatrix_gir_extra_args,
+   )
+
+endif

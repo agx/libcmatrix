@@ -122,6 +122,7 @@ cmatrix_deps = [
 
 subdir('src')
 subdir('tests')
+subdir('doc')
 
 if (get_option('build-examples'))
   subdir('examples')
