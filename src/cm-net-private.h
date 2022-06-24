@@ -56,5 +56,16 @@ void           cm_net_get_file_async      (CmNet                 *self,
 GInputStream  *cm_net_get_file_finish     (CmNet                 *self,
                                            GAsyncResult          *result,
                                            GError               **error);
+void          cm_net_put_file_async       (CmNet                 *self,
+                                           GFile                 *file,
+                                           gboolean               encrypt,
+                                           GFileProgressCallback  progress_callback,
+                                           gpointer               progress_user_data,
+                                           GCancellable          *cancellable,
+                                           GAsyncReadyCallback    callback,
+                                           gpointer               user_data);
+char         *cm_net_put_file_finish      (CmNet                 *self,
+                                           GAsyncResult          *result,
+                                           GError               **error);
 
 G_END_DECLS

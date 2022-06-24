@@ -150,7 +150,7 @@ session_send_cb (GObject      *object,
   self = g_task_get_source_object (task);
   g_assert (CM_IS_NET (self));
 
-  stream = soup_session_send_finish (self->soup_session, result, &error);
+  stream = soup_session_send_finish (SOUP_SESSION (object), result, &error);
 
   if (error) {
     if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
@@ -489,6 +489,171 @@ cm_net_get_file_finish (CmNet         *self,
   g_return_val_if_fail (CM_IS_NET (self), NULL);
   g_return_val_if_fail (G_IS_TASK (result), NULL);
   g_return_val_if_fail (!error || !*error, NULL);
+
+  return g_task_propagate_pointer (G_TASK (result), error);
+}
+
+static void
+put_file_async_cb (GObject      *obj,
+                   GAsyncResult *result,
+                   gpointer      user_data)
+{
+  CmNet *self = user_data;
+  g_autoptr(JsonObject) root = NULL;
+  GError *error = NULL;
+  GTask *task, *local_task;
+
+  local_task = G_TASK (result);
+  g_assert (G_IS_TASK (local_task));
+
+  self = g_task_get_source_object (local_task);
+  task = g_task_get_task_data (local_task);
+
+  g_assert (G_IS_TASK (task));
+  g_assert (CM_IS_NET (self));
+
+  root = g_task_propagate_pointer (G_TASK (result), &error);
+  g_assert_no_error (error);
+
+  if (root)
+    {
+      const char *file_url;
+
+      file_url = cm_utils_json_object_get_string (root, "content_uri");
+      g_task_return_pointer (task, g_strdup (file_url), g_free);
+    }
+  else
+    {
+      if (error)
+        g_task_return_error (task, error);
+      else
+        g_task_return_pointer (task, NULL, NULL);
+    }
+}
+
+static void
+put_file_chunk (GTask       *task,
+                SoupMessage *msg)
+{
+  CmNet *self;
+  GInputStream *stream;
+  char buffer[8 * 1024];
+  gssize n_read;
+
+  g_assert (G_IS_TASK (task));
+  g_assert (SOUP_IS_MESSAGE (msg));
+
+  self = g_task_get_source_object (task);
+  g_assert (CM_IS_NET (self));
+
+  stream = g_object_get_data (G_OBJECT (task), "stream");
+  n_read = g_input_stream_read (stream, buffer, 8 * 1024, NULL, NULL);
+
+  if (n_read == 0)
+    {
+      soup_message_body_complete (msg->request_body);
+    }
+  else if (n_read == -1)
+    {
+      soup_session_cancel_message (self->file_session, msg, SOUP_STATUS_CANCELLED);
+    }
+  else
+    {
+      soup_message_body_append (msg->request_body, SOUP_MEMORY_COPY, buffer, n_read);
+    }
+}
+
+static void
+wrote_body_data_cb (GTask       *task,
+                    SoupMessage *msg,
+                    SoupBuffer  *chunk)
+{
+  GFileProgressCallback progress_cb;
+  gpointer progress_user_data;
+
+  progress_cb = g_object_get_data (G_OBJECT (task), "progress-cb");
+  progress_user_data = g_object_get_data (G_OBJECT (task), "progress-cb-data");
+  g_assert (progress_cb);
+
+  progress_cb (0, 0, progress_user_data);
+}
+
+void
+cm_net_put_file_async (CmNet                 *self,
+                       GFile                 *file,
+                       gboolean               encrypt,
+                       GFileProgressCallback  progress_callback,
+                       gpointer               progress_user_data,
+                       GCancellable          *cancellable,
+                       GAsyncReadyCallback    callback,
+                       gpointer               user_data)
+{
+  g_autoptr(GHashTable) query = NULL;
+  g_autoptr(GError) error = NULL;
+  g_autofree char *url = NULL;
+  CmInputStream *cm_stream;
+  GTask *task, *local_task;
+  SoupMessage *msg;
+
+  if (!cancellable)
+    cancellable = self->cancellable;
+
+  cm_stream = cm_input_stream_new_from_file (file, encrypt, cancellable, &error);
+  task = g_task_new (self, cancellable, callback, user_data);
+
+  if (!cm_stream)
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED,
+                               "Failed to create stream: %s", error->message ?: "");
+      return;
+    }
+
+  query = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+  g_hash_table_replace (query, g_strdup ("filename"), g_file_get_basename (file));
+  g_hash_table_replace (query, g_strdup ("access_token"), g_strdup (self->access_token));
+
+  url = g_strconcat (self->homeserver, "/_matrix/media/r0/upload", NULL);
+  msg = soup_message_new (SOUP_METHOD_POST, url);
+  soup_uri_set_query_from_form (soup_message_get_uri (msg), query);
+
+  /* We're uploading files in chunk */
+  soup_message_headers_set_encoding (msg->request_headers, SOUP_ENCODING_CHUNKED);
+  soup_message_body_set_accumulate (msg->request_body, FALSE);
+  soup_message_headers_set_content_length (msg->request_headers,
+                                           cm_input_stream_get_size (cm_stream));
+  soup_message_headers_set_content_type (msg->request_headers,
+                                         cm_input_stream_get_content_type (cm_stream), NULL);
+
+  /* Use this once we port to libsoup-3 */
+  /* soup_message_set_request_body (msg, "fixme", G_INPUT_STREAM (cm_stream), -1); */
+
+  g_task_set_task_data (task, g_object_ref (file), g_object_unref);
+  g_object_set_data_full (G_OBJECT (task), "msg", msg, g_object_unref);
+  g_object_set_data_full (G_OBJECT (task), "stream", cm_stream, g_object_unref);
+
+  local_task = g_task_new (self, cancellable, put_file_async_cb, self);
+  g_task_set_task_data (local_task, task, g_object_unref);
+
+  g_signal_connect_object (msg, "wrote-headers",
+                           G_CALLBACK (put_file_chunk), task, G_CONNECT_SWAPPED);
+  g_signal_connect_object (msg, "wrote-chunk",
+                           G_CALLBACK (put_file_chunk), task, G_CONNECT_SWAPPED);
+  if (progress_callback)
+    g_signal_connect_object (msg, "wrote-body-data",
+                             G_CALLBACK (wrote_body_data_cb), task, G_CONNECT_SWAPPED);
+
+  soup_session_send_async (self->file_session, msg, cancellable,
+                           session_send_cb, local_task);
+}
+
+char *
+cm_net_put_file_finish (CmNet         *self,
+                        GAsyncResult  *result,
+                        GError       **error)
+{
+  g_return_val_if_fail (CM_IS_NET (self), FALSE);
+  g_return_val_if_fail (G_IS_TASK (result), FALSE);
+  g_return_val_if_fail (!error || !*error, FALSE);
 
   return g_task_propagate_pointer (G_TASK (result), error);
 }
