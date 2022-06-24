@@ -21,9 +21,15 @@ G_BEGIN_DECLS
 
 G_DECLARE_FINAL_TYPE (CmInputStream, cm_input_stream, CM, INPUT_STREAM, GFilterInputStream)
 
-CmInputStream *cm_input_stream_new          (GInputStream  *base_stream);
-void           cm_input_stream_set_file_enc (CmInputStream *self,
-                                             CmEncFileInfo *file);
-void           cm_input_stream_set_encrypt  (CmInputStream *self);
+CmInputStream  *cm_input_stream_new                   (GInputStream        *base_stream);
+CmInputStream  *cm_input_stream_new_from_file         (GFile               *file,
+                                                       gboolean             encrypt,
+                                                       GCancellable        *cancellable,
+                                                       GError             **error);
+void            cm_input_stream_set_file_enc          (CmInputStream       *self,
+                                                       CmEncFileInfo       *file);
+void            cm_input_stream_set_encrypt           (CmInputStream       *self);
+const char     *cm_input_stream_get_content_type      (CmInputStream       *self);
+goffset         cm_input_stream_get_size              (CmInputStream       *self);
 
 G_END_DECLS

@@ -29,6 +29,10 @@ struct _CmInputStream
   char              *aes_iv_base64;
   char              *sha256_base64;
 
+  /* For files that will be used to upload */
+  GFile             *file;
+  GFileInfo         *file_info;
+  gboolean           encrypt;
 
   char              *decrypt_buffer;
   int                buffer_len;
@@ -141,6 +145,9 @@ cm_input_stream_finalize (GObject *object)
 
   g_free (self->decrypt_buffer);
 
+  g_clear_object (&self->file);
+  g_clear_object (&self->file_info);
+
   G_OBJECT_CLASS (cm_input_stream_parent_class)->finalize (object);
 }
 
@@ -166,6 +173,43 @@ cm_input_stream_new (GInputStream *base_stream)
   return g_object_new (CM_TYPE_INPUT_STREAM,
                        "base-stream", base_stream,
                        NULL);
+}
+
+CmInputStream *
+cm_input_stream_new_from_file (GFile         *file,
+                               gboolean       encrypt,
+                               GCancellable  *cancellable,
+                               GError       **error)
+{
+  CmInputStream *self;
+  GInputStream *stream;
+  GFileInfo *file_info;
+
+  g_return_val_if_fail (G_IS_FILE (file), NULL);
+  g_return_val_if_fail (!cancellable || G_IS_CANCELLABLE (cancellable), NULL);
+
+  stream = G_INPUT_STREAM (g_file_read (file, cancellable, error));
+
+  if (!stream)
+    return NULL;
+
+  file_info = g_file_query_info (file,
+                                 G_FILE_ATTRIBUTE_STANDARD_SIZE","G_FILE_ATTRIBUTE_STANDARD_CONTENT_TYPE,
+                                 G_FILE_QUERY_INFO_NONE,
+                                 cancellable,
+                                 error);
+  if (!file_info)
+    return NULL;
+
+  self = cm_input_stream_new (stream);
+  self->file_info = file_info;
+  self->file = g_object_ref (file);
+  self->encrypt = !!encrypt;
+
+  if (encrypt)
+    cm_input_stream_set_encrypt (self);
+
+  return self;
 }
 
 void
@@ -254,4 +298,33 @@ cm_input_stream_set_encrypt (CmInputStream *self)
 
       cm_utils_clear ((char *)iv, 16);
     }
+}
+
+const char *
+cm_input_stream_get_content_type (CmInputStream *self)
+{
+  const char *content_type;
+
+  g_return_val_if_fail (CM_IS_INPUT_STREAM (self), NULL);
+
+  if (!self->file_info)
+    return NULL;
+
+  content_type = g_file_info_get_content_type (self->file_info);
+
+  if (content_type && !self->encrypt)
+    return content_type;
+
+  return "application/octect-stream";
+}
+
+goffset
+cm_input_stream_get_size (CmInputStream *self)
+{
+  g_return_val_if_fail (CM_IS_INPUT_STREAM (self), 0);
+
+  if (!self->file_info)
+    return 0;
+
+  return g_file_info_get_size (self->file_info);
 }
