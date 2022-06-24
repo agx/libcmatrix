@@ -320,7 +320,9 @@ cm_input_stream_set_encrypt (CmInputStream *self)
     {
       g_autofree guchar *iv = NULL;
 
-      iv = g_malloc (16);
+      /* The first 8 bytes has to be random, and the rest (counter) has to be 0 */
+      iv = g_malloc0 (16);
+      gcry_randomize (iv, 8, GCRY_STRONG_RANDOM);
       self->aes_iv_base64 = value_to_unpadded_base64 (iv, 16, FALSE);
       self->gcr_error = gcry_cipher_setctr (cipher_hd, iv, 16);
 
