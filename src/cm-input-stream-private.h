@@ -29,6 +29,7 @@ CmInputStream  *cm_input_stream_new_from_file         (GFile               *file
 void            cm_input_stream_set_file_enc          (CmInputStream       *self,
                                                        CmEncFileInfo       *file);
 void            cm_input_stream_set_encrypt           (CmInputStream       *self);
+char           *cm_input_stream_get_sha256            (CmInputStream       *self);
 const char     *cm_input_stream_get_content_type      (CmInputStream       *self);
 goffset         cm_input_stream_get_size              (CmInputStream       *self);
 

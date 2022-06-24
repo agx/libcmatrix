@@ -32,9 +32,11 @@ struct _CmInputStream
   /* For files that will be used to upload */
   GFile             *file;
   GFileInfo         *file_info;
+  GChecksum         *checksum;
+  gboolean           checksum_complete;
   gboolean           encrypt;
 
-  char              *decrypt_buffer;
+  char              *buffer;
   int                buffer_len;
 
   gcry_error_t       gcr_error;
@@ -110,19 +112,42 @@ cm_input_stream_read_fn (GInputStream  *stream,
 
   if (self->cipher_hd && n_read > 0)
     {
+      /* We need sha256 checksums only for encrypted/to be encrypted files */
+      if (!self->checksum)
+        self->checksum = g_checksum_new (G_CHECKSUM_SHA256);
+
       if (G_UNLIKELY (self->buffer_len < n_read))
         {
           self->buffer_len = MAX (n_read, 1024 * 8);
-          self->decrypt_buffer = g_realloc (self->decrypt_buffer, self->buffer_len);
+          self->buffer = g_realloc (self->buffer, self->buffer_len);
+        }
+    }
+
+  /* Since it's CTR mode, the encrypted and decrypted always have the same size */
+  if (self->cipher_hd && n_read > 0)
+    {
+      if (self->encrypt)
+        {
+          self->gcr_error = gcry_cipher_encrypt (self->cipher_hd, self->buffer,
+                                                 n_read, buffer, n_read);
+          /* we are encrypting, calculate the checksum after encryption */
+          if (!self->gcr_error)
+            g_checksum_update (self->checksum, (gpointer)self->buffer, n_read);
+        }
+      else
+        {
+          /* we are decrypting, calculate the checksum before decryption */
+          g_checksum_update (self->checksum, buffer, n_read);
+          self->gcr_error = gcry_cipher_decrypt (self->cipher_hd, self->buffer,
+                                                 n_read, buffer, n_read);
         }
 
-      /* Since it's CTR mode, the encrypted and decrypted always have the same size */
-      self->gcr_error = gcry_cipher_decrypt (self->cipher_hd, self->decrypt_buffer, n_read,
-                                             buffer, n_read);
-
       if (!self->gcr_error)
-        memcpy (buffer, self->decrypt_buffer, count);
+        memcpy (buffer, self->buffer, n_read);
     }
+
+  if (!self->gcr_error && self->cipher_hd && n_read == 0)
+    self->checksum_complete = TRUE;
 
  end:
   if (self->gcr_error)
@@ -143,7 +168,10 @@ cm_input_stream_finalize (GObject *object)
   if (self->cipher_hd)
     gcry_cipher_close (self->cipher_hd);
 
-  g_free (self->decrypt_buffer);
+  if (self->checksum)
+    g_checksum_free (self->checksum);
+
+  g_free (self->buffer);
 
   g_clear_object (&self->file);
   g_clear_object (&self->file_info);
@@ -298,6 +326,24 @@ cm_input_stream_set_encrypt (CmInputStream *self)
 
       cm_utils_clear ((char *)iv, 16);
     }
+}
+
+char *
+cm_input_stream_get_sha256 (CmInputStream *self)
+{
+  guint8 *buffer;
+  gsize digest_len;
+
+  g_return_val_if_fail (CM_IS_INPUT_STREAM (self), NULL);
+
+  if (!self->checksum || !self->checksum_complete)
+    return NULL;
+
+  digest_len = g_checksum_type_get_length (G_CHECKSUM_SHA256);
+  buffer = g_malloc (digest_len);
+  g_checksum_get_digest (self->checksum, buffer, &digest_len);
+
+  return value_to_unpadded_base64 (buffer, digest_len, FALSE);
 }
 
 const char *
