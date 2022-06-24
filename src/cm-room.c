@@ -9,6 +9,7 @@
 # include "config.h"
 #endif
 
+#include "cm-input-stream-private.h"
 #include "cm-client-private.h"
 #include "cm-utils-private.h"
 #include "cm-net-private.h"
@@ -825,8 +826,30 @@ room_prepare_message (CmRoom  *self,
     }
 
   root = json_object_new ();
-  json_object_set_string_member (root, "msgtype", "m.text");
-  json_object_set_string_member (root, "body", message->text);
+  if (message->file)
+    {
+      g_autofree char *name = NULL;
+
+      name = g_file_get_basename (message->file);
+      json_object_set_string_member (root, "msgtype", "m.file");
+      json_object_set_string_member (root, "body", name);
+      json_object_set_string_member (root, "filename", name);
+      if (!self->encryption)
+        {
+          const char *mxc_uri;
+
+          mxc_uri = g_object_get_data (G_OBJECT (message->file), "uri");
+          if (mxc_uri)
+            json_object_set_string_member (root, "url", mxc_uri);
+          else
+            g_warn_if_reached ();
+        }
+    }
+  else
+    {
+      json_object_set_string_member (root, "msgtype", "m.text");
+      json_object_set_string_member (root, "body", message->text);
+    }
 
   if (self->encryption)
     {
@@ -838,6 +861,16 @@ room_prepare_message (CmRoom  *self,
       json_object_set_string_member (object, "room_id", self->room_id);
       json_object_set_object_member (object, "content", root);
 
+      if (message->file)
+        {
+          JsonObject *file_json;
+          CmInputStream *stream;
+
+          stream = g_object_get_data (G_OBJECT (message->file), "stream");
+          file_json = cm_input_stream_get_file_json (stream);
+          json_object_set_object_member (root, "file", file_json);
+        }
+
       text = cm_utils_json_object_to_string (object, FALSE);
       message->object = cm_enc_encrypt_for_chat (cm_client_get_enc (self->client),
                                                  self->room_id, text);
@@ -846,6 +879,63 @@ room_prepare_message (CmRoom  *self,
     {
       message->object = root;
     }
+}
+
+static void
+room_send_file_cb (GObject      *object,
+                   GAsyncResult *result,
+                   gpointer      user_data)
+{
+  CmRoom *self;
+  g_autoptr(GTask) task = user_data;
+  g_autoptr(GError) error = NULL;
+  g_autofree char *uri = NULL;
+  CmInputStream *stream;
+  char *mxc_uri = NULL;
+  Message *message;
+
+  g_assert (G_IS_TASK (task));
+
+  self = g_task_get_source_object (task);
+  message = g_task_get_task_data (task);
+
+  g_assert (CM_IS_ROOM (self));
+  g_assert (message);
+
+  mxc_uri = cm_net_put_file_finish (CM_NET (object), result, &error);
+
+  if (!mxc_uri)
+    {
+      self->is_sending_message = FALSE;
+
+      g_task_return_new_error (message->task, G_IO_ERROR, G_IO_ERROR_FAILED,
+                               "Failed to upload file: %s", error->message ?: "");
+      room_send_message_from_queue (self);
+
+      return;
+    }
+
+  stream = g_object_get_data (G_OBJECT (result), "stream");
+  g_assert (stream);
+  g_object_ref (stream);
+
+  g_object_set_data_full (G_OBJECT (message->file), "uri", mxc_uri, g_free);
+  g_object_set_data_full (G_OBJECT (message->file), "stream", stream, g_object_unref);
+  g_object_set_data_full (G_OBJECT (stream), "uri", g_strdup (mxc_uri), g_free);
+  room_prepare_message (self, message);
+
+  /* https://matrix.org/docs/spec/client_server/r0.6.1#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid */
+  if (self->encryption)
+    uri = g_strdup_printf ("/_matrix/client/r0/rooms/%s/send/m.room.encrypted/%s",
+                           self->room_id, message->event_id);
+  else
+    uri = g_strdup_printf ("/_matrix/client/r0/rooms/%s/send/m.room.message/%s",
+                           self->room_id, message->event_id);
+
+  cm_net_send_json_async (cm_client_get_net (self->client), 0,
+                          json_object_ref (message->object),
+                          uri, SOUP_METHOD_PUT, NULL, g_task_get_cancellable (message->task),
+                          send_cb, message);
 }
 
 static void
@@ -918,6 +1008,25 @@ room_send_message_from_queue (CmRoom *self)
     }
 
   message = g_queue_pop_head (self->message_queue);
+
+  if (message->file)
+    {
+      GFileProgressCallback progress_cb;
+      gpointer progress_user_data;
+      GTask *task;
+
+      progress_cb = g_object_get_data (G_OBJECT (message->task), "progress-cb");
+      progress_user_data = g_object_get_data (G_OBJECT (message->task), "progress-cb-data");
+
+      task = g_task_new (self, NULL, NULL, NULL);
+      g_task_set_task_data (task, message, NULL);
+      cm_net_put_file_async (cm_client_get_net (self->client),
+                             message->file, !!self->encryption,
+                             progress_cb, progress_user_data,
+                             g_task_get_cancellable (message->task),
+                             room_send_file_cb, task);
+      return;
+    }
 
   room_prepare_message (self, message);
 
