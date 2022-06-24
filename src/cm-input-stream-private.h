@@ -32,5 +32,6 @@ void            cm_input_stream_set_encrypt           (CmInputStream       *self
 char           *cm_input_stream_get_sha256            (CmInputStream       *self);
 const char     *cm_input_stream_get_content_type      (CmInputStream       *self);
 goffset         cm_input_stream_get_size              (CmInputStream       *self);
+JsonObject     *cm_input_stream_get_file_json         (CmInputStream       *self);
 
 G_END_DECLS

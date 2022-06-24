@@ -374,3 +374,49 @@ cm_input_stream_get_size (CmInputStream *self)
 
   return g_file_info_get_size (self->file_info);
 }
+
+JsonObject *
+cm_input_stream_get_file_json (CmInputStream *self)
+{
+  g_autofree char *sha256 = NULL;
+  JsonObject *root, *child;
+  JsonArray *array;
+  const char *url;
+
+  g_return_val_if_fail (CM_IS_INPUT_STREAM (self), NULL);
+
+  /* Return JSON only if the stream is used to encrypt and after file
+   * has been read completely
+   */
+  if (!self->encrypt || !self->checksum_complete || !self->cipher_hd)
+    return NULL;
+
+  /* The mxc url should have set somewhere else */
+  if (!g_object_get_data (G_OBJECT (self), "uri"))
+    return NULL;
+
+  url = g_object_get_data (G_OBJECT (self), "uri");
+  root = json_object_new ();
+  json_object_set_string_member (root, "v", "v2");
+  json_object_set_string_member (root, "url", url);
+  json_object_set_string_member (root, "iv", self->aes_iv_base64);
+
+  sha256 = cm_input_stream_get_sha256 (self);
+  child = json_object_new ();
+  json_object_set_string_member (child, "sha256", sha256);
+  json_object_set_object_member (root, "hashes", child);
+
+  array = json_array_new ();
+  json_array_add_string_element (array, "encrypt");
+  json_array_add_string_element (array, "decrypt");
+
+  child = json_object_new ();
+  json_object_set_array_member (child, "key_ops", array);
+  json_object_set_string_member (child, "alg", "A256CTR");
+  json_object_set_string_member (child, "kty", "oct");
+  json_object_set_string_member (child, "k", self->aes_key_base64);
+  json_object_set_boolean_member (child, "ext", TRUE);
+  json_object_set_object_member (root, "key", child);
+
+  return root;
+}
