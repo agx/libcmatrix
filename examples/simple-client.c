@@ -11,7 +11,9 @@
 
 #include <stdio.h>
 
-#define CMATRIX_USE_EXPERIMENTAL_API
+#ifndef CMATRIX_USE_EXPERIMENTAL_API
+# define CMATRIX_USE_EXPERIMENTAL_API
+#endif /* CMATRIX_USE_EXPERIMENTAL_API */
 #include "cmatrix.h"
 
 CmMatrix *matrix;

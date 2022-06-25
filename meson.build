@@ -78,6 +78,7 @@ add_project_arguments(
 add_project_arguments([
   '-DHAVE_CONFIG_H',
   '-DCMATRIX_COMPILATION',
+  '-DCMATRIX_USE_EXPERIMENTAL_API',
 ], language: 'c')
 
 config_h = configuration_data()
@@ -121,6 +122,7 @@ cmatrix_deps = [
 
 subdir('src')
 subdir('tests')
+subdir('doc')
 
 if (get_option('build-examples'))
   subdir('examples')

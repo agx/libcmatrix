@@ -341,7 +341,7 @@ cm_room_get_id (CmRoom *self)
 }
 
 /**
- * cm_room_get_id:
+ * cm_room_get_name:
  * @self: A #CmRoom
  *
  * Get the matrix room name.  Can be %NULL

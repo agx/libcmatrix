@@ -31,6 +31,26 @@ build:
     paths:
       - _build
 
+doc:
+  tags:
+    - librem5:arm64
+  image: debian:bookworm
+  stage: build
+  before_script:
+    - apt-get update -qq && apt-get install -qq ccache meson gcovr gcc
+      libsoup2.4-dev libsqlite3-dev libjson-glib-dev libgcrypt20-dev
+      libolm-dev gi-docgen libgirepository1.0-dev
+  variables:
+    BUILD_OPTS: >-
+      -Dgtk_doc=true
+  script:
+    - meson ${BUILD_OPTS} _build
+    - ninja -C _build
+    - mv _build/doc/libcmatrix-0 _doc/
+  artifacts:
+    paths:
+      - _doc/
+
 pages:
   tags:
     - librem5

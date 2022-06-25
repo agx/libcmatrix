@@ -1551,7 +1551,7 @@ cm_db_close_async (CmDb                *self,
 }
 
 /**
- * cm_db_open_finish:
+ * cm_db_close_finish:
  * @self: a #CmDb
  * @result: a #GAsyncResult provided to callback
  * @error: a location for a #GError or %NULL
