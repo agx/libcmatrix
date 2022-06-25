@@ -4,7 +4,7 @@ Slug: building
 # Compiling with libcmatrix
 
 If you need to build libcmatrix, get the source from
-[here](https://gitlab.gnome.org/World/Phosh/libcmatrix/) and see the `README.md` file.
+[here](https://source.puri.sm/Librem5/libcmatrix/) and see the `README.md` file.
 
 ## Bundling the library
 
