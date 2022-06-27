@@ -9,10 +9,10 @@ libcmatrix_sources = [
   'cm-room.c',
   'cm-room-member.c',
   'cm-input-stream.c',
-  # 'cm-room-message.c',
   'cm-utils.c',
   'events/cm-event.c',
   'events/cm-room-event.c',
+  'events/cm-room-message-event.c',
 ]
 
 libcmatrix_headers = [
