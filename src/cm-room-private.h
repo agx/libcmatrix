@@ -31,6 +31,8 @@ void          cm_room_set_prev_batch               (CmRoom              *self,
                                                     const char          *prev_batch);
 void          cm_room_set_name                     (CmRoom              *self,
                                                     const char          *name);
+void          cm_room_set_generated_name           (CmRoom              *self,
+                                                    const char          *name);
 gint64        cm_room_get_encryption_rotation_time (CmRoom              *self);
 CmRoomType    cm_room_get_room_type                (CmRoom              *self);
 guint         cm_room_get_encryption_msg_count     (CmRoom              *self);

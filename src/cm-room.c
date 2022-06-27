@@ -34,6 +34,7 @@ struct _CmRoom
   GHashTable *invited_members_table;
   CmClient   *client;
   char       *name;
+  char       *generated_name;
   char       *room_id;
   char       *encryption;
   char       *prev_batch;
@@ -230,6 +231,9 @@ cm_room_finalize (GObject *object)
   g_clear_object (&self->client);
   g_free (self->room_id);
 
+  g_free (self->name);
+  g_free (self->generated_name);
+
   G_OBJECT_CLASS (cm_room_parent_class)->finalize (object);
 }
 
@@ -348,15 +352,18 @@ cm_room_get_name (CmRoom *self)
 {
   g_return_val_if_fail (CM_IS_ROOM (self), NULL);
 
-  if (!self->name && cm_room_is_direct (self))
+  if (!self->generated_name && !self->name && cm_room_is_direct (self))
     {
-      self->name = cm_room_generate_name (self);
-      if (self->name)
+      self->generated_name = cm_room_generate_name (self);
+      if (self->generated_name)
         self->db_save_pending = TRUE;
       cm_room_save (self);
     }
 
-  return self->name;
+  if (self->name)
+    return self->name;
+
+  return self->generated_name;
 }
 
 /**
@@ -489,7 +496,7 @@ cm_room_parse_events (CmRoom     *self,
               g_hash_table_insert (self->joined_members_table,
                                    g_strdup (user_id), g_steal_pointer (&member));
               /* Clear the name so that it will be regenerated when name is requested */
-              g_clear_pointer (&self->name, g_free);
+              g_clear_pointer (&self->generated_name, g_free);
               g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
             }
           else if (g_strcmp0 (membership, "invite") == 0)
@@ -619,6 +626,18 @@ cm_room_set_name (CmRoom     *self,
 
   g_free (self->name);
   self->name = g_strdup (name);
+}
+
+void
+cm_room_set_generated_name (CmRoom     *self,
+                            const char *name)
+{
+  g_return_if_fail (CM_IS_ROOM (self));
+
+  g_free (self->generated_name);
+  self->generated_name = g_strdup (name);
+
+  self->db_save_pending = TRUE;
 }
 
 /* cm_room_get_encryption_rotation_time:
