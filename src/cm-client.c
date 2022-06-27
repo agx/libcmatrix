@@ -1537,7 +1537,7 @@ parse_direct_rooms (CmClient   *self,
 
           if (room)
             {
-              cm_room_set_name (room, user_id->data);
+              cm_room_set_generated_name (room, user_id->data);
               cm_room_set_is_direct (room, TRUE);
               /* cm_room_save (room); */
 
@@ -1547,7 +1547,7 @@ parse_direct_rooms (CmClient   *self,
           room = cm_room_new (room_id);
           cm_room_set_client (room, self);
           cm_room_set_is_direct (room, TRUE);
-          cm_room_set_name (room, user_id->data);
+          cm_room_set_generated_name (room, user_id->data);
           /* cm_room_save (room); */
 
           /* This eats the ref on the new room */
