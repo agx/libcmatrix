@@ -15,19 +15,11 @@
 #include "cm-net-private.h"
 #include "cm-enc-private.h"
 #include "cm-common.h"
+#include "events/cm-room-message-event-private.h"
 #include "cm-room-member-private.h"
 #include "cm-room-member.h"
 #include "cm-room-private.h"
 #include "cm-room.h"
-
-typedef struct _Message
-{
-  GTask *task;
-  char  *text;
-  char  *event_id;
-  GFile *file;
-  JsonObject *object;
-} Message;
 
 #define KEY_TIMEOUT         10000 /* milliseconds */
 #define TYPING_TIMEOUT      4     /* seconds */
@@ -696,14 +688,14 @@ send_cb (GObject      *obj,
          gpointer      user_data)
 {
   CmRoom *self;
-  Message *message = user_data;
+  GTask *message_task = user_data;
   g_autoptr(JsonObject) object = NULL;
   GError *error = NULL;
   const char *event_id = NULL;
 
-  g_assert (G_IS_TASK (message->task));
+  g_assert (G_IS_TASK (message_task));
 
-  self = g_task_get_source_object (message->task);
+  self = g_task_get_source_object (message_task);
   object = g_task_propagate_pointer (G_TASK (result), &error);
 
   event_id = cm_utils_json_object_get_string (object, "event_id");
@@ -715,11 +707,11 @@ send_cb (GObject      *obj,
   if (error)
     {
       g_debug ("Error sending message: %s", error->message);
-      g_task_return_error (message->task, error);
+      g_task_return_error (message_task, error);
     }
   else
     {
-      g_task_return_pointer (message->task, g_strdup (event_id), g_free);
+      g_task_return_pointer (message_task, g_strdup (event_id), g_free);
     }
 }
 
@@ -809,28 +801,26 @@ claim_key_cb (GObject      *obj,
 }
 
 static void
-room_prepare_message (CmRoom  *self,
-                      Message *message)
+room_prepare_message (CmRoom             *self,
+                      CmRoomMessageEvent *message)
 {
   g_autofree char *uri = NULL;
+  const char *body;
   JsonObject *root;
+  GFile *file;
 
   g_assert (CM_IS_ROOM (self));
-  g_assert (message);
+  g_assert (CM_IS_ROOM_MESSAGE_EVENT (message));
 
-  if (!message->event_id)
-    {
-      message->event_id = g_strdup_printf ("m%"G_GINT64_FORMAT".%d",
-                                           g_get_real_time () / G_TIME_SPAN_MILLISECOND,
-                                           cm_client_pop_event_id (self->client));
-    }
+  body = cm_room_message_event_get_plain (message);
+  file = cm_room_message_event_get_file (message);
 
   root = json_object_new ();
-  if (message->file)
+  if (file)
     {
       g_autofree char *name = NULL;
 
-      name = g_file_get_basename (message->file);
+      name = g_file_get_basename (file);
       json_object_set_string_member (root, "msgtype", "m.file");
       json_object_set_string_member (root, "body", name);
       json_object_set_string_member (root, "filename", name);
@@ -838,7 +828,7 @@ room_prepare_message (CmRoom  *self,
         {
           const char *mxc_uri;
 
-          mxc_uri = g_object_get_data (G_OBJECT (message->file), "uri");
+          mxc_uri = g_object_get_data (G_OBJECT (file), "uri");
           if (mxc_uri)
             json_object_set_string_member (root, "url", mxc_uri);
           else
@@ -848,7 +838,7 @@ room_prepare_message (CmRoom  *self,
   else
     {
       json_object_set_string_member (root, "msgtype", "m.text");
-      json_object_set_string_member (root, "body", message->text);
+      json_object_set_string_member (root, "body", body);
     }
 
   if (self->encryption)
@@ -861,23 +851,27 @@ room_prepare_message (CmRoom  *self,
       json_object_set_string_member (object, "room_id", self->room_id);
       json_object_set_object_member (object, "content", root);
 
-      if (message->file)
+      if (file)
         {
           JsonObject *file_json;
           CmInputStream *stream;
 
-          stream = g_object_get_data (G_OBJECT (message->file), "stream");
+          stream = g_object_get_data (G_OBJECT (file), "stream");
           file_json = cm_input_stream_get_file_json (stream);
           json_object_set_object_member (root, "file", file_json);
         }
 
       text = cm_utils_json_object_to_string (object, FALSE);
-      message->object = cm_enc_encrypt_for_chat (cm_client_get_enc (self->client),
+      json_object_unref (object);
+      object = cm_enc_encrypt_for_chat (cm_client_get_enc (self->client),
                                                  self->room_id, text);
+      g_object_set_data_full (G_OBJECT (message), "json", object,
+                              (GDestroyNotify)json_object_unref);
     }
   else
     {
-      message->object = root;
+      g_object_set_data_full (G_OBJECT (message), "json", root,
+                              (GDestroyNotify)json_object_unref);
     }
 }
 
@@ -892,15 +886,17 @@ room_send_file_cb (GObject      *object,
   g_autofree char *uri = NULL;
   CmInputStream *stream;
   char *mxc_uri = NULL;
-  Message *message;
+  GTask *message_task;
+  GFile *message_file;
+  CmRoomMessageEvent *message;
 
   g_assert (G_IS_TASK (task));
 
   self = g_task_get_source_object (task);
-  message = g_task_get_task_data (task);
+  message_task = g_task_get_task_data (task);
 
   g_assert (CM_IS_ROOM (self));
-  g_assert (message);
+  g_assert (G_TASK (message_task));
 
   mxc_uri = cm_net_put_file_finish (CM_NET (object), result, &error);
 
@@ -908,7 +904,7 @@ room_send_file_cb (GObject      *object,
     {
       self->is_sending_message = FALSE;
 
-      g_task_return_new_error (message->task, G_IO_ERROR, G_IO_ERROR_FAILED,
+      g_task_return_new_error (message_task, G_IO_ERROR, G_IO_ERROR_FAILED,
                                "Failed to upload file: %s", error->message ?: "");
       room_send_message_from_queue (self);
 
@@ -919,36 +915,43 @@ room_send_file_cb (GObject      *object,
   g_assert (stream);
   g_object_ref (stream);
 
-  g_object_set_data_full (G_OBJECT (message->file), "uri", mxc_uri, g_free);
-  g_object_set_data_full (G_OBJECT (message->file), "stream", stream, g_object_unref);
+  message = g_task_get_task_data (message_task);
+  g_assert (CM_IS_ROOM_MESSAGE_EVENT (message));
+
+  message_file = cm_room_message_event_get_file (message);
+  g_assert (G_IS_FILE (message_file));
+
+  g_object_set_data_full (G_OBJECT (message_file), "uri", mxc_uri, g_free);
+  g_object_set_data_full (G_OBJECT (message_file), "stream", stream, g_object_unref);
   g_object_set_data_full (G_OBJECT (stream), "uri", g_strdup (mxc_uri), g_free);
   room_prepare_message (self, message);
 
   /* https://matrix.org/docs/spec/client_server/r0.6.1#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid */
   if (self->encryption)
     uri = g_strdup_printf ("/_matrix/client/r0/rooms/%s/send/m.room.encrypted/%s",
-                           self->room_id, message->event_id);
+                           self->room_id, cm_room_event_get_id (CM_ROOM_EVENT (message)));
   else
     uri = g_strdup_printf ("/_matrix/client/r0/rooms/%s/send/m.room.message/%s",
-                           self->room_id, message->event_id);
+                           self->room_id, cm_room_event_get_id (CM_ROOM_EVENT (message)));
 
   cm_net_send_json_async (cm_client_get_net (self->client), 0,
-                          json_object_ref (message->object),
-                          uri, SOUP_METHOD_PUT, NULL, g_task_get_cancellable (message->task),
-                          send_cb, message);
+                          g_object_steal_data (G_OBJECT (message), "json"),
+                          uri, SOUP_METHOD_PUT, NULL, g_task_get_cancellable (message_task),
+                          send_cb, message_task);
 }
 
 static void
 room_send_message_from_queue (CmRoom *self)
 {
-  Message *message;
+  CmRoomMessageEvent *message;
+  GTask *message_task;
   g_autofree char *uri = NULL;
 
   g_assert (CM_IS_ROOM (self));
 
-  message = g_queue_peek_head (self->message_queue);
+  message_task = g_queue_peek_head (self->message_queue);
 
-  if (!message)
+  if (!message_task)
     return;
 
   if (self->is_sending_message || self->retry_timeout_id)
@@ -970,7 +973,7 @@ room_send_message_from_queue (CmRoom *self)
       if (!self->joined_members_loaded)
         {
           g_debug ("getting joined members");
-          cm_room_get_joined_members_async (self, g_task_get_cancellable (message->task), NULL, NULL);
+          cm_room_get_joined_members_async (self, g_task_get_cancellable (message_task), NULL, NULL);
           self->is_sending_message = FALSE;
           return;
         }
@@ -978,7 +981,7 @@ room_send_message_from_queue (CmRoom *self)
       /* and then query their keys */
       if (!self->keys_queried)
         {
-          cm_room_query_keys_async (self, g_task_get_cancellable (message->task), NULL, NULL);
+          cm_room_query_keys_async (self, g_task_get_cancellable (message_task), NULL, NULL);
           self->is_sending_message = FALSE;
           return;
         }
@@ -1007,23 +1010,26 @@ room_send_message_from_queue (CmRoom *self)
         }
     }
 
-  message = g_queue_pop_head (self->message_queue);
+  message_task = g_queue_pop_head (self->message_queue);
+  message = g_task_get_task_data (message_task);
+  g_assert (CM_IS_ROOM_MESSAGE_EVENT (message));
 
-  if (message->file)
+  if (cm_room_message_event_get_msg_type (message) == CM_MESSAGE_TYPE_FILE)
     {
       GFileProgressCallback progress_cb;
       gpointer progress_user_data;
       GTask *task;
 
-      progress_cb = g_object_get_data (G_OBJECT (message->task), "progress-cb");
-      progress_user_data = g_object_get_data (G_OBJECT (message->task), "progress-cb-data");
+      progress_cb = g_object_get_data (G_OBJECT (message_task), "progress-cb");
+      progress_user_data = g_object_get_data (G_OBJECT (message_task), "progress-cb-data");
 
       task = g_task_new (self, NULL, NULL, NULL);
-      g_task_set_task_data (task, message, NULL);
+      g_task_set_task_data (task, g_object_ref (message_task), g_object_unref);
       cm_net_put_file_async (cm_client_get_net (self->client),
-                             message->file, !!self->encryption,
+                             cm_room_message_event_get_file (message),
+                             !!self->encryption,
                              progress_cb, progress_user_data,
-                             g_task_get_cancellable (message->task),
+                             g_task_get_cancellable (message_task),
                              room_send_file_cb, task);
       return;
     }
@@ -1033,15 +1039,15 @@ room_send_message_from_queue (CmRoom *self)
   /* https://matrix.org/docs/spec/client_server/r0.6.1#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid */
   if (self->encryption)
     uri = g_strdup_printf ("/_matrix/client/r0/rooms/%s/send/m.room.encrypted/%s",
-                           self->room_id, message->event_id);
+                           self->room_id, cm_room_event_get_id (CM_ROOM_EVENT (message)));
   else
     uri = g_strdup_printf ("/_matrix/client/r0/rooms/%s/send/m.room.message/%s",
-                           self->room_id, message->event_id);
+                           self->room_id, cm_room_event_get_id (CM_ROOM_EVENT (message)));
 
   cm_net_send_json_async (cm_client_get_net (self->client), 0,
-                          json_object_ref (message->object),
-                          uri, SOUP_METHOD_PUT, NULL, g_task_get_cancellable (message->task),
-                          send_cb, message);
+                          g_object_steal_data (G_OBJECT (message), "json"),
+                          uri, SOUP_METHOD_PUT, NULL, g_task_get_cancellable (message_task),
+                          send_cb, message_task);
 }
 
 /* todo */
@@ -1083,24 +1089,23 @@ cm_room_send_text_async (CmRoom              *self,
                          GAsyncReadyCallback  callback,
                          gpointer             user_data)
 {
-  Message *message;
+  CmRoomMessageEvent *message;
   GTask *task;
 
   g_return_val_if_fail (CM_IS_ROOM (self), NULL);
 
   task = g_task_new (self, cancellable, callback, user_data);
-  message = g_new0 (Message, 1);
-  message->task = task;
-  message->text = g_strdup (text);
-  /* xxx: Should we use a different one so that we won't conflict with element client? */
-  message->event_id = g_strdup_printf ("mc%"G_GINT64_FORMAT".%d",
-                                       g_get_real_time () / G_TIME_SPAN_MILLISECOND,
-                                       cm_client_pop_event_id (self->client));
-  g_queue_push_tail (self->message_queue, message);
+  message = cm_room_message_event_new (CM_MESSAGE_TYPE_TEXT);
+  cm_room_message_event_set_plain (message, text);
+  cm_room_event_create_id (CM_ROOM_EVENT (message),
+                           cm_client_pop_event_id (self->client));
+  g_task_set_task_data (task, message, g_object_unref);
+
+  g_queue_push_tail (self->message_queue, task);
 
   room_send_message_from_queue (self);
 
-  return message->event_id;
+  return cm_room_event_get_id (CM_ROOM_EVENT (message));
 }
 
 /**
@@ -1138,7 +1143,7 @@ cm_room_send_file_async (CmRoom                *self,
                          GAsyncReadyCallback    callback,
                          gpointer               user_data)
 {
-  Message *message;
+  CmRoomMessageEvent *message;
   GTask *task;
 
   g_return_val_if_fail (CM_IS_ROOM (self), NULL);
@@ -1148,18 +1153,16 @@ cm_room_send_file_async (CmRoom                *self,
   g_object_set_data (G_OBJECT (task), "progress-cb", progress_callback);
   g_object_set_data (G_OBJECT (task), "progress-cb-data", progress_user_data);
 
-  message = g_new0 (Message, 1);
-  message->task = task;
-  message->text = g_strdup (body);
-  message->file = g_object_ref (file);
-  message->event_id = g_strdup_printf ("mc%"G_GINT64_FORMAT".%d",
-                                       g_get_real_time () / G_TIME_SPAN_MILLISECOND,
-                                       cm_client_pop_event_id (self->client));
-  g_queue_push_tail (self->message_queue, message);
+  message = cm_room_message_event_new (CM_MESSAGE_TYPE_FILE);
+  cm_room_message_event_set_file (message, body, file);
+  cm_room_event_create_id (CM_ROOM_EVENT (message),
+                           cm_client_pop_event_id (self->client));
+  g_task_set_task_data (task, message, g_object_unref);
+  g_queue_push_tail (self->message_queue, task);
 
   room_send_message_from_queue (self);
 
-  return message->event_id;
+  return cm_room_event_get_id (CM_ROOM_EVENT (message));
 }
 
 char *
