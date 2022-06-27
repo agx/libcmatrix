@@ -11,6 +11,7 @@ libcmatrix_sources = [
   'cm-input-stream.c',
   # 'cm-room-message.c',
   'cm-utils.c',
+  'events/cm-event.c',
 ]
 
 libcmatrix_headers = [
