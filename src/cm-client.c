@@ -2288,15 +2288,15 @@ cm_client_claim_keys_async (CmClient            *self,
 
   for (guint i = 0; i < g_list_model_get_n_items (member_list); i++)
     {
-      g_autoptr(CmRoomMember) member = NULL;
+      g_autoptr(CmUser) user = NULL;
       JsonObject *key_json;
 
-      member = g_list_model_get_item (member_list, i);
-      key_json = cm_room_member_get_device_key_json (member);
+      user = g_list_model_get_item (member_list, i);
+      key_json = cm_room_member_get_device_key_json (CM_ROOM_MEMBER (user));
 
       if (key_json)
         json_object_set_object_member (child,
-                                       cm_room_member_get_user_id (member),
+                                       cm_user_get_id (user),
                                        key_json);
     }
 
