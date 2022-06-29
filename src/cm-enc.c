@@ -18,7 +18,7 @@
 #include <sys/random.h>
 
 #include "cm-utils-private.h"
-#include "cm-room-member-private.h"
+#include "users/cm-room-member-private.h"
 #include "cm-device.h"
 #include "cm-device-private.h"
 #include "cm-db-private.h"

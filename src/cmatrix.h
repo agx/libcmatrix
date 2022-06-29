@@ -20,6 +20,8 @@ G_BEGIN_DECLS
 
 #define _CMATRIX_TAKEN
 
+#include "users/cm-user.h"
+#include "users/cm-account.h"
 #include "cm-enums.h"
 #include "cm-common.h"
 #include "cm-client.h"

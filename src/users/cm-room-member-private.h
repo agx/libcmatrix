@@ -1,6 +1,10 @@
 /* -*- mode: c; c-basic-offset: 2; indent-tabs-mode: nil; -*- */
-/*
- * Copyright (C) 2022 Purism SPC
+/* cm-room-member-private.h
+ *
+ * Copyright 2022 Purism SPC
+ *
+ * Author(s):
+ *   Mohammed Sadiq <sadiq@sadiqpk.org>
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  */

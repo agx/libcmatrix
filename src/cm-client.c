@@ -17,13 +17,13 @@
 #include <gcrypt.h>
 #include <libsoup/soup.h>
 
-#include "cm-room-member-private.h"
 #include "cm-net-private.h"
 #include "cm-utils-private.h"
 #include "cm-common.h"
 #include "cm-db-private.h"
 #include "cm-enc-private.h"
 #include "cm-enums.h"
+#include "users/cm-room-member-private.h"
 #include "users/cm-user-private.h"
 #include "users/cm-account.h"
 #include "cm-room-private.h"

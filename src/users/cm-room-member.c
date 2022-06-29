@@ -1,6 +1,10 @@
 /* -*- mode: c; c-basic-offset: 2; indent-tabs-mode: nil; -*- */
-/*
- * Copyright (C) 2022 Purism SPC
+/* cm-room-member.c
+ *
+ * Copyright 2022 Purism SPC
+ *
+ * Author(s):
+ *   Mohammed Sadiq <sadiq@sadiqpk.org>
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  */
@@ -16,12 +20,13 @@
 #include "cm-device-private.h"
 #include "cm-room.h"
 #include "cm-enc-private.h"
+#include "cm-user-private.h"
 #include "cm-room-member-private.h"
 #include "cm-room-member.h"
 
 struct _CmRoomMember
 {
-  GObject     parent_instance;
+  CmUser      parent_instance;
 
   CmRoom     *room;
   CmClient   *client;
@@ -29,12 +34,9 @@ struct _CmRoomMember
   GHashTable *devices_table;
 
   char       *user_id;
-  char       *display_name;
-  char       *name;
-  char       *avatar_url;
 };
 
-G_DEFINE_TYPE (CmRoomMember, cm_room_member, G_TYPE_OBJECT)
+G_DEFINE_TYPE (CmRoomMember, cm_room_member, CM_TYPE_USER)
 
 static void
 cm_room_member_finalize (GObject *object)
@@ -49,9 +51,6 @@ cm_room_member_finalize (GObject *object)
   g_clear_pointer (&self->devices_table, g_hash_table_unref);
 
   g_free (self->user_id);
-  g_free (self->display_name);
-  g_free (self->name);
-  g_free (self->avatar_url);
 
   G_OBJECT_CLASS (cm_room_member_parent_class)->finalize (object);
 }
@@ -120,20 +119,17 @@ void
 cm_room_member_set_json_data (CmRoomMember *self,
                               JsonObject   *object)
 {
-  const char *text;
+  const char *name, *avatar_url;
 
   g_return_if_fail (CM_IS_ROOM_MEMBER (self));
   g_return_if_fail (object);
 
-  text = cm_utils_json_object_get_string (object, "display_name");
-  if (!text)
-      text = cm_utils_json_object_get_string (object, "displayname");
-  g_free (self->display_name);
-  self->display_name = g_strdup (text);
+  name = cm_utils_json_object_get_string (object, "display_name");
+  if (!name)
+      name = cm_utils_json_object_get_string (object, "displayname");
 
-  text = cm_utils_json_object_get_string (object, "avatar_url");
-  g_free (self->avatar_url);
-  self->avatar_url = g_strdup (text);
+  avatar_url = cm_utils_json_object_get_string (object, "avatar_url");
+  cm_user_set_details (CM_USER (self), name, avatar_url);
 }
 
 /*
@@ -306,20 +302,4 @@ cm_room_member_add_one_time_keys (CmRoomMember *self,
             }
         }
     }
-}
-
-const char *
-cm_room_member_get_user_id (CmRoomMember *self)
-{
-  g_return_val_if_fail (CM_IS_ROOM_MEMBER (self), NULL);
-
-  return self->user_id;
-}
-
-const char *
-cm_room_member_get_display_name (CmRoomMember *self)
-{
-  g_return_val_if_fail (CM_IS_ROOM_MEMBER (self), NULL);
-
-  return self->display_name;
 }
