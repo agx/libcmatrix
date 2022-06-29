@@ -14,6 +14,7 @@ libcmatrix_sources = [
   'events/cm-room-event.c',
   'events/cm-room-message-event.c',
   'users/cm-user.c',
+  'users/cm-account.c',
 ]
 
 libcmatrix_headers = [
@@ -25,6 +26,7 @@ libcmatrix_headers = [
   'cm-matrix.h',
   'cm-room.h',
   'users/cm-user.h',
+  'users/cm-account.h',
 ]
 
 cmatrix_c_args = [
