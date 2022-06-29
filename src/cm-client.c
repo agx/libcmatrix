@@ -17,13 +17,15 @@
 #include <gcrypt.h>
 #include <libsoup/soup.h>
 
+#include "cm-room-member-private.h"
 #include "cm-net-private.h"
 #include "cm-utils-private.h"
 #include "cm-common.h"
 #include "cm-db-private.h"
 #include "cm-enc-private.h"
 #include "cm-enums.h"
-#include "cm-room-member-private.h"
+#include "users/cm-user-private.h"
+#include "users/cm-account.h"
 #include "cm-room-private.h"
 #include "cm-room.h"
 #include "cm-client-private.h"
@@ -52,6 +54,7 @@ struct _CmClient
   char           *device_id;
   char           *device_name;
 
+  CmAccount      *cm_account;
   CmDb           *cm_db;
   CmNet          *cm_net;
   CmEnc          *cm_enc;
@@ -428,6 +431,7 @@ cm_client_finalize (GObject *object)
     g_cancellable_cancel (self->cancellable);
   g_clear_object (&self->cancellable);
 
+  g_clear_object (&self->cm_account);
   g_clear_object (&self->cm_net);
 
   g_list_store_remove_all (self->joined_rooms);
@@ -504,6 +508,20 @@ CmClient *
 cm_client_new (void)
 {
   return g_object_new (CM_TYPE_CLIENT, NULL);
+}
+
+CmAccount *
+cm_client_get_account (CmClient *self)
+{
+  g_return_val_if_fail (CM_IS_CLIENT (self), NULL);
+
+  if (!self->cm_account)
+    {
+      self->cm_account = g_object_new (CM_TYPE_ACCOUNT, NULL);
+      cm_user_set_client (CM_USER (self->cm_account), self);
+    }
+
+  return self->cm_account;
 }
 
 static void

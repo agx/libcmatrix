@@ -17,6 +17,7 @@
 G_BEGIN_DECLS
 
 #include "cm-enums.h"
+#include "users/cm-account.h"
 
 #define CM_TYPE_CLIENT (cm_client_get_type ())
 G_DECLARE_FINAL_TYPE (CmClient, cm_client, CM, CLIENT, GObject)
@@ -29,6 +30,7 @@ typedef void   (*CmCallback)                        (gpointer            object,
                                                      GError             *err);
 
 CmClient     *cm_client_new                           (void);
+CmAccount    *cm_client_get_account                   (CmClient            *self);
 void          cm_client_set_enabled                   (CmClient            *self,
                                                        gboolean             enable);
 gboolean      cm_client_get_enabled                   (CmClient            *self);
