@@ -1405,7 +1405,7 @@ cm_enc_create_out_group_keys (CmEnc      *self,
       n_items = g_list_model_get_n_items (devices);
 
       user = json_object_new ();
-      json_object_set_object_member (root, cm_room_member_get_user_id (member), user);
+      json_object_set_object_member (root, cm_user_get_id (CM_USER (member)), user);
 
       for (guint j = 0; j < n_items; j++)
         {
@@ -1464,7 +1464,7 @@ cm_enc_create_out_group_keys (CmEnc      *self,
             json_object_set_object_member (object, "content", child);
 
             /* User specific data */
-            json_object_set_string_member (object, "recipient", cm_room_member_get_user_id (member));
+            json_object_set_string_member (object, "recipient", cm_user_get_id (CM_USER (member)));
 
             /* Device specific data */
             child = json_object_new ();
