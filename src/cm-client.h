@@ -86,49 +86,5 @@ void          cm_client_get_file_async                (CmClient              *se
 GInputStream *cm_client_get_file_finish               (CmClient              *self,
                                                        GAsyncResult          *result,
                                                        GError               **error);
-void          cm_client_get_user_info_async           (CmClient            *self,
-                                                       const char          *user_id,
-                                                       GCancellable        *cancellable,
-                                                       GAsyncReadyCallback  callback,
-                                                       gpointer             user_data);
-gboolean      cm_client_get_user_info_finish          (CmClient            *self,
-                                                       char               **name,
-                                                       char               **avatar_url,
-                                                       GAsyncResult        *result,
-                                                       GError             **error);
-void          cm_client_set_name_async                (CmClient            *self,
-                                                       const char          *name,
-                                                       GCancellable        *cancellable,
-                                                       GAsyncReadyCallback  callback,
-                                                       gpointer             user_data);
-gboolean      cm_client_set_name_finish               (CmClient            *self,
-                                                       GAsyncResult        *result,
-                                                       GError             **error);
-void          cm_client_set_user_avatar_async         (CmClient            *self,
-                                                       GFile               *image_file,
-                                                       GCancellable        *cancellable,
-                                                       GAsyncReadyCallback  callback,
-                                                       gpointer             user_data);
-gboolean      cm_client_set_user_avatar_finish        (CmClient            *self,
-                                                       GAsyncResult        *result,
-                                                       GError             **error);
-void          cm_client_get_3pid_async                (CmClient            *self,
-                                                       GCancellable        *cancellable,
-                                                       GAsyncReadyCallback  callback,
-                                                       gpointer             user_data);
-gboolean      cm_client_get_3pid_finish               (CmClient            *self,
-                                                       GPtrArray          **emails,
-                                                       GPtrArray          **phones,
-                                                       GAsyncResult        *result,
-                                                       GError             **error);
-void          cm_client_delete_3pid_async             (CmClient            *self,
-                                                       const char          *value,
-                                                       const char          *type,
-                                                       GCancellable        *cancellable,
-                                                       GAsyncReadyCallback  callback,
-                                                       gpointer             user_data);
-gboolean      cm_client_delete_3pid_finish            (CmClient            *self,
-                                                       GAsyncResult        *result,
-                                                       GError             **error);
 
 G_END_DECLS
