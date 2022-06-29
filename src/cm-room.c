@@ -18,6 +18,7 @@
 #include "events/cm-room-message-event-private.h"
 #include "cm-room-member-private.h"
 #include "cm-room-member.h"
+#include "users/cm-user.h"
 #include "cm-room-private.h"
 #include "cm-room.h"
 
@@ -103,14 +104,14 @@ room_find_member (CmRoom     *self,
 
   for (guint i = 0; i < n_items; i++)
     {
-      g_autoptr(CmRoomMember) member = NULL;
+      g_autoptr(CmUser) user = NULL;
       const char *user_id;
 
-      member = g_list_model_get_item (model, i);
-      user_id = cm_room_member_get_user_id (member);
+      user = g_list_model_get_item (model, i);
+      user_id = cm_user_get_id (user);
 
       if (g_strcmp0 (user_id, matrix_id) == 0)
-        return member;
+        return CM_ROOM_MEMBER (user);
     }
 
   return NULL;
@@ -134,26 +135,26 @@ cm_room_generate_name (CmRoom *self)
       count = n_items = g_list_model_get_n_items (model);
     }
   for (guint i = 0; i < MIN (3, n_items); i++) {
-    g_autoptr(CmRoomMember) member = NULL;
+    g_autoptr(CmUser) user = NULL;
 
-    member = g_list_model_get_item (model, i);
+    user = g_list_model_get_item (model, i);
 
     /* Don't add self to create room name */
-    if (g_strcmp0 (cm_room_member_get_user_id (member), cm_client_get_user_id (self->client)) == 0) {
+    if (g_strcmp0 (cm_user_get_id (user), cm_client_get_user_id (self->client)) == 0) {
       count--;
       continue;
     }
 
     if (!name_a) {
-      name_a = cm_room_member_get_display_name (member);
+      name_a = cm_user_get_display_name (user);
 
       if (!name_a || !*name_a)
-        name_a = cm_room_member_get_user_id (member);
+        name_a = cm_user_get_id (user);
     } else {
-      name_b = cm_room_member_get_display_name (member);
+      name_b = cm_user_get_display_name (user);
 
       if (!name_b || !*name_b)
-        name_b = cm_room_member_get_user_id (member);
+        name_b = cm_user_get_id (user);
     }
   }
 
@@ -1789,12 +1790,12 @@ cm_room_query_keys_async (CmRoom              *self,
 
   for (guint i = 0; i < n_items; i++)
     {
-      g_autoptr(CmRoomMember) member = NULL;
+      g_autoptr(CmUser) user = NULL;
 
-      member = g_list_model_get_item (members, i);
+      user = g_list_model_get_item (members, i);
       /* TODO: Implement and handle device blocking */
       json_object_set_array_member (child,
-                                    cm_room_member_get_user_id (member),
+                                    cm_user_get_id (user),
                                     json_array_new ());
     }
 
