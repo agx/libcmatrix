@@ -517,6 +517,15 @@ cm_room_parse_events (CmRoom     *self,
 
           if (g_strcmp0 (membership, "join") == 0)
             {
+              CmRoomMember *invite;
+
+              invite = g_hash_table_lookup (self->invited_members_table, user_id);
+              if (invite)
+                {
+                  g_hash_table_remove (self->invited_members_table, user_id);
+                  cm_utils_remove_list_item (self->invited_members, invite);
+                }
+
               if (g_hash_table_contains (self->joined_members_table, user_id))
                 continue;
 
@@ -535,6 +544,23 @@ cm_room_parse_events (CmRoom     *self,
               g_list_store_append (self->invited_members, member);
               g_hash_table_insert (self->invited_members_table,
                                    g_strdup (user_id), g_steal_pointer (&member));
+              self->db_save_pending = TRUE;
+            }
+          else if (g_strcmp0 (membership, "leave") == 0)
+            {
+              CmRoomMember *join;
+
+              join = g_hash_table_lookup (self->joined_members_table, user_id);
+
+              if (join)
+                {
+                  g_hash_table_remove (self->joined_members_table, user_id);
+                  cm_utils_remove_list_item (self->joined_members, join);
+                }
+
+              /* Clear the name so that it will be regenerated when name is requested */
+              g_clear_pointer (&self->generated_name, g_free);
+              g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
               self->db_save_pending = TRUE;
             }
         }
