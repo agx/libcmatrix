@@ -1695,6 +1695,9 @@ handle_room_join (CmClient   *self,
           cm_room_set_prev_batch (room, prev);
           cm_room_save (room);
         }
+
+      if (cm_room_get_replacement_room (room))
+        cm_utils_remove_list_item (self->joined_rooms, room);
     }
 }
 
