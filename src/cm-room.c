@@ -374,7 +374,7 @@ cm_room_get_name (CmRoom *self)
 {
   g_return_val_if_fail (CM_IS_ROOM (self), NULL);
 
-  if (!self->generated_name && !self->name && cm_room_is_direct (self))
+  if (!self->generated_name && !self->name)
     {
       self->generated_name = cm_room_generate_name (self);
       if (self->generated_name)
@@ -492,8 +492,7 @@ cm_room_parse_events (CmRoom     *self,
           break;
         }
 
-      if (cm_room_is_direct (self) &&
-          g_strcmp0 (type, "m.room.member") == 0)
+      if (g_strcmp0 (type, "m.room.member") == 0)
         {
           const char *sender, *membership, *state_key, *user_id;
           g_autoptr(CmRoomMember) member = NULL;
