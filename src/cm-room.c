@@ -1910,6 +1910,7 @@ room_load_from_db_cb (GObject      *object,
   CmRoom *self;
   g_autoptr(GCancellable) cancellable = NULL;
   g_autoptr(GTask) task = user_data;
+  g_autoptr(GError) error = NULL;
   g_autofree char *json_str;
   char *prev_batch;
 
@@ -1922,7 +1923,7 @@ room_load_from_db_cb (GObject      *object,
   if (cancellable)
     g_object_ref (cancellable);
 
-  json_str = cm_db_load_room_finish (CM_DB (object), result, NULL);
+  json_str = cm_db_load_room_finish (CM_DB (object), result, &error);
   prev_batch = g_object_get_data (G_OBJECT (task), "prev-batch");
 
   if (json_str)
@@ -1946,7 +1947,7 @@ room_load_from_db_cb (GObject      *object,
       g_task_return_boolean (task, TRUE);
       return;
     }
-  else
+  else if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
     {
       g_autofree char *uri = NULL;
 
