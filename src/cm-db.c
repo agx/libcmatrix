@@ -1049,7 +1049,8 @@ cm_db_load_room (CmDb  *self,
     }
   else
     {
-      g_task_return_pointer (task, NULL, NULL);
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
+                               "Room not found");
     }
 
   sqlite3_finalize (stmt);
