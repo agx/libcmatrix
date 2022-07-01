@@ -36,6 +36,7 @@ CREATE TABLE rooms(
   account_id INTEGER NOT NULL REFERENCES accounts(id),
   room_name TEXT NOT NULL,
   prev_batch TEXT,
+  replacement_room_id INTEGER REFERENCES rooms(id),
   json_data TEXT,
   UNIQUE (account_id, room_name)
 );
