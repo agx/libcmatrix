@@ -37,6 +37,7 @@ struct _CmRoom
   char       *name;
   char       *generated_name;
   char       *room_id;
+  char       *replacement_room;
   char       *encryption;
   char       *prev_batch;
 
@@ -304,6 +305,26 @@ cm_room_new (const char *room_id)
   return self;
 }
 
+/*
+ * cm_room_get_replacement_room:
+ * @self: A #CmRoom
+ *
+ * Get the id of the room this room has been
+ * replaced with, which means that this room
+ * has been obsolete and should no longer
+ * be used for conversations.
+ *
+ * Returns: (nullable): The replacement room
+ * if this room has tombstone
+ */
+const char *
+cm_room_get_replacement_room (CmRoom *self)
+{
+  g_return_val_if_fail (CM_IS_ROOM (self), FALSE);
+
+  return self->replacement_room;
+}
+
 void
 cm_room_set_client (CmRoom   *self,
                     CmClient *client)
@@ -463,6 +484,13 @@ cm_room_parse_events (CmRoom     *self,
           self->encryption = g_strdup (value);
           self->db_save_pending = TRUE;
         }
+      else if (g_strcmp0 (type, "m.room.tombstone") == 0)
+        {
+          child = cm_utils_json_object_get_object (child, "content");
+          value = cm_utils_json_object_get_string (child, "replacement_room");
+          self->replacement_room = g_strdup (value);
+          break;
+        }
 
       if (cm_room_is_direct (self) &&
           g_strcmp0 (type, "m.room.member") == 0)
@@ -527,8 +555,15 @@ cm_room_set_data (CmRoom     *self,
 
   child = cm_utils_json_object_get_object (object, "state");
   cm_room_parse_events (self, child);
+
+  if (self->replacement_room)
+    return;
+
   child = cm_utils_json_object_get_object (object, "timeline");
   cm_room_parse_events (self, child);
+
+  if (self->replacement_room)
+    return;
 
   /* todo: Implement this in a better less costly way */
   /* currently if a user changes the whole key list is reset */

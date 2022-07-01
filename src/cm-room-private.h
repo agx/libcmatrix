@@ -19,6 +19,7 @@
 G_BEGIN_DECLS
 
 CmRoom       *cm_room_new                          (const char          *room_id);
+const char   *cm_room_get_replacement_room         (CmRoom              *self);
 void          cm_room_set_client                   (CmRoom              *self,
                                                     CmClient            *client);
 gboolean      cm_room_has_state_sync               (CmRoom              *self);
