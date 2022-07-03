@@ -11,6 +11,8 @@
 # error "Only <cmatrix.h> can be included directly."
 #endif
 
+#include <json-glib/json-glib.h>
+
 #include <glib-object.h>
 #include <gio/gio.h>
 
