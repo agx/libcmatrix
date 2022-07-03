@@ -32,8 +32,6 @@ struct _CmRoomMember
   CmClient   *client;
   GListStore *devices;
   GHashTable *devices_table;
-
-  char       *user_id;
 };
 
 G_DEFINE_TYPE (CmRoomMember, cm_room_member, CM_TYPE_USER)
@@ -49,8 +47,6 @@ cm_room_member_finalize (GObject *object)
   g_list_store_remove_all (self->devices);
   g_clear_object (&self->devices);
   g_clear_pointer (&self->devices_table, g_hash_table_unref);
-
-  g_free (self->user_id);
 
   G_OBJECT_CLASS (cm_room_member_parent_class)->finalize (object);
 }
@@ -83,7 +79,7 @@ cm_room_member_new (gpointer    room,
   g_return_val_if_fail (user_id && *user_id == '@', NULL);
 
   self = g_object_new (CM_TYPE_ROOM_MEMBER, NULL);
-  self->user_id = g_strdup (user_id);
+  cm_user_set_user_id (CM_USER (self), user_id);
   self->room = g_object_ref (room);
   self->client = g_object_ref (client);
 
@@ -181,9 +177,10 @@ cm_room_member_set_devices (CmRoomMember *self,
           continue;
         }
 
-      if (g_strcmp0 (user, self->user_id) != 0)
+      if (g_strcmp0 (user, cm_user_get_id (CM_USER (self))) != 0)
         {
-          g_warning ("‘%s’ and ‘%s’ are not the same users", user, self->user_id);
+          g_warning ("‘%s’ and ‘%s’ are not the same users", user,
+                     cm_user_get_id (CM_USER (self)));
           continue;
         }
 
@@ -291,8 +288,8 @@ cm_room_member_add_one_time_keys (CmRoomMember *self,
         {
           object = cm_utils_json_object_get_object (child, node->data);
 
-          if (cm_enc_verify (cm_client_get_enc (self->client),
-                             object, self->user_id, device_id,
+          if (cm_enc_verify (cm_client_get_enc (self->client), object,
+                             cm_user_get_id (CM_USER (self)), device_id,
                              cm_device_get_ed_key (device)))
             {
               const char *key;
