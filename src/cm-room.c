@@ -236,6 +236,8 @@ cm_room_finalize (GObject *object)
   g_free (self->name);
   g_free (self->generated_name);
 
+  g_queue_free_full (self->message_queue, g_object_unref);
+
   G_OBJECT_CLASS (cm_room_parent_class)->finalize (object);
 }
 
