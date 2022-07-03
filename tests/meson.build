@@ -15,6 +15,7 @@ test_items = [
   'enc-chat',
   'cm-db',
   'cm-enc',
+  'room',
   'cm-utils',
 ]
 
