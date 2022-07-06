@@ -26,6 +26,7 @@ G_DECLARE_FINAL_TYPE (CmRoom, cm_room, CM, ROOM, GObject)
 const char   *cm_room_get_id                      (CmRoom                *self);
 const char   *cm_room_get_name                    (CmRoom                *self);
 gboolean      cm_room_is_encrypted                (CmRoom                *self);
+GListModel   *cm_room_get_joined_members          (CmRoom                *self);
 char         *cm_room_decrypt_content             (CmRoom                *self,
                                                    const char            *json_str);
 const char   *cm_room_send_text_async             (CmRoom                *self,

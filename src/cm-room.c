@@ -408,6 +408,14 @@ cm_room_is_encrypted (CmRoom *self)
   return !!self->encryption;
 }
 
+GListModel *
+cm_room_get_joined_members (CmRoom *self)
+{
+  g_return_val_if_fail (CM_IS_ROOM (self), NULL);
+
+  return G_LIST_MODEL (self->joined_members);
+}
+
 CmRoomType
 cm_room_get_room_type (CmRoom *self)
 {
