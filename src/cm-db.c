@@ -1147,8 +1147,8 @@ cm_db_add_session (CmDb  *self,
     room_id = cm_db_get_room_id (self, task, room, account_id);
 
   status = sqlite3_prepare_v2 (self->db,
-                               "INSERT INTO session(account_id,sender_key,session_id,type,pickle,room_id) "
-                               "VALUES(?1,?2,?3,?4,?5,?6)",
+                               "INSERT INTO session(account_id,sender_key,session_id,type,pickle,room_id,time) "
+                               "VALUES(?1,?2,?3,?4,?5,?6,?7)",
                                -1, &stmt, NULL);
 
   matrix_bind_int (stmt, 1, account_id, "binding when adding session");
@@ -1158,6 +1158,8 @@ cm_db_add_session (CmDb  *self,
   matrix_bind_text (stmt, 5, pickle, "binding when adding session");
   if (room_id)
     matrix_bind_int (stmt, 6, room_id, "binding when adding session");
+  /* Save time in milliseconds */
+  matrix_bind_int (stmt, 7, time (NULL) * 1000, "binding when adding session");
 
   status = sqlite3_step (stmt);
   sqlite3_finalize (stmt);
