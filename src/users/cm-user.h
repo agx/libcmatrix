@@ -35,6 +35,13 @@ struct _CmUserClass
 const char   *cm_user_get_id                  (CmUser              *self);
 const char   *cm_user_get_display_name        (CmUser              *self);
 const char   *cm_user_get_avatar_url          (CmUser              *self);
+void          cm_user_get_avatar_async        (CmUser              *self,
+                                               GCancellable        *cancellable,
+                                               GAsyncReadyCallback  callback,
+                                               gpointer             user_data);
+GInputStream *cm_user_get_avatar_finish       (CmUser              *self,
+                                               GAsyncResult        *result,
+                                               GError             **error);
 void          cm_user_load_info_async         (CmUser              *self,
                                                GCancellable        *cancellable,
                                                GAsyncReadyCallback  callback,
