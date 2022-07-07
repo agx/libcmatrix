@@ -86,7 +86,6 @@ cm_user_set_user_id (CmUser     *self,
   CmUserPrivate *priv = cm_user_get_instance_private (self);
 
   g_return_if_fail (CM_IS_USER (self));
-  g_return_if_fail (cm_utils_user_name_valid (user_id));
   g_return_if_fail (!priv->user_id);
 
   priv->user_id = g_strdup (user_id);
