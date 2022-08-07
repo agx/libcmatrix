@@ -285,9 +285,8 @@ handle_matrix_glitches (CmClient *self,
    * The G_RESOLVER_ERROR may be suggesting that the hostname is wrong, but we don't
    * know if it's network/DNS/Proxy error. So keep retrying.
    */
-  if ((error->domain == SOUP_HTTP_ERROR &&
-       error->code <= SOUP_STATUS_TLS_FAILED &&
-       error->code > SOUP_STATUS_CANCELLED) ||
+  if (error->domain == SOUP_TLD_ERROR ||
+      error->domain == G_TLS_ERROR ||
       g_error_matches (error, G_IO_ERROR, G_IO_ERROR_NETWORK_UNREACHABLE) ||
       g_error_matches (error, G_IO_ERROR, G_IO_ERROR_TIMED_OUT) ||
       /* Should we handle connection_refused, or just keep it for localhost? */
@@ -1245,7 +1244,7 @@ gboolean
 cm_client_set_homeserver (CmClient   *self,
                           const char *homeserver)
 {
-  g_autoptr(SoupURI) uri = NULL;
+  g_autoptr(GUri) uri = NULL;
   GString *server;
 
   g_return_val_if_fail (CM_IS_CLIENT (self), FALSE);

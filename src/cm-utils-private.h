@@ -61,9 +61,6 @@ JsonObject   *cm_utils_json_object_get_object   (JsonObject          *object,
                                                  const char          *member);
 JsonArray    *cm_utils_json_object_get_array    (JsonObject          *object,
                                                  const char          *member);
-
-JsonObject   *cm_utils_get_message_json_object  (SoupMessage         *message,
-                                                 const char          *member);
 void          cm_utils_clear                    (char                *buffer,
                                                  size_t               length);
 void          cm_utils_free_buffer              (char                *buffer);

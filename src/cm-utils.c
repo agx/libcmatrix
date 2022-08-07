@@ -558,16 +558,16 @@ cm_utils_home_server_valid (const char *homeserver)
   if (homeserver)
     {
       g_autofree char *server = NULL;
-      g_autoptr(SoupURI) uri = NULL;
+      g_autoptr(GUri) uri = NULL;
 
       if (!strstr (homeserver, "//"))
         server = g_strconcat ("https://", homeserver, NULL);
 
-      uri = soup_uri_new (server ?: homeserver);
+      uri = g_uri_parse (server ?: homeserver, SOUP_HTTP_URI_FLAGS, NULL);
 
-      valid = SOUP_URI_VALID_FOR_HTTP (uri);
+      valid = !!uri;
       /* We need an absolute path URI */
-      valid = valid && *uri->host && g_str_equal (soup_uri_get_path (uri), "/");
+      valid = valid && *g_uri_get_host(uri) && g_str_equal (g_uri_get_path (uri), "/");
     }
 
   return valid;
@@ -807,38 +807,6 @@ cm_utils_json_object_get_array (JsonObject *object,
   return NULL;
 }
 
-JsonObject *
-cm_utils_get_message_json_object (SoupMessage *message,
-                                  const char  *member)
-{
-  g_autoptr(JsonParser) parser = NULL;
-  g_autoptr(SoupBuffer) buffer = NULL;
-  JsonObject *object = NULL;
-  gboolean is_json;
-
-  if (!message || !message->response_body)
-    return NULL;
-
-  buffer = soup_message_body_flatten (message->response_body);
-  parser = json_parser_new ();
-  is_json = json_parser_load_from_data (parser, buffer->data, buffer->length, NULL);
-
-  if (is_json)
-{
-    JsonNode *root;
-
-    root = json_parser_get_root (parser);
-
-    if (root && JSON_NODE_HOLDS_OBJECT (root))
-      object = json_node_get_object (root);
-
-    if (member && object)
-      object = json_object_get_object_member (object, member);
-  }
-
-  return object ? json_object_ref (object) : NULL;
-}
-
 static void
 load_from_stream_cb (JsonParser   *parser,
                      GAsyncResult *result,
@@ -917,11 +885,8 @@ uri_file_read_cb (GObject      *object,
     return;
   }
 
-  soup_message_get_https_status (message, NULL, &err_flags);
-
   if (message &&
-      soup_message_get_https_status (message, NULL, &err_flags) &&
-      err_flags)
+      (err_flags = soup_message_get_tls_peer_certificate_errors (message)))
 {
     guint timeout_id, timeout;
 
@@ -964,6 +929,16 @@ message_network_event_cb (SoupMessage        *msg,
   /* @connection is a #GSocketConnection */
   address = g_socket_connection_get_remote_address (G_SOCKET_CONNECTION (connection), NULL);
   g_object_set_data_full (user_data, "address", address, g_object_unref);
+}
+
+static gboolean
+accept_certificate_callback (SoupMessage          *msg,
+                             GTlsCertificate      *certificate,
+                             GTlsCertificateFlags  tls_errors,
+                             gpointer              user_data)
+{
+    /* Returning TRUE trusts it anyway. */
+    return TRUE;
 }
 
 void
@@ -1012,9 +987,10 @@ cm_utils_read_uri_async (const char          *uri,
                            G_CALLBACK (message_network_event_cb), task,
                            G_CONNECT_AFTER);
   session = soup_session_new ();
-  g_object_set (G_OBJECT (session), SOUP_SESSION_SSL_STRICT, FALSE, NULL);
+  /* Accept invalid certificates */
+  g_signal_connect (message, "accept-certificate", G_CALLBACK (accept_certificate_callback), NULL);
 
-  soup_session_send_async (session, message, cancel,
+  soup_session_send_async (session, message, 0, cancel,
                            uri_file_read_cb,
                            g_steal_pointer (&task));
 }
