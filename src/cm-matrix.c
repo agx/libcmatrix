@@ -11,6 +11,7 @@
 
 #define GCRYPT_NO_DEPRECATED
 #include <gcrypt.h>
+#include <libsecret/secret.h>
 #include <glib.h>
 #include <glib/gstdio.h>
 #include <fcntl.h>
@@ -19,6 +20,7 @@
 
 #include "cm-db-private.h"
 #include "cm-utils-private.h"
+#include "cm-secret-store-private.h"
 #include "cm-client.h"
 #include "cm-client-private.h"
 #include "cm-matrix.h"
@@ -43,8 +45,12 @@ struct _CmMatrix
 
   CmDb *cm_db;
 
-  gboolean is_open;
-  gboolean is_opening_db;
+  GListStore *clients_list;
+
+  gboolean secrets_loaded;
+  gboolean db_loaded;
+  gboolean is_opening;
+  gboolean loading_accounts;
 };
 
 char *cmatrix_data_dir, *cmatrix_app_id;
@@ -58,6 +64,27 @@ enum {
 };
 
 static GParamSpec *properties[N_PROPS];
+
+static void
+matrix_stop (CmMatrix *self)
+{
+  GListModel *model;
+  guint n_items;
+
+  g_assert (CM_IS_MATRIX (self));
+
+  model = G_LIST_MODEL (self->clients_list);
+  n_items = g_list_model_get_n_items (model);
+
+  for (guint i = 0; i < n_items; i++)
+    {
+      g_autoptr(CmClient) client = NULL;
+
+      client = g_list_model_get_item (model, i);
+
+      cm_client_stop_sync (client);
+    }
+}
 
 static void
 cm_matrix_get_property (GObject    *object,
@@ -82,6 +109,10 @@ static void
 cm_matrix_finalize (GObject *object)
 {
   CmMatrix *self = (CmMatrix *)object;
+
+  matrix_stop (self);
+  g_list_store_remove_all (self->clients_list);
+  g_clear_object (&self->clients_list);
 
   g_free (self->db_path);
   g_free (self->db_name);
@@ -120,6 +151,8 @@ cm_matrix_init (CmMatrix *self)
 {
   if (!gcry_control (GCRYCTL_INITIALIZATION_FINISHED_P))
     g_error ("libgcrypt has not been initialized, did you run cm_init()?");
+
+  self->clients_list = g_list_store_new (CM_TYPE_CLIENT);
 }
 
 /**
@@ -209,6 +242,109 @@ cm_init (gboolean init_gcrypt)
     }
 }
 
+static void
+load_accounts_from_secrets (CmMatrix  *self,
+                            GPtrArray *accounts)
+{
+  g_assert (CM_IS_MATRIX (self));
+
+  if (!accounts || !accounts->len)
+    return;
+
+  g_assert (SECRET_IS_RETRIEVABLE (accounts->pdata[0]));
+
+  for (guint i = 0; i < accounts->len; i++)
+    {
+      g_autoptr(CmClient) client = NULL;
+
+      client = cm_client_new_from_secret (accounts->pdata[i], self->cm_db);
+      g_list_store_append (self->clients_list, client);
+      cm_client_enable_as_in_store (client);
+    }
+}
+
+static void
+db_open_cb (GObject      *obj,
+            GAsyncResult *result,
+            gpointer      user_data)
+{
+  g_autoptr(GTask) task = user_data;
+  GError *error = NULL;
+  CmMatrix *self;
+
+  g_assert (G_IS_TASK (task));
+
+  self = g_task_get_source_object (task);
+  g_assert (CM_IS_MATRIX (self));
+
+  self->db_loaded = cm_db_open_finish (self->cm_db, result, &error);
+  self->is_opening = FALSE;
+
+  if (!self->db_loaded)
+    {
+      g_clear_object (&self->cm_db);
+      g_warning ("Error opening Matrix client database: %s",
+                 error ? error->message : "");
+      g_task_return_error (task, error);
+      return;
+    }
+  else
+    {
+      GPtrArray *accounts;
+
+      accounts = g_task_get_task_data (task);
+      load_accounts_from_secrets (self, accounts);
+      g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_READY]);
+      g_task_return_boolean (task,  self->db_loaded && self->secrets_loaded);
+    }
+}
+
+static void
+matrix_store_load_cb (GObject      *object,
+                      GAsyncResult *result,
+                      gpointer      user_data)
+{
+  CmMatrix *self;
+  g_autoptr(GTask) task = user_data;
+  g_autoptr(GPtrArray) accounts = NULL;
+  GError *error = NULL;
+
+  g_assert (G_IS_TASK (task));
+
+  self = g_task_get_source_object (task);
+  g_assert (CM_IS_MATRIX (self));
+
+  accounts = cm_secret_store_load_finish (result, &error);
+  self->is_opening = FALSE;
+  if (!error)
+    self->secrets_loaded = TRUE;
+
+  if (error)
+    {
+      g_task_return_error (task, error);
+      return;
+    }
+
+  if (self->db_loaded)
+    {
+      load_accounts_from_secrets (self, accounts);
+      g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_READY]);
+      g_task_return_boolean (task, TRUE);
+    }
+  else
+    {
+      self->is_opening = TRUE;
+      if (accounts)
+        g_task_set_task_data (task, g_steal_pointer (&accounts),
+                              (GDestroyNotify)g_ptr_array_unref);
+
+      self->cm_db = cm_db_new ();
+      cm_db_open_async (self->cm_db,
+                        g_strdup (self->db_path), self->db_name,
+                        db_open_cb, g_steal_pointer (&task));
+    }
+}
+
 /**
  * cm_matrix_open_async:
  * @db_path: The path where db is (to be) stored
@@ -236,29 +372,46 @@ cm_matrix_open_async (CmMatrix            *self,
   g_return_if_fail (db_path && *db_path);
   g_return_if_fail (db_name && *db_name);
   g_return_if_fail (!cancellable || G_IS_CANCELLABLE (cancellable));
-  g_return_if_fail (!self->is_open);
-  g_return_if_fail (!self->cm_db);
+  g_return_if_fail (!cm_matrix_is_ready (self));
 
   task = g_task_new (self, cancellable, callback, user_data);
 
-  if (self->is_opening_db)
+  if (self->is_opening)
     {
       g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED,
                                "Opening db in progress");
       return;
     }
 
-  if (self->is_open)
+  if (cm_matrix_is_ready (self))
     {
       g_task_return_boolean (task, TRUE);
       return;
     }
 
-  self->is_opening_db = TRUE;
-  self->cm_db = cm_db_new ();
-  cm_db_open_async (self->cm_db, g_strdup (db_path), db_name,
-                    db_open_cb,
-                    g_steal_pointer (&task));
+  self->is_opening = TRUE;
+
+  if (!self->db_path)
+    self->db_path = g_strdup (db_path);
+
+  if (!self->db_name)
+    self->db_name = g_strdup (db_name);
+
+  if (!self->secrets_loaded)
+    {
+      cm_secret_store_load_async (cancellable,
+                                  matrix_store_load_cb,
+                                  g_steal_pointer (&task));
+    }
+  else if (!self->db_loaded)
+    {
+      self->cm_db = cm_db_new ();
+      cm_db_open_async (self->cm_db, g_strdup (db_path), db_name,
+                        db_open_cb,
+                        g_steal_pointer (&task));
+    }
+  else
+    g_assert_not_reached ();
 }
 
 gboolean
@@ -278,7 +431,15 @@ cm_matrix_is_ready (CmMatrix *self)
 {
   g_return_val_if_fail (CM_IS_MATRIX (self), FALSE);
 
-  return self->is_open;
+  return self->db_loaded || self->secrets_loaded;
+}
+
+GListModel *
+cm_matrix_get_clients_list (CmMatrix *self)
+{
+  g_return_val_if_fail (CM_IS_MATRIX (self), FALSE);
+
+  return G_LIST_MODEL (self->clients_list);
 }
 
 /**
@@ -303,8 +464,104 @@ cm_matrix_client_new (CmMatrix *self)
 
   client = g_object_new (CM_TYPE_CLIENT, NULL);
   cm_client_set_db (client, self->cm_db);
+  g_list_store_append (self->clients_list, client);
 
   return client;
+}
+
+static void
+matrix_save_client_cb (GObject      *object,
+                       GAsyncResult *result,
+                       gpointer      user_data)
+{
+  g_autoptr(GTask) task = user_data;
+  GError *error = NULL;
+  gboolean ret;
+
+  ret = cm_client_save_secrets_finish (CM_CLIENT (object), result, &error);
+
+  if (error)
+    g_task_return_error (task, error);
+  else
+    g_task_return_boolean (task, ret);
+}
+
+void
+cm_matrix_save_client_async (CmMatrix            *self,
+                             CmClient            *client,
+                             GAsyncReadyCallback  callback,
+                             gpointer             user_data)
+{
+  GTask *task;
+
+  g_return_if_fail (CM_IS_MATRIX (self));
+  g_return_if_fail (CM_IS_CLIENT (client));
+  g_return_if_fail (cm_client_get_user_id (client) ||
+                    cm_client_get_login_id (client));
+  g_return_if_fail (cm_client_get_homeserver (client));
+
+  task = g_task_new (self, NULL, callback, user_data);
+  cm_client_save_secrets_async (client,
+                                matrix_save_client_cb,
+                                task);
+}
+
+gboolean
+cm_matrix_save_client_finish (CmMatrix      *self,
+                              GAsyncResult  *result,
+                              GError       **error)
+{
+  g_return_val_if_fail (CM_IS_MATRIX (self), FALSE);
+  g_return_val_if_fail (G_IS_TASK (result), FALSE);
+
+  return g_task_propagate_boolean (G_TASK (result), error);
+}
+
+static void
+matrix_delete_client_cb (GObject      *object,
+                         GAsyncResult *result,
+                         gpointer      user_data)
+{
+  g_autoptr(GTask) task = user_data;
+  GError *error = NULL;
+  gboolean ret;
+
+  ret = cm_client_delete_secrets_finish (CM_CLIENT (object), result, &error);
+
+  if (error)
+    g_task_return_error (task, error);
+  else
+    g_task_return_boolean (task, ret);
+}
+
+void
+cm_matrix_delete_client_async (CmMatrix            *self,
+                               CmClient            *client,
+                               GAsyncReadyCallback  callback,
+                               gpointer             user_data)
+{
+  GTask *task;
+
+  g_return_if_fail (CM_IS_MATRIX (self));
+  g_return_if_fail (CM_IS_CLIENT (client));
+
+  task = g_task_new (self, NULL, callback, user_data);
+  g_task_set_task_data (task, g_object_ref (client), g_object_unref);
+
+  cm_client_delete_secrets_async (client,
+                                  matrix_delete_client_cb,
+                                  task);
+}
+
+gboolean
+cm_matrix_delete_client_finish (CmMatrix      *self,
+                                GAsyncResult  *result,
+                                GError       **error)
+{
+  g_return_val_if_fail (CM_IS_MATRIX (self), FALSE);
+  g_return_val_if_fail (G_IS_TASK (result), FALSE);
+
+  return g_task_propagate_boolean (G_TASK (result), error);
 }
 
 CmDb *
@@ -325,4 +582,88 @@ const char *
 cm_matrix_get_app_id (void)
 {
   return cmatrix_app_id;
+}
+
+static void
+matrix_save_client (GObject      *object,
+                    GAsyncResult *result,
+                    gpointer      user_data)
+{
+  CmMatrix *self;
+  g_autoptr(GTask) task = user_data;
+  GPtrArray *clients;
+  CmClient *client;
+
+  g_assert (G_IS_TASK (task));
+
+  self = g_task_get_source_object (task);
+  g_assert (CM_IS_MATRIX (self));
+
+  clients = g_task_get_task_data (task);
+  client = (CmClient *)object;
+
+  if (client &&
+      cm_client_save_secrets_finish (client, result, NULL))
+    {
+      g_list_store_append (self->clients_list, CM_CLIENT (object));
+      cm_client_enable_as_in_store (client);
+    }
+
+  if (!clients || !clients->len)
+    {
+      g_task_return_boolean (task, TRUE);
+      return;
+    }
+
+  client = g_ptr_array_steal_index (clients, 0);
+  g_object_set_data_full (user_data, "client", client, g_object_unref);
+
+  cm_client_save_secrets_async (client,
+                                matrix_save_client,
+                                g_steal_pointer (&task));
+}
+
+void
+cm_matrix_add_clients_async (CmMatrix            *self,
+                             GPtrArray           *secrets,
+                             GAsyncReadyCallback  callback,
+                             gpointer             user_data)
+{
+  GPtrArray *clients;
+  GTask *task;
+
+  g_return_if_fail (CM_IS_MATRIX (self));
+  g_return_if_fail (secrets && secrets->len);
+  g_return_if_fail (SECRET_IS_RETRIEVABLE (secrets->pdata[0]));
+  g_return_if_fail (cm_matrix_is_ready (self));
+
+  clients = g_ptr_array_new_full (secrets->len, g_object_unref);
+  task = g_task_new (self, NULL, callback, user_data);
+  g_task_set_task_data (task, clients, (GDestroyNotify)g_ptr_array_unref);
+
+  for (guint i = 0; i < secrets->len; i++)
+    {
+      SecretRetrievable *secret = secrets->pdata[i];
+      CmClient *client;
+
+      g_warning ("%d", i);
+      client = cm_client_new_from_secret (secret, self->cm_db);
+      if (client)
+        g_ptr_array_add (clients, client);
+      else
+        g_warning ("failed to create client from secret");
+    }
+
+  matrix_save_client (NULL, NULL, task);
+}
+
+gboolean
+cm_matrix_add_clients_finish (CmMatrix      *self,
+                              GAsyncResult  *result,
+                              GError       **error)
+{
+  g_return_val_if_fail (CM_IS_MATRIX (self), FALSE);
+  g_return_val_if_fail (G_IS_TASK (result), FALSE);
+
+  return g_task_propagate_boolean (G_TASK (result), error);
 }

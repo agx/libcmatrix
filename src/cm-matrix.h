@@ -33,6 +33,28 @@ gboolean    cm_matrix_open_finish        (CmMatrix            *self,
                                           GAsyncResult        *result,
                                           GError             **error);
 gboolean    cm_matrix_is_ready           (CmMatrix            *self);
+GListModel *cm_matrix_get_clients_list   (CmMatrix            *self);
 CmClient   *cm_matrix_client_new         (CmMatrix            *self);
+void        cm_matrix_save_client_async    (CmMatrix            *self,
+                                            CmClient            *client,
+                                            GAsyncReadyCallback  callback,
+                                            gpointer             user_data);
+gboolean    cm_matrix_save_client_finish   (CmMatrix            *self,
+                                            GAsyncResult        *result,
+                                            GError             **error);
+void        cm_matrix_delete_client_async  (CmMatrix            *self,
+                                            CmClient            *client,
+                                            GAsyncReadyCallback  callback,
+                                            gpointer             user_data);
+gboolean    cm_matrix_delete_client_finish (CmMatrix            *self,
+                                            GAsyncResult        *result,
+                                            GError             **error);
+void        cm_matrix_add_clients_async    (CmMatrix            *self,
+                                            GPtrArray           *secrets,
+                                            GAsyncReadyCallback  callback,
+                                            gpointer             user_data);
+gboolean    cm_matrix_add_clients_finish   (CmMatrix            *self,
+                                            GAsyncResult        *result,
+                                            GError             **error);
 
 G_END_DECLS
