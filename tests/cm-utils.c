@@ -17,6 +17,55 @@
 
 #include "cm-utils-private.h"
 
+static JsonObject *
+get_json_object_for_file (const char *dir,
+                          const char *file_name)
+{
+  g_autoptr(JsonParser) parser = NULL;
+  g_autoptr(GError) error = NULL;
+  g_autofree char *path = NULL;
+
+  path = g_build_filename (dir, file_name, NULL);
+  parser = json_parser_new ();
+  json_parser_load_from_file (parser, path, &error);
+  g_assert_no_error (error);
+
+  return json_node_dup_object (json_parser_get_root (parser));
+}
+
+static void
+test_utils_canonical (void)
+{
+  g_autoptr(GError) error = NULL;
+  g_autoptr(GDir) dir = NULL;
+  g_autofree char *path = NULL;
+  const char *name;
+
+  path = g_test_build_filename (G_TEST_DIST, "cm-utils", NULL);
+  dir = g_dir_open (path, 0, &error);
+  g_assert_no_error (error);
+
+  while ((name = g_dir_read_name (dir)) != NULL) {
+    g_autofree char *expected_file = NULL;
+    g_autofree char *expected_name = NULL;
+    g_autofree char *expected_json = NULL;
+    g_autoptr(JsonObject) object = NULL;
+    g_autoptr(GString) json_str = NULL;
+
+    if (!g_str_has_suffix (name, ".json"))
+      continue;
+
+    expected_name = g_strconcat (name, ".expected", NULL);
+    expected_file = g_build_filename (path, expected_name, NULL);
+    g_file_get_contents (expected_file, &expected_json, NULL, &error);
+    g_assert_no_error (error);
+
+    object = get_json_object_for_file (path, name);
+    json_str = cm_utils_json_get_canonical (object, NULL);
+    g_assert_cmpstr (json_str->str, ==, expected_json);
+  }
+}
+
 static void
 test_utils_valid_user_name (void)
 {
@@ -119,6 +168,7 @@ main (int   argc,
 {
   g_test_init (&argc, &argv, NULL);
 
+  g_test_add_func ("/cm-utils/canonical", test_utils_canonical);
   g_test_add_func ("/cm-utils/valid-user-name", test_utils_valid_user_name);
   g_test_add_func ("/cm-utils/valid-email", test_utils_valid_email);
   g_test_add_func ("/cm-utils/valid-phone", test_utils_valid_phone);
