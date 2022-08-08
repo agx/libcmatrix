@@ -19,6 +19,9 @@ G_BEGIN_DECLS
 #define CM_TYPE_MATRIX (cm_matrix_get_type ())
 G_DECLARE_FINAL_TYPE (CmMatrix, cm_matrix, CM, MATRIX, GObject)
 
+CmMatrix   *cm_matrix_new                (const char          *data_dir,
+                                          const char          *cache_dir,
+                                          const char          *app_id);
 void        cm_init                      (gboolean             init_gcrypt);
 void        cm_matrix_open_async         (CmMatrix            *self,
                                           const char          *db_path,

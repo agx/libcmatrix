@@ -18,6 +18,7 @@
 #include <sys/stat.h>
 
 #include "cm-db-private.h"
+#include "cm-utils-private.h"
 #include "cm-client.h"
 #include "cm-client-private.h"
 #include "cm-matrix.h"
@@ -37,11 +38,16 @@ struct _CmMatrix
   char *db_path;
   char *db_name;
 
+  char *data_dir;
+  char *cache_dir;
+
   CmDb *cm_db;
 
   gboolean is_open;
   gboolean is_opening_db;
 };
+
+char *cmatrix_data_dir, *cmatrix_app_id;
 
 G_DEFINE_TYPE (CmMatrix, cm_matrix, G_TYPE_OBJECT)
 
@@ -80,6 +86,9 @@ cm_matrix_finalize (GObject *object)
   g_free (self->db_path);
   g_free (self->db_name);
 
+  g_free (self->data_dir);
+  g_free (self->cache_dir);
+
   G_OBJECT_CLASS (cm_matrix_parent_class)->finalize (object);
 }
 
@@ -113,34 +122,63 @@ cm_matrix_init (CmMatrix *self)
     g_error ("libgcrypt has not been initialized, did you run cm_init()?");
 }
 
-static void
-db_open_cb (GObject      *obj,
-            GAsyncResult *result,
-            gpointer      user_data)
+/**
+ * cm_matrix_new:
+ * @data_dir: The data directory
+ * @cache_dir: The cache directory
+ * @app_id: The app id string (unused)
+ *
+ * Create a new #CmMatrix with the provided details
+ *
+ * @data_dir is used to store downloaded files,
+ * avatars, and thumbnails.  The content shall not
+ * be encrypted even if that was the case when
+ * received over the wire.
+ *
+ * @app_id should be a valid string when validated
+ * with g_application_id_is_valid()
+ *
+ * The same values should be provided every time
+ * #CmMatrix is created as these info are used
+ * to store data.
+ *
+ * Returns: (transfer full): A #CmMatrix
+ */
+/*
+ * @cache_dir may be used to store files temporarily
+ * when needed (eg: when resizing images)
+ */
+CmMatrix *
+cm_matrix_new (const char *data_dir,
+               const char *cache_dir,
+               const char *app_id)
 {
-  g_autoptr(GTask) task = user_data;
-  GError *error = NULL;
   CmMatrix *self;
+  char *dir;
 
-  g_assert (G_IS_TASK (task));
+  g_return_val_if_fail (data_dir && *data_dir, NULL);
+  g_return_val_if_fail (cache_dir && *cache_dir, NULL);
+  g_return_val_if_fail (g_application_id_is_valid (app_id), NULL);
 
-  self = g_task_get_source_object (task);
-  g_assert (CM_IS_MATRIX (self));
+  self = g_object_new (CM_TYPE_MATRIX, NULL);
+  self->data_dir = g_build_filename (data_dir, "cmatrix", NULL);
+  cmatrix_data_dir = g_strdup (self->data_dir);
+  cmatrix_app_id = g_strdup (app_id);
+  self->cache_dir = g_build_filename (cache_dir, "cmatrix", NULL);
 
-  self->is_open = cm_db_open_finish (self->cm_db, result, &error);
-  self->is_opening_db = FALSE;
+  dir = cm_utils_get_path_for_m_type (self->data_dir, CM_M_ROOM_MESSAGE, TRUE, NULL);
+  g_mkdir_with_parents (dir, S_IRWXU);
+  g_free (dir);
 
-  if (!self->is_open)
-    {
-      g_clear_object (&self->cm_db);
-      g_warning ("Error opening Matrix client database: %s",
-                 error ? error->message : "");
-      g_task_return_error (task, error);
-      return;
-    }
+  dir = cm_utils_get_path_for_m_type (self->data_dir, CM_M_ROOM_MEMBER, TRUE, NULL);
+  g_mkdir_with_parents (dir, S_IRWXU);
+  g_free (dir);
 
-  g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_READY]);
-  g_task_return_boolean (task, self->is_open);
+  dir = cm_utils_get_path_for_m_type (self->data_dir, CM_M_ROOM_AVATAR, TRUE, NULL);
+  g_mkdir_with_parents (dir, S_IRWXU);
+  g_free (dir);
+
+  return self;
 }
 
 /**
