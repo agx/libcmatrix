@@ -96,7 +96,8 @@ static void     room_send_message_from_queue (CmRoom *self);
 static CmRoomMember *
 room_find_member (CmRoom     *self,
                   GListModel *model,
-                  const char *matrix_id)
+                  const char *matrix_id,
+                  gboolean    add_if_missing)
 {
   guint n_items;
 
@@ -118,6 +119,19 @@ room_find_member (CmRoom     *self,
 
       if (g_strcmp0 (user_id, matrix_id) == 0)
         return CM_ROOM_MEMBER (user);
+    }
+
+  if (add_if_missing)
+    {
+      CmRoomMember *member;
+
+      g_assert (self->joined_members == (gpointer)model);
+      member = cm_room_member_new (self, self->client, matrix_id);
+      g_list_store_append (self->joined_members, member);
+      g_hash_table_insert (self->joined_members_table,
+                           g_strdup (matrix_id), member);
+
+      return member;
     }
 
   return NULL;
@@ -1014,7 +1028,7 @@ claim_key_cb (GObject      *obj,
           CmRoomMember *user;
           JsonObject *keys;
 
-          user = room_find_member (self, G_LIST_MODEL (self->joined_members), member->data);
+          user = room_find_member (self, G_LIST_MODEL (self->joined_members), member->data, FALSE);
 
           if (!user)
             {
@@ -1949,7 +1963,7 @@ keys_query_cb (GObject      *obj,
           CmRoomMember *cm_member;
           JsonObject *key;
 
-          cm_member = room_find_member (self, G_LIST_MODEL (self->joined_members), member->data);
+          cm_member = room_find_member (self, G_LIST_MODEL (self->joined_members), member->data, FALSE);
 
           if (!cm_member)
             {
