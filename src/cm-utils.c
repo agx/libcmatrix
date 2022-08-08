@@ -912,3 +912,41 @@ cm_utils_verify_homeserver_finish (GAsyncResult  *result,
 
   return g_task_propagate_boolean (G_TASK (result), error);
 }
+
+/*
+ * The @base_path should contain the base path up to 'cmatrix'
+ * directory
+ */
+char *
+cm_utils_get_path_for_m_type (const char  *base_path,
+                              CmEventType  type,
+                              gboolean     thumbnail,
+                              const char  *file_name)
+{
+  const char *thumbnail_path = NULL;
+  g_autofree char *path = NULL;
+
+  g_return_val_if_fail (base_path && *base_path, NULL);
+
+  if (thumbnail)
+    thumbnail_path = "thumbnails";
+
+  if (type == CM_M_ROOM_MESSAGE)
+    path = g_build_filename (base_path, "files", thumbnail_path, NULL);
+
+  if (type == CM_M_ROOM_AVATAR)
+    path = g_build_filename (base_path, "avatars", "rooms", thumbnail_path, NULL);
+
+  if (type == CM_M_ROOM_MEMBER)
+    path = g_build_filename (base_path, "avatars", "users", thumbnail_path, NULL);
+
+  if (path)
+    {
+      if (file_name && *file_name)
+        return g_build_filename (path, file_name, NULL);
+      else
+        return g_steal_pointer (&path);
+    }
+
+  g_return_val_if_reached (NULL);
+}

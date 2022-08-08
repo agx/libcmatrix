@@ -13,6 +13,8 @@
 #include <json-glib/json-glib.h>
 #include <libsoup/soup.h>
 
+#include "cm-enums.h"
+
 GError       *cm_utils_json_node_get_error      (JsonNode            *node);
 gboolean      cm_utils_remove_list_item         (GListStore          *store,
                                                  gpointer             item);
@@ -64,3 +66,7 @@ void          cm_utils_verify_homeserver_async  (const char          *server,
                                                  gpointer             user_data);
 gboolean      cm_utils_verify_homeserver_finish (GAsyncResult        *result,
                                                  GError             **error);
+char         *cm_utils_get_path_for_m_type      (const char          *base_path,
+                                                 CmEventType          type,
+                                                 gboolean             thumbnail,
+                                                 const char          *file_name);
