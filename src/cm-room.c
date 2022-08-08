@@ -15,6 +15,7 @@
 #include "cm-net-private.h"
 #include "cm-enc-private.h"
 #include "cm-common.h"
+#include "events/cm-event-private.h"
 #include "events/cm-room-message-event-private.h"
 #include "users/cm-room-member-private.h"
 #include "users/cm-room-member.h"
@@ -33,6 +34,7 @@ struct _CmRoom
   GHashTable *joined_members_table;
   GListStore *invited_members;
   GHashTable *invited_members_table;
+  JsonObject *local_json;
   CmClient   *client;
   char       *name;
   char       *generated_name;
@@ -40,6 +42,8 @@ struct _CmRoom
   char       *replacement_room;
   char       *encryption;
   char       *prev_batch;
+  /* The last event in the room, if any */
+  CmEvent    *last_event;
 
   GQueue     *message_queue;
   guint       retry_timeout_id;
@@ -230,6 +234,7 @@ cm_room_finalize (GObject *object)
   g_hash_table_unref (self->invited_members_table);
   g_clear_object (&self->invited_members);
 
+  g_clear_object (&self->last_event);
   g_clear_object (&self->client);
   g_free (self->room_id);
 
@@ -305,6 +310,93 @@ cm_room_new (const char *room_id)
   self->room_id = g_strdup (room_id);
 
   return self;
+}
+
+/*
+ * cm_room_new_from_json:
+ * @room_id: room id string
+ * @root: (nullable): A JsonObject with "local" object
+ * last_event: (nullable) (transfer full): A #CmEvent
+ *
+ * Create a new #CmRoom. @last_event is the
+ * last sync event in the room.
+ */
+CmRoom *
+cm_room_new_from_json (const char *room_id,
+                       JsonObject *root,
+                       CmEvent    *last_event)
+{
+  CmRoom *self;
+
+  self = cm_room_new (room_id);
+
+  if (root)
+    {
+      JsonObject *child;
+
+      self->local_json = root;
+      child = cm_utils_json_object_get_object (root, "local");
+      self->name = g_strdup (cm_utils_json_object_get_string (child, "alias"));
+      cm_room_set_is_direct (self, cm_utils_json_object_get_bool (child, "direct"));
+      if (cm_utils_json_object_get_int (child, "encryption") > 0)
+        self->encryption = g_strdup ("encrypted");
+
+      self->last_event = last_event;
+    }
+
+  return self;
+}
+
+static void
+room_generate_json (CmRoom *self)
+{
+  JsonObject *json, *child;
+
+  g_assert (CM_IS_ROOM (self));
+  g_assert (!self->local_json);
+
+  json = json_object_new ();
+  child = json_object_new ();
+  self->local_json = json;
+
+  json_object_set_object_member (json, "local", child);
+
+  json_object_set_string_member (child, "generated_alias", self->generated_name);
+  json_object_set_string_member (child, "alias", cm_room_get_name (self));
+  /* Alias set before the current one, may be used if current one is NULL (eg: was x) */
+  json_object_set_string_member (child, "last_alias", cm_room_get_name (self));
+  json_object_set_boolean_member (child, "direct", cm_room_is_direct (self));
+  json_object_set_int_member (child, "encryption", cm_room_is_encrypted (self));
+  /* todo */
+  /* Set only if there is only one member in the room */
+  /* json_object_set_string_member (child, "m.room.member", "bad"); */
+  /* json_object_set_string_member (child, "topic", "bad"); */
+  /* json_object_set_object_member (child, "m.room.history_visibility", "bad"); */
+  /* json_object_set_object_member (child, "m.room.create", "bad"); */
+  /* json_object_set_object_member (child, "m.room.join_rules", "bad"); */
+  /* json_object_set_object_member (child, "m.room.name", "bad"); */
+  /* json_object_set_object_member (child, "m.room.canonical_alias", "bad"); */
+  /* json_object_set_object_member (child, "m.room.power_levels", "bad"); */
+  /* json_object_set_object_member (child, "m.room.guest_access", "bad"); */
+  /* json_object_set_object_member (child, "summary", "bad"); */
+  /* json_object_set_object_member (child, "unread_notifications", "bad"); */
+}
+
+/*
+ * cm_room_get_json:
+ *
+ * Get the json which is to be stored
+ * in db as such
+ */
+char *
+cm_room_get_json (CmRoom *self)
+{
+  g_return_val_if_fail (CM_IS_ROOM (self), NULL);
+
+  if (!self->local_json)
+    room_generate_json (self);
+
+  return cm_utils_json_object_to_string (self->local_json, FALSE);
 }
 
 /*

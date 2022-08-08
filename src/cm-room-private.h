@@ -21,6 +21,10 @@
 G_BEGIN_DECLS
 
 CmRoom       *cm_room_new                          (const char          *room_id);
+CmRoom       *cm_room_new_from_json                (const char          *room_id,
+                                                    JsonObject          *root,
+                                                    CmEvent             *last_event);
+char         *cm_room_get_json                     (CmRoom              *self);
 const char   *cm_room_get_replacement_room         (CmRoom              *self);
 void          cm_room_set_client                   (CmRoom              *self,
                                                     CmClient            *client);
