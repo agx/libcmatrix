@@ -234,7 +234,6 @@ handle_matrix_glitches (CmClient *self,
     {
       client_reset_state (self);
       cm_db_delete_client_async (self->cm_db, self, NULL, NULL);
-      self->callback (self->cb_data, self, CM_ACCESS_TOKEN_LOGIN, NULL, NULL, NULL);
       matrix_start_sync (self, NULL);
 
       return TRUE;
@@ -1513,7 +1512,7 @@ client_verify_homeserver_cb (GObject      *obj,
       g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED,
                                "Failed to verify homeserver");
       if (self->callback)
-        self->callback (self->cb_data, self, CM_VERIFY_HOMESERVER, NULL, NULL, error);
+        self->callback (self->cb_data, self, NULL, NULL, error);
     }
 }
 
@@ -1547,7 +1546,7 @@ client_password_login_cb (GObject      *obj,
       client_set_login_state (self, FALSE, FALSE);
 
       if (!handle_matrix_glitches (self, error) && self->callback)
-        self->callback (self->cb_data, self, CM_PASSWORD_LOGIN, NULL, NULL, error);
+        self->callback (self->cb_data, self, NULL, NULL, error);
 
       g_task_return_error (task, g_steal_pointer (&error));
       return;
@@ -1576,9 +1575,6 @@ client_password_login_cb (GObject      *obj,
   cm_client_set_homeserver (self, value);
   client_set_login_state (self, FALSE, !!cm_net_get_access_token (self->cm_net));
   cm_client_save (self, TRUE);
-
-  g_assert (self->callback);
-  self->callback (self->cb_data, self, CM_PASSWORD_LOGIN, NULL, NULL, NULL);
 
   g_debug ("Login success: %d, username: %s", self->login_success, self->login_user_id);
 
@@ -1691,15 +1687,13 @@ upload_key_cb (GObject      *obj,
   if (error)
     {
       self->sync_failed = TRUE;
-      if (!handle_matrix_glitches (self, error))
-        self->callback (self->cb_data, self, CM_UPLOAD_KEY, NULL, NULL, error);
+      handle_matrix_glitches (self, error);
       g_debug ("Error uploading key: %s", error->message);
       return;
     }
 
   json_str = cm_utils_json_object_to_string (root, FALSE);
   cm_enc_publish_one_time_keys (self->cm_enc);
-  self->callback (self->cb_data, self, CM_UPLOAD_KEY, NULL, json_str, NULL);
 
   object = cm_utils_json_object_get_object (root, "one_time_key_counts");
 
@@ -1848,7 +1842,6 @@ handle_room_join (CmClient   *self,
                   JsonObject *root)
 {
   g_autoptr(GList) joined_room_ids = NULL;
-  JsonObject *object;
 
   g_assert (CM_IS_CLIENT (self));
 
@@ -1859,6 +1852,7 @@ handle_room_join (CmClient   *self,
 
   for (GList *room_id = joined_room_ids; room_id; room_id = room_id->next)
     {
+      g_autoptr(GPtrArray) events = NULL;
       CmRoom *room;
       JsonObject *room_data;
 
@@ -1881,23 +1875,13 @@ handle_room_join (CmClient   *self,
               g_list_store_append (self->joined_rooms, room);
               g_object_unref (room);
             }
-
-          cm_room_load_async (room, self->cancellable,
-                              room_loaded_cb,
-                              g_object_ref (self));
         }
 
-      cm_room_set_data (room, room_data);
-      object = cm_utils_json_object_get_object (room_data, "timeline");
+      events = cm_room_set_data (room, room_data);
+      cm_db_add_room_events (self->cm_db, room, events, FALSE);
 
-      if (cm_utils_json_object_get_bool (object, "limited"))
-        {
-          const char *prev;
-
-          prev = cm_utils_json_object_get_string (object, "prev_batch");
-          cm_room_set_prev_batch (room, prev);
-          cm_room_save (room);
-        }
+      if (self->callback)
+        self->callback (self->cb_data, self, room, events, NULL);
 
       if (cm_room_get_replacement_room (room))
         cm_utils_remove_list_item (self->joined_rooms, room);
@@ -1978,7 +1962,7 @@ matrix_take_red_pill_cb (GObject      *obj,
       self->sync_failed = TRUE;
       client_set_login_state (self, FALSE, FALSE);
       if (!handle_matrix_glitches (self, error))
-        self->callback (self->cb_data, self, CM_RED_PILL, NULL, NULL, error);
+        self->callback (self->cb_data, self, NULL, NULL, error);
       else if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
         g_debug ("Error syncing with time %s: %s", self->next_batch, error->message);
       return;
@@ -2003,8 +1987,6 @@ matrix_take_red_pill_cb (GObject      *obj,
         self->is_sync = TRUE;
         g_signal_emit (self, signals[STATUS_CHANGED], 0);
       }
-
-    self->callback (self->cb_data, self, CM_RED_PILL, NULL, json_str, NULL);
   }
 
   object = cm_utils_json_object_get_object (root, "device_one_time_keys_count");
@@ -2084,7 +2066,7 @@ client_get_homeserver_cb (GObject      *obj,
       g_task_return_new_error (task, CM_ERROR, M_NO_HOME_SERVER,
                                "Couldn't fetch homeserver");
       if (self->callback)
-        self->callback (self->cb_data, self, CM_GET_HOMESERVER, NULL, NULL, error);
+        self->callback (self->cb_data, self, NULL, NULL, error);
 
       return;
     }
