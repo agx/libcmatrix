@@ -18,6 +18,7 @@ G_BEGIN_DECLS
 
 #include "cm-client.h"
 #include "cm-enums.h"
+#include "events/cm-event.h"
 
 #define CM_TYPE_ROOM (cm_room_get_type ())
 
