@@ -49,6 +49,7 @@ struct _CmRoom
   GQueue     *message_queue;
   guint       retry_timeout_id;
 
+  gboolean    has_prev_batch;
   gboolean    is_direct;
 
   /* Use g_get_monotonic_time(), we only need the interval */
@@ -57,6 +58,7 @@ struct _CmRoom
    * also compare with typing_set_time and TYPING_TIMEOUT */
   gboolean   typing;
 
+  gboolean    loading_past_events;
   gboolean    db_save_pending;
   gboolean    is_sending_message;
   gboolean    name_loaded;
@@ -1796,8 +1798,8 @@ room_load_prev_batch_cb (GObject      *obj,
   CmRoom *self;
   g_autoptr(GTask) task = user_data;
   g_autoptr(JsonObject) object = NULL;
+  GPtrArray *events = NULL;
   GError *error = NULL;
-  char *json_str;
   const char *end;
 
   self = g_task_get_source_object (task);
@@ -1822,8 +1824,9 @@ room_load_prev_batch_cb (GObject      *obj,
   cm_room_set_prev_batch (self, end);
   cm_room_save (self);
 
-  json_str = cm_utils_json_object_to_string (object, FALSE);
-  g_task_return_pointer (task, json_str, g_free);
+  events = g_ptr_array_new_full (64, g_object_unref);
+  cm_room_parse_events (self, object, events, FALSE, TRUE);
+  g_task_return_pointer (task, events, (GDestroyNotify)g_ptr_array_unref);
 }
 
 void
@@ -1864,8 +1867,126 @@ cm_room_load_prev_batch_async (CmRoom              *self,
                           query, cancellable, room_load_prev_batch_cb, task);
 }
 
-char *
+GPtrArray *
 cm_room_load_prev_batch_finish (CmRoom        *self,
+                                GAsyncResult  *result,
+                                GError       **error)
+{
+  g_return_val_if_fail (CM_IS_ROOM (self), NULL);
+  g_return_val_if_fail (G_IS_TASK (result), NULL);
+  g_return_val_if_fail (!error || !*error, NULL);
+
+  return g_task_propagate_pointer (G_TASK (result), error);
+}
+
+static void
+room_prev_batch_cb (GObject      *object,
+                    GAsyncResult *result,
+                    gpointer      user_data)
+{
+  CmRoom *self;
+  g_autoptr(GTask) task = user_data;
+  GPtrArray *events = NULL;
+  GError *error = NULL;
+
+  g_assert (G_IS_TASK (task));
+
+  self = g_task_get_source_object (task);
+  g_assert (CM_IS_ROOM (self));
+
+  events = cm_room_load_prev_batch_finish (self, result, &error);
+  self->loading_past_events = FALSE;
+
+  if (error)
+    {
+      g_task_return_error (task, error);
+    }
+  else
+    {
+      cm_db_add_room_events (cm_client_get_db (self->client),
+                             self, events, TRUE);
+      g_task_return_pointer (task, events, (GDestroyNotify)g_ptr_array_unref);
+    }
+}
+
+static void
+room_get_past_db_events_cb (GObject      *object,
+                            GAsyncResult *result,
+                            gpointer      user_data)
+{
+  CmRoom *self;
+  g_autoptr(GTask) task = user_data;
+  g_autoptr(GPtrArray) events = NULL;
+  g_autoptr(GError) error = NULL;
+
+  g_assert (G_IS_TASK (task));
+
+  self = g_task_get_source_object (task);
+  g_assert (CM_IS_ROOM (self));
+
+  events = cm_db_get_past_events_finish (CM_DB (object), result, &error);
+  self->loading_past_events = FALSE;
+
+  if (events && events->len)
+    {
+      for (guint i = 0; i < events->len; i++)
+        {
+          CmEvent *event = events->pdata[i];
+          CmRoomMember *member;
+
+          member = room_find_member (self, G_LIST_MODEL (self->joined_members),
+                                     cm_event_get_sender_id (event), TRUE);
+          cm_event_set_sender (event, CM_USER (member));
+          if (g_strcmp0 (cm_event_get_sender_id (event),
+                         cm_client_get_user_id (self->client)) == 0)
+            cm_event_sender_is_self (event);
+        }
+
+      g_task_return_pointer (task, g_steal_pointer (&events),
+                             (GDestroyNotify)g_ptr_array_unref);
+    }
+  else if (self->prev_batch)
+    {
+      self->loading_past_events = TRUE;
+      cm_room_load_prev_batch_async (self, NULL, room_prev_batch_cb,
+                                     g_steal_pointer (&task));
+    }
+  else
+    {
+      g_task_return_pointer (task, NULL, NULL);
+    }
+}
+
+void
+cm_room_get_past_events_async (CmRoom              *self,
+                               CmEvent             *from,
+                               GAsyncReadyCallback  callback,
+                               gpointer             user_data)
+{
+  g_autoptr(GTask) task = NULL;
+
+  g_return_if_fail (CM_IS_ROOM (self));
+  g_return_if_fail (!from || CM_IS_ROOM_EVENT (from));
+
+  task = g_task_new (self, NULL, callback, user_data);
+
+  if (self->loading_past_events)
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_PENDING,
+                               "Past events are being already loaded");
+      return;
+    }
+
+  self->loading_past_events = TRUE;
+
+  cm_db_get_past_events_async (cm_client_get_db (self->client),
+                               self, from,
+                               room_get_past_db_events_cb,
+                               g_steal_pointer (&task));
+}
+
+GPtrArray *
+cm_room_get_past_events_finish (CmRoom        *self,
                                 GAsyncResult  *result,
                                 GError       **error)
 {
