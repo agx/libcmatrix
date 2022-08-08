@@ -100,6 +100,15 @@ typedef enum {
 } CmRoomType;
 
 typedef enum {
+  CM_STATUS_UNKNOWN,
+  CM_STATUS_JOIN,
+  CM_STATUS_LEAVE,
+  CM_STATUS_INVITE,
+  CM_STATUS_BAN,
+  CM_STATUS_KNOCK
+} CmStatus;
+
+typedef enum {
   CM_CONTENT_TYPE_UNKNOWN,
   CM_CONTENT_TYPE_TEXT,
   CM_CONTENT_TYPE_EMOTE,
