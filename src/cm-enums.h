@@ -60,38 +60,6 @@ typedef enum {
 } CmError;
 
 
-/*
- * CM_BLUE_PILL and CM_RED_PILL
- * are objects than actions
- */
-typedef enum {
-  /* When nothing real is happening */
-  CM_BLUE_PILL,  /* For no/unknown command */
-  CM_GET_HOMESERVER,
-  CM_VERIFY_HOMESERVER,
-  CM_PASSWORD_LOGIN,
-  CM_ACCESS_TOKEN_LOGIN,
-  CM_UPLOAD_KEY,
-  CM_GET_JOINED_ROOMS,
-  CM_SET_TYPING,
-  CM_SEND_MESSAGE,
-  CM_SEND_IMAGE,
-  CM_SEND_VIDEO,
-  CM_SEND_FILE,
-  /* sync: plugged into the Matrix from the real world */
-  /* TODO? */
-  /* CM_RED_PILL = 255, */
-  CM_RED_PILL,
-} CmAction;
-
-/* typedef enum { */
-/*   CM_UNKNOWN, */
-/*   CM_LOGGING_IN, */
-/*   CM_LOGGED_IN, */
-/*   CM_BAD_PASSWORD, */
-/*   CM_BAD_HOMESERVER, */
-/* } CmState; */
-
 typedef enum {
   CM_ROOM_UNKNOWN,
   CM_ROOM_JOINED,
