@@ -793,10 +793,25 @@ void
 cm_room_set_name (CmRoom     *self,
                   const char *name)
 {
+  JsonObject *child;
+
   g_return_if_fail (CM_IS_ROOM (self));
+
+  if (g_strcmp0 (name, self->name) == 0)
+    return;
 
   g_free (self->name);
   self->name = g_strdup (name);
+
+  if (!self->local_json)
+    room_generate_json (self);
+
+  child = cm_utils_json_object_get_object (self->local_json, "local");
+  json_object_set_string_member (child, "alias", name);
+
+  self->db_save_pending = TRUE;
+
+  g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
 }
 
 void
@@ -805,10 +820,23 @@ cm_room_set_generated_name (CmRoom     *self,
 {
   g_return_if_fail (CM_IS_ROOM (self));
 
+  if (g_strcmp0 (name, self->generated_name) == 0)
+    return;
+
   g_free (self->generated_name);
   self->generated_name = g_strdup (name);
 
+  if (self->local_json)
+    {
+      JsonObject *child;
+
+      child = cm_utils_json_object_get_object (self->local_json, "local");
+      json_object_set_string_member (child, "generated_alias", name);
+    }
+
   self->db_save_pending = TRUE;
+
+  g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
 }
 
 /* cm_room_get_encryption_rotation_time:
