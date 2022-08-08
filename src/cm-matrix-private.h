@@ -17,6 +17,8 @@
 
 G_BEGIN_DECLS
 
+const char  *cm_matrix_get_data_dir   (void);
+const char  *cm_matrix_get_app_id     (void);
 
 /* To be used only for tests */
 CmDb *cm_matrix_get_db (CmMatrix *self);

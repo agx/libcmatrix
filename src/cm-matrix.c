@@ -314,3 +314,15 @@ cm_matrix_get_db (CmMatrix *self)
 
   return self->cm_db;
 }
+
+const char *
+cm_matrix_get_data_dir (void)
+{
+  return cmatrix_data_dir;
+}
+
+const char *
+cm_matrix_get_app_id (void)
+{
+  return cmatrix_app_id;
+}
