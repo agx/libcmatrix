@@ -20,3 +20,5 @@ G_BEGIN_DECLS
 
 /* To be used only for tests */
 CmDb *cm_matrix_get_db (CmMatrix *self);
+
+G_END_DECLS
