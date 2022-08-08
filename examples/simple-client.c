@@ -20,22 +20,30 @@ CmMatrix *matrix;
 CmClient *client;
 
 static void
-simple_account_sync_cb (gpointer    object,
-                        CmClient   *cm_client,
-                        CmAction    action,
-                        const char *event,
-                        const char *json,
-                        GError     *err)
+simple_account_sync_cb (gpointer   object,
+                        CmClient  *cm_client,
+                        CmRoom    *room,
+                        GPtrArray *events,
+                        GError    *err)
 {
   puts ("\n\n\n");
 
-  if (event)
-    g_message ("client event: %s", event);
+  if (room && events)
+    {
+      for (guint i = 0; i < events->len; i++)
+        {
+          gpointer event;
 
-  /* You shall see encrypted room contents as encrypted text here */
-  /* You can use cm_room_decrypt_content() for "m.room.encrypted" type events */
-  if (json)
-    g_message ("client json: %s", json);
+          event = events->pdata[i];
+          g_warning ("here: %d", cm_event_get_m_type (event));
+
+          if (CM_IS_ROOM_MESSAGE_EVENT (event) &&
+              cm_room_message_event_get_msg_type (event))
+            {
+              g_warning ("text message: %s", cm_room_message_event_get_body (event));
+            }
+        }
+    }
 
   if (err)
     g_warning ("client error: %s", err->message);
@@ -73,7 +81,7 @@ simple_get_homeserver_cb (GObject      *object,
 
   /* The sync callback runs for every /sync response and other interesting events (like wrong password error) */
   cm_client_set_sync_callback (client,
-                               (CmCallback)simple_account_sync_cb,
+                               simple_account_sync_cb,
                                NULL, NULL);
   /* Now, enable the client, and the client will start to sync, executing the callback on events */
   cm_client_set_enabled (client, TRUE);
@@ -146,12 +154,16 @@ main (void)
 {
   GMainLoop *main_loop;
   g_autofree char *db_dir = NULL;
+  g_autofree char *data_dir = NULL;
+  g_autofree char *cache_dir = NULL;
 
   /* Initialize the library */
   cm_init (TRUE);
 
   /* Create a matrix object */
-  matrix = g_object_new (CM_TYPE_MATRIX, NULL);
+  data_dir = g_build_filename (g_get_user_data_dir (), "CMatrix", "simple-client", NULL);
+  cache_dir = g_build_filename (g_get_user_cache_dir (), "CMatrix", "simple-client", NULL);
+  matrix = cm_matrix_new (data_dir, cache_dir, "com.example.CMatrix");
 
   /* Ask matrix to open/create the db which will be used to store keys, session data, etc. */
   db_dir = g_build_filename (g_get_user_data_dir (), "CMatrix", "simple-client", NULL);
