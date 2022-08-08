@@ -2378,6 +2378,8 @@ void
 cm_client_get_file_async (CmClient              *self,
                           const char            *uri,
                           GCancellable          *cancellable,
+                          GFileProgressCallback  progress_callback,
+                          gpointer               progress_user_data,
                           GAsyncReadyCallback    callback,
                           gpointer               user_data)
 {

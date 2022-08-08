@@ -46,4 +46,14 @@ void        cm_client_upload_group_keys_async     (CmClient            *self,
 gboolean    cm_client_upload_group_keys_finish    (CmClient            *self,
                                                    GAsyncResult        *result,
                                                    GError             **error);
+void          cm_client_get_file_async                (CmClient              *self,
+                                                       const char            *uri,
+                                                       GCancellable          *cancellable,
+                                                       GFileProgressCallback  progress_callback,
+                                                       gpointer               progress_user_data,
+                                                       GAsyncReadyCallback    callback,
+                                                       gpointer               user_data);
+GInputStream *cm_client_get_file_finish               (CmClient              *self,
+                                                       GAsyncResult          *result,
+                                                       GError               **error);
 G_END_DECLS

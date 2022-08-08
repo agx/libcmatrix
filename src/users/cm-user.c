@@ -178,6 +178,7 @@ cm_user_get_avatar_async (CmUser              *self,
                              user_get_avatar_cb, task);
   else if (priv->avatar_url)
     cm_client_get_file_async (priv->cm_client, priv->avatar_url, cancellable,
+                              NULL, NULL,
                               user_get_avatar_cb, g_steal_pointer (&task));
   else
     g_task_return_pointer (task, NULL, NULL);
@@ -239,6 +240,7 @@ user_get_user_info_cb (GObject      *obj,
 
       if (priv->avatar_url)
         cm_client_get_file_async (priv->cm_client, priv->avatar_url, cancellable,
+                                  NULL, NULL,
                                   user_get_avatar_cb, g_steal_pointer (&task));
       else
         g_task_return_pointer (task, NULL, NULL);

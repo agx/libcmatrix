@@ -78,13 +78,5 @@ void          cm_client_stop_sync                     (CmClient            *self
 gboolean      cm_client_get_logging_in                (CmClient            *self);
 gboolean      cm_client_get_logged_in                 (CmClient            *self);
 GListModel   *cm_client_get_joined_rooms              (CmClient            *self);
-void          cm_client_get_file_async                (CmClient              *self,
-                                                       const char            *uri,
-                                                       GCancellable          *cancellable,
-                                                       GAsyncReadyCallback    callback,
-                                                       gpointer               user_data);
-GInputStream *cm_client_get_file_finish               (CmClient              *self,
-                                                       GAsyncResult          *result,
-                                                       GError               **error);
 
 G_END_DECLS
