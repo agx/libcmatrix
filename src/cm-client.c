@@ -1012,9 +1012,13 @@ cm_client_set_password (CmClient   *self,
   g_return_if_fail (!self->is_logging_in);
   g_return_if_fail (!self->login_success);
 
-  gcry_free (self->password);
-  self->password = gcry_malloc_secure (strlen (password) + 1);
-  strcpy (self->password, password);
+  g_clear_pointer (&self->password, gcry_free);
+
+  if (password && *password)
+    {
+      self->password = gcry_malloc_secure (strlen (password) + 1);
+      strcpy (self->password, password);
+    }
 }
 
 /**
