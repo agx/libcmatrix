@@ -902,7 +902,7 @@ room_prepare_message (CmRoom             *self,
   g_assert (CM_IS_ROOM (self));
   g_assert (CM_IS_ROOM_MESSAGE_EVENT (message));
 
-  body = cm_room_message_event_get_plain (message);
+  body = cm_room_message_event_get_body (message);
   file = cm_room_message_event_get_file (message);
 
   root = json_object_new ();
@@ -1019,10 +1019,10 @@ room_send_file_cb (GObject      *object,
   /* https://matrix.org/docs/spec/client_server/r0.6.1#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid */
   if (self->encryption)
     uri = g_strdup_printf ("/_matrix/client/r0/rooms/%s/send/m.room.encrypted/%s",
-                           self->room_id, cm_room_event_get_id (CM_ROOM_EVENT (message)));
+                           self->room_id, cm_event_get_txn_id (CM_EVENT (message)));
   else
     uri = g_strdup_printf ("/_matrix/client/r0/rooms/%s/send/m.room.message/%s",
-                           self->room_id, cm_room_event_get_id (CM_ROOM_EVENT (message)));
+                           self->room_id, cm_event_get_txn_id (CM_EVENT (message)));
 
   cm_net_send_json_async (cm_client_get_net (self->client), 0,
                           g_object_steal_data (G_OBJECT (message), "json"),
@@ -1104,7 +1104,7 @@ room_send_message_from_queue (CmRoom *self)
   message = g_task_get_task_data (message_task);
   g_assert (CM_IS_ROOM_MESSAGE_EVENT (message));
 
-  if (cm_room_message_event_get_msg_type (message) == CM_MESSAGE_TYPE_FILE)
+  if (cm_room_message_event_get_msg_type (message) == CM_CONTENT_TYPE_FILE)
     {
       GFileProgressCallback progress_cb;
       gpointer progress_user_data;
@@ -1129,10 +1129,10 @@ room_send_message_from_queue (CmRoom *self)
   /* https://matrix.org/docs/spec/client_server/r0.6.1#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid */
   if (self->encryption)
     uri = g_strdup_printf ("/_matrix/client/r0/rooms/%s/send/m.room.encrypted/%s",
-                           self->room_id, cm_room_event_get_id (CM_ROOM_EVENT (message)));
+                           self->room_id, cm_event_get_txn_id (CM_EVENT (message)));
   else
     uri = g_strdup_printf ("/_matrix/client/r0/rooms/%s/send/m.room.message/%s",
-                           self->room_id, cm_room_event_get_id (CM_ROOM_EVENT (message)));
+                           self->room_id, cm_event_get_txn_id (CM_EVENT (message)));
 
   cm_net_send_json_async (cm_client_get_net (self->client), 0,
                           g_object_steal_data (G_OBJECT (message), "json"),
@@ -1185,17 +1185,17 @@ cm_room_send_text_async (CmRoom              *self,
   g_return_val_if_fail (CM_IS_ROOM (self), NULL);
 
   task = g_task_new (self, cancellable, callback, user_data);
-  message = cm_room_message_event_new (CM_MESSAGE_TYPE_TEXT);
-  cm_room_message_event_set_plain (message, text);
-  cm_room_event_create_id (CM_ROOM_EVENT (message),
-                           cm_client_pop_event_id (self->client));
+  message = cm_room_message_event_new (CM_CONTENT_TYPE_TEXT);
+  cm_room_message_event_set_body (message, text);
+  cm_event_create_txn_id (CM_EVENT (message),
+                          cm_client_pop_event_id (self->client));
   g_task_set_task_data (task, message, g_object_unref);
 
   g_queue_push_tail (self->message_queue, task);
 
   room_send_message_from_queue (self);
 
-  return cm_room_event_get_id (CM_ROOM_EVENT (message));
+  return cm_event_get_txn_id (CM_EVENT (message));
 }
 
 /**
@@ -1243,16 +1243,16 @@ cm_room_send_file_async (CmRoom                *self,
   g_object_set_data (G_OBJECT (task), "progress-cb", progress_callback);
   g_object_set_data (G_OBJECT (task), "progress-cb-data", progress_user_data);
 
-  message = cm_room_message_event_new (CM_MESSAGE_TYPE_FILE);
+  message = cm_room_message_event_new (CM_CONTENT_TYPE_FILE);
   cm_room_message_event_set_file (message, body, file);
-  cm_room_event_create_id (CM_ROOM_EVENT (message),
-                           cm_client_pop_event_id (self->client));
+  cm_event_create_txn_id (CM_EVENT (message),
+                          cm_client_pop_event_id (self->client));
   g_task_set_task_data (task, message, g_object_unref);
   g_queue_push_tail (self->message_queue, task);
 
   room_send_message_from_queue (self);
 
-  return cm_room_event_get_id (CM_ROOM_EVENT (message));
+  return cm_event_get_txn_id (CM_EVENT (message));
 }
 
 char *
