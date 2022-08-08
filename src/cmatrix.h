@@ -27,6 +27,7 @@ G_BEGIN_DECLS
 #include "cm-client.h"
 #include "cm-matrix.h"
 #include "cm-room.h"
+#include "events/cm-room-message-event.h"
 /* these are not yet public */
 /* #include "cm-room-member.h" */
 /* #include "cm-device.h" */
