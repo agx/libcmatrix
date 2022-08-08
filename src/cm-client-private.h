@@ -21,6 +21,21 @@
 
 G_BEGIN_DECLS
 
+void        cm_client_enable_as_in_store          (CmClient           *self);
+CmClient   *cm_client_new_from_secret             (gpointer            secret_retrievable,
+                                                   CmDb                *db);
+void        cm_client_save_secrets_async          (CmClient            *self,
+                                                   GAsyncReadyCallback  callback,
+                                                   gpointer             user_data);
+gboolean    cm_client_save_secrets_finish         (CmClient            *self,
+                                                   GAsyncResult        *result,
+                                                   GError             **error);
+void        cm_client_delete_secrets_async        (CmClient            *self,
+                                                   GAsyncReadyCallback  callback,
+                                                   gpointer             user_data);
+gboolean    cm_client_delete_secrets_finish       (CmClient            *self,
+                                                   GAsyncResult        *result,
+                                                   GError             **error);
 int         cm_client_pop_event_id                (CmClient            *self);
 CmDb       *cm_client_get_db                      (CmClient            *self);
 CmNet      *cm_client_get_net                     (CmClient            *self);

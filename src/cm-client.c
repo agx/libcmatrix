@@ -15,6 +15,7 @@
 
 #define GCRYPT_NO_DEPRECATED
 #include <gcrypt.h>
+#include <libsecret/secret.h>
 #include <libsoup/soup.h>
 
 #include "cm-net-private.h"
@@ -28,6 +29,7 @@
 #include "users/cm-account.h"
 #include "cm-room-private.h"
 #include "cm-room.h"
+#include "cm-secret-store-private.h"
 #include "cm-client-private.h"
 #include "cm-client.h"
 
@@ -88,6 +90,7 @@ struct _CmClient
   gboolean        db_loading;
   gboolean        db_loaded;
   gboolean        client_enabled;
+  gboolean        client_enabled_in_store;
   gboolean        has_tried_connecting;
   gboolean        is_logging_in;
   /* Set if passsword is right/success using @access_token */
@@ -508,6 +511,204 @@ CmClient *
 cm_client_new (void)
 {
   return g_object_new (CM_TYPE_CLIENT, NULL);
+}
+
+static char *
+client_get_value (const char *str,
+                  const char *key)
+{
+  const char *start, *end;
+
+  if (!str || !*str)
+    return NULL;
+
+  g_assert (key && *key);
+
+  start = strstr (str, key);
+  if (start) {
+    start = start + strlen (key);
+    while (*start && *start++ != '"')
+      ;
+
+    end = start - 1;
+    do {
+      end++;
+      end = strchr (end, '"');
+    } while (end && *(end - 1) == '\\' && *(end - 2) != '\\');
+
+    if (end && end > start)
+      return g_strndup (start, end - start);
+  }
+
+  return NULL;
+}
+
+void
+cm_client_enable_as_in_store (CmClient *self)
+{
+  g_return_if_fail (CM_IS_CLIENT (self));
+
+  if (self->client_enabled_in_store)
+    cm_client_set_enabled (self, TRUE);
+}
+
+CmClient *
+cm_client_new_from_secret (gpointer  secret_retrievable,
+                           CmDb     *db)
+{
+  CmClient *self = NULL;
+  g_autoptr(GHashTable) attributes = NULL;
+  SecretRetrievable *item = secret_retrievable;
+  g_autoptr(SecretValue) value = NULL;
+  const char *homeserver, *credentials = NULL;
+  const char *username, *login_username;
+  char *password, *token, *device_id;
+  char *password_str = NULL, *token_str = NULL;
+  g_autofree char *enabled = NULL;
+
+  g_return_val_if_fail (SECRET_IS_RETRIEVABLE (item), NULL);
+  g_return_val_if_fail (CM_IS_DB (db), NULL);
+
+  value = secret_retrievable_retrieve_secret_sync (item, NULL, NULL);
+
+  if (value)
+    credentials = secret_value_get_text (value);
+
+  if (!credentials)
+    return NULL;
+
+  attributes = secret_retrievable_get_attributes (item);
+  login_username = g_hash_table_lookup (attributes, CM_USERNAME_ATTRIBUTE);
+  homeserver = g_hash_table_lookup (attributes, CM_SERVER_ATTRIBUTE);
+
+  device_id = client_get_value (credentials, "\"device-id\"");
+  username = client_get_value (credentials, "\"username\"");
+  password = client_get_value (credentials, "\"password\"");
+  enabled = client_get_value (credentials, "\"enabled\"");
+  token = client_get_value (credentials, "\"access-token\"");
+
+  if (token)
+    token_str = g_strcompress (token);
+
+  if (password)
+    password_str = g_strcompress (password);
+
+  self = g_object_new (CM_TYPE_CLIENT, NULL);
+  cm_client_set_db (self, db);
+  cm_client_set_homeserver (self, homeserver);
+  cm_client_set_login_id (self, login_username);
+  cm_client_set_user_id (self, username);
+  cm_client_set_password (self, password_str);
+  cm_client_set_device_id (self, device_id);
+
+  if (g_strcmp0 (enabled, "true") == 0)
+    self->client_enabled_in_store = TRUE;
+
+  cm_client_set_access_token (self, token_str);
+
+  if (token && device_id) {
+    g_autofree char *pickle = NULL;
+
+    pickle = client_get_value (credentials, "\"pickle-key\"");
+    cm_client_set_pickle_key (self, pickle);
+  }
+
+  cm_utils_free_buffer (device_id);
+  cm_utils_free_buffer (password);
+  cm_utils_free_buffer (password_str);
+  cm_utils_free_buffer (token);
+  cm_utils_free_buffer (token_str);
+
+  return self;
+}
+static void
+save_secrets_cb (GObject      *object,
+                 GAsyncResult *result,
+                 gpointer      user_data)
+{
+  g_autoptr(GTask) task = user_data;
+  GError *error = NULL;
+  gboolean ret;
+
+  ret = cm_secret_store_save_finish (result, &error);
+
+  if (error)
+    g_task_return_error (task, error);
+  else
+    g_task_return_boolean (task, ret);
+}
+
+void
+cm_client_save_secrets_async (CmClient            *self,
+                              GAsyncReadyCallback  callback,
+                              gpointer             user_data)
+{
+  char *pickle_key = NULL;
+  GTask *task;
+
+  g_return_if_fail (CM_IS_CLIENT (self));
+
+  if (self->cm_enc)
+    pickle_key = cm_enc_get_pickle_key (self->cm_enc);
+
+  task = g_task_new (self, NULL, callback, user_data);
+  cm_secret_store_save_async (self,
+                              g_strdup (cm_client_get_access_token (self)),
+                              pickle_key, NULL,
+                              save_secrets_cb, task);
+}
+
+gboolean
+cm_client_save_secrets_finish (CmClient      *self,
+                               GAsyncResult  *result,
+                               GError       **error)
+{
+  g_return_val_if_fail (CM_IS_CLIENT (self), FALSE);
+  g_return_val_if_fail (G_IS_TASK (result), FALSE);
+
+  return g_task_propagate_boolean (G_TASK (result), error);
+}
+
+static void
+delete_secrets_cb (GObject      *object,
+                   GAsyncResult *result,
+                   gpointer      user_data)
+{
+  g_autoptr(GTask) task = user_data;
+  GError *error = NULL;
+  gboolean ret;
+
+  ret = cm_secret_store_delete_finish (result, &error);
+
+  if (error)
+    g_task_return_error (task, error);
+  else
+    g_task_return_boolean (task, ret);
+}
+
+void
+cm_client_delete_secrets_async (CmClient            *self,
+                                GAsyncReadyCallback  callback,
+                                gpointer             user_data)
+{
+  GTask *task;
+
+  g_return_if_fail (CM_IS_CLIENT (self));
+
+  task = g_task_new (self, NULL, callback, user_data);
+  cm_secret_store_delete_async (self, NULL,
+                                delete_secrets_cb, task);
+}
+
+gboolean
+cm_client_delete_secrets_finish (CmClient      *self,
+                                 GAsyncResult  *result,
+                                 GError       **error)
+{
+  g_return_val_if_fail (CM_IS_CLIENT (self), FALSE);
+  g_return_val_if_fail (G_IS_TASK (result), FALSE);
+
+  return g_task_propagate_boolean (G_TASK (result), error);
 }
 
 CmAccount *
