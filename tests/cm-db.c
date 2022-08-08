@@ -416,7 +416,7 @@ test_cm_db_migration (void)
     GTask *task;
     int status;
 
-    if (g_str_has_suffix (name, "v1.sql"))
+    if (g_str_has_suffix (name, "v2.sql"))
       continue;
 
     g_assert_true (g_str_has_suffix (name, "sql"));
@@ -427,7 +427,7 @@ test_cm_db_migration (void)
     sqlite3_close (db);
 
     /* Export migrated version sql file */
-    expected_file = g_strdelimit (g_strdup (name), "0", '1');
+    expected_file = g_strdelimit (g_strdup (name), "01", '2');
     matrix_export_sql_file (path, expected_file, &db);
 
     /* Open history with old db, which will result in db migration */

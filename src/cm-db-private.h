@@ -129,6 +129,18 @@ char          *cm_db_lookup_session                (CmDb                *self,
                                                     const char          *session_id,
                                                     const char          *sender_key,
                                                     CmSessionType        type);
+void           cm_db_add_room_events               (CmDb                *self,
+                                                    CmRoom              *room,
+                                                    GPtrArray           *events,
+                                                    gboolean             prepend);
+void           cm_db_get_past_events_async         (CmDb                *self,
+                                                    CmRoom              *room,
+                                                    CmEvent             *from,
+                                                    GAsyncReadyCallback  callback,
+                                                    gpointer             user_data);
+GPtrArray     *cm_db_get_past_events_finish        (CmDb                *self,
+                                                    GAsyncResult        *result,
+                                                    GError             **error);
 gpointer       cm_db_lookup_olm_session            (CmDb                *self,
                                                     const char          *account_id,
                                                     const char          *account_device,

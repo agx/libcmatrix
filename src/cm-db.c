@@ -17,6 +17,9 @@
 #include <fcntl.h>
 #include <sqlite3.h>
 
+#include "events/cm-event-private.h"
+#include "events/cm-room-event-private.h"
+#include "events/cm-room-message-event-private.h"
 #include "cm-enc-private.h"
 #include "cm-client-private.h"
 #include "cm-room-private.h"
@@ -27,7 +30,7 @@
 #define STRING_VALUE(arg) #arg
 
 /* increment when DB changes */
-#define DB_VERSION 1
+#define DB_VERSION 2
 
 struct _CmDb
 {
@@ -89,14 +92,61 @@ matrix_bind_text (sqlite3_stmt *statement,
 static void
 matrix_bind_int (sqlite3_stmt *statement,
                  guint         position,
-                 int           bind_value,
+                 gint64        bind_value,
                  const char   *message)
 {
   guint status;
 
-  status = sqlite3_bind_int (statement, position, bind_value);
+  status = sqlite3_bind_int64 (statement, position, bind_value);
   warn_if_sql_error (status, message);
 }
+
+static int
+db_event_state_to_int (CmEventState state)
+{
+  switch (state)
+    {
+    case CM_EVENT_STATE_DRAFT:
+      return 1;
+
+    case CM_EVENT_STATE_RECEIVED:
+      return 2;
+
+      /* When saving to db consider sending as failed */
+    case CM_EVENT_STATE_SENDING:
+    case CM_EVENT_STATE_SENDING_FAILED:
+      return 3;
+
+    case CM_EVENT_STATE_SENT:
+      return 4;
+
+    case CM_EVENT_STATE_UNKNOWN:
+    default:
+      return 0;
+    }
+
+  return 0;
+}
+
+#if 0
+static CmEventState
+db_event_state_from_int (int state)
+{
+  if (state == 0)
+    return CM_EVENT_STATE_UNKNOWN;
+
+  if (state == 1)
+    return CM_EVENT_STATE_DRAFT;
+
+  if (state == 2)
+    return CM_EVENT_STATE_RECEIVED;
+
+  if (state == 3)
+    return CM_EVENT_STATE_SENDING_FAILED;
+
+  return CM_EVENT_STATE_SENT;
+}
+#endif
 
 /**
    user_devices.json_data
@@ -104,6 +154,8 @@ matrix_bind_int (sqlite3_stmt *statement,
    -  device_display_name
    users.json_data
    - local
+   -  name
+   -  avatar_url
    -  status = unknown, known, blocked, verified,
    accounts.json_data
    - local
@@ -116,12 +168,18 @@ matrix_bind_int (sqlite3_stmt *statement,
    -  state = int (joined, invited, left, unknown)
    -  name_loaded = bool
    -  alias = string
+   -  draft = json object
+   -    m.text = string
    -  encryption = int (0 = "none", 1 = "m.megolm.v1.aes-sha2")
    -  rotation_period_ms = time_t (or may be use μs as provided by server?)
    -  rotation_count_msgs = int (message count max for key change)
    session.json_data
    - local
    -  key_added_date = time_t (or may be use μs as provided by server?)
+   room_members.json_data
+   - local
+   -  display_name TEXT (set if different from default name)
+   -  avatar_url TEXT (set id different from default avatar)
 */
 static gboolean
 cm_db_create_schema (CmDb  *self,
@@ -142,17 +200,23 @@ cm_db_create_schema (CmDb  *self,
 
     "CREATE TABLE IF NOT EXISTS users ("
     "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
-    /* Version 2: Unique */
+    /* v2 */
+    "account_id INTEGER REFERENCES accounts(id), "
+    /* Version 1: Unique */
     "username TEXT NOT NULL UNIQUE, "
-    /* Version 2 */
+    /* Version 1 */
     "outdated INTEGER DEFAULT 1, "
-    /* Version 2 */
+    /* Version 1 */
     "json_data TEXT);"
 
-    /* Version 2 */
+    /* Version 1 */
     "CREATE TABLE IF NOT EXISTS user_devices ("
     "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
     "user_id INTEGER NOT NULL REFERENCES users(id), "
+    /* xxx: Move device to devices table along with
+     * curve25519_key and ed25519_key as the same
+     * can exist in several accounts
+     */
     "device TEXT NOT NULL, "
     "curve25519_key TEXT, "
     "ed25519_key TEXT, "
@@ -162,12 +226,12 @@ cm_db_create_schema (CmDb  *self,
 
     "CREATE TABLE IF NOT EXISTS accounts ("
     "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
-    /* Version 2 */
+    /* Version 1 */
     "user_device_id INTEGER NOT NULL REFERENCES user_devices(id), "
     "next_batch TEXT, "
     "pickle TEXT, "
     "enabled INTEGER DEFAULT 0, "
-    /* Version 2 */
+    /* Version 1 */
     "json_data TEXT, "
     "UNIQUE (user_device_id));"
 
@@ -176,15 +240,51 @@ cm_db_create_schema (CmDb  *self,
     "account_id INTEGER NOT NULL REFERENCES accounts(id), "
     "room_name TEXT NOT NULL, "
     "prev_batch TEXT, "
-    /* Version 2 */
+    /* Version 1 */
     /* Set if the room has tombstone and got replaced by a different room */
     "replacement_room_id INTEGER REFERENCES rooms(id),"
-    /* Version 2 */
+    /* Version 1 */
     "json_data TEXT, "
     "UNIQUE (account_id, room_name));"
 
+    /* v2 */
+    "CREATE TABLE IF NOT EXISTS room_members ("
+    "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
+    "room_id INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE, "
+    "user_id INTEGER NOT NULL REFERENCES users(id), "
+    /* joined, invited, left (we set left instead of deleting as past messages may refer to user id) */
+    "user_state INTEGER NOT NULL DEFAULT 0, "
+    "json_data TEXT, "
+    "UNIQUE (room_id, user_id));"
+
+    /* v2 */
+    "CREATE TABLE IF NOT EXISTS room_events ("
+    "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
+    /* 'id' above only increments, 'sorted_id' increments
+     * or decrements in the order events has to be placed.
+     */
+    "sorted_id INTEGER NOT NULL, "
+    "room_id INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE, "
+    "sender_id INTEGER NOT NULL REFERENCES room_members(id), "
+    "event_type INTEGER NOT NULL, "
+    "event_uid TEXT NOT NULL, "
+    "txnid TEXT, "
+    /* If set to 0, this event replaces some other, which is not yet in db */
+    "replaces_event_id INTEGER REFERENCES room_events(id), "
+    /* If set to 0, this event is a reply to some other, which is not yet in db */
+    "reply_to_id INTEGER REFERENCES room_events(id), "
+    /* sending, sent, sending failed, */
+    "event_state INTEGER, "
+    "state_key TEXT, "
+    "origin_server_ts INTEGER NOT NULL, "
+    /* direction int, encrypted int, verified int, txnid */
+    "json_data TEXT, "
+    "UNIQUE (room_id, event_uid));"
+
     "CREATE TABLE IF NOT EXISTS encryption_keys ("
     "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
+    /* v2 */
+    "account_id INTEGER REFERENCES accounts(id), "
     "file_url TEXT NOT NULL, "
     "file_sha256 TEXT, "
     /* Initialization vector: iv in JSON */
@@ -199,9 +299,9 @@ cm_db_create_schema (CmDb  *self,
     "type INT NOT NULL, "
     /* ext in JSON */
     "extractable INT DEFAULT 1 NOT NULL, "
-    /* Version 2 */
+    /* Version 1 */
     "json_data TEXT, "
-    "UNIQUE (file_url));"
+    "UNIQUE (account_id, file_url));"
 
     "CREATE TABLE IF NOT EXISTS session ("
     "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
@@ -211,9 +311,9 @@ cm_db_create_schema (CmDb  *self,
     "type INTEGER NOT NULL, "
     "pickle TEXT NOT NULL, "
     "time INT, "
-    /* Version 2 */
+    /* Version 1 */
     "room_id INTEGER REFERENCES rooms(id), "
-    /* Version 2 */
+    /* Version 1 */
     "json_data TEXT, "
     "UNIQUE (account_id, sender_key, session_id));"
 
@@ -289,7 +389,7 @@ cm_db_backup (CmDb *self)
 }
 
 static gboolean
-cm_db_migrate_db_v2 (CmDb  *self,
+cm_db_migrate_db_v1 (CmDb  *self,
                      GTask *task)
 {
   char *error = NULL;
@@ -302,8 +402,8 @@ cm_db_migrate_db_v2 (CmDb  *self,
   cm_db_backup (self);
 
   status = sqlite3_exec (self->db,
-                         "BEGIN TRANSACTION;"
                          "PRAGMA foreign_keys=OFF;"
+                         "BEGIN TRANSACTION;"
 
                          "CREATE TABLE IF NOT EXISTS tmp_users ("
                          "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
@@ -390,7 +490,118 @@ cm_db_migrate_db_v2 (CmDb  *self,
                          "PRAGMA foreign_keys=ON;",
                          NULL, NULL, &error);
 
-  g_debug ("Migrating db to version %d, success: %d", DB_VERSION, !error);
+  g_debug ("Migrating db to version 1, success: %d", !error);
+
+  if (status == SQLITE_OK || status == SQLITE_DONE)
+    return TRUE;
+
+  g_task_return_new_error (task,
+                           G_IO_ERROR,
+                           G_IO_ERROR_FAILED,
+                           "Couldn't migrate to new db. errno: %d. %s",
+                           status, error);
+  sqlite3_free (error);
+
+  return FALSE;
+}
+
+static gboolean
+cm_db_migrate_to_v2 (CmDb  *self,
+                     GTask *task)
+{
+  char *error = NULL;
+  int status;
+
+  g_assert (CM_IS_DB (self));
+  g_assert (G_IS_TASK (task));
+  g_assert (g_thread_self () == self->worker_thread);
+
+  cm_db_backup (self);
+
+  status = sqlite3_exec (self->db,
+                         "PRAGMA foreign_keys=OFF;"
+                         "BEGIN TRANSACTION;"
+
+                         "CREATE TABLE IF NOT EXISTS room_members ("
+                         "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
+                         "room_id INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE, "
+                         "user_id INTEGER NOT NULL REFERENCES users(id), "
+                         /* joined, invited, left (we set left instead of deleting as past messages may refer to user id) */
+                         "user_state INTEGER NOT NULL DEFAULT 0, "
+                         "json_data TEXT, "
+                         "UNIQUE (room_id, user_id));"
+
+                         "CREATE TABLE IF NOT EXISTS room_events ("
+                         "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
+                         /* 'id' above only increments, 'sorted_id' increments
+                          * or decrements in the order events has to be placed.
+                          */
+                         "sorted_id INTEGER NOT NULL, "
+                         "room_id INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE, "
+                         "sender_id INTEGER NOT NULL REFERENCES room_members(id), "
+                         "event_type INTEGER NOT NULL, "
+                         "event_uid TEXT NOT NULL, "
+                         "txnid TEXT, "
+                         "replaces_event_id INTEGER REFERENCES room_events(id), "
+                         "reply_to_id INTEGER REFERENCES room_events(id), "
+                         /* sending, sent, sending failed, */
+                         "event_state INTEGER, "
+                         "state_key TEXT, "
+                         "origin_server_ts INTEGER NOT NULL, "
+                         /* direction int, encrypted int, verified int, txnid */
+                         "json_data TEXT, "
+                         "UNIQUE (room_id, event_uid));"
+
+                         "CREATE TABLE IF NOT EXISTS tmp_encryption_keys ("
+                         "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
+                         /* v2 */
+                         "account_id INTEGER REFERENCES accounts(id), "
+                         "file_url TEXT NOT NULL, "
+                         "file_sha256 TEXT, "
+                         /* Initialization vector: iv in JSON */
+                         "iv TEXT NOT NULL, "
+                         /* v in JSON */
+                         "version INT DEFAULT 2 NOT NULL, "
+                         /* alg in JSON */
+                         "algorithm INT NOT NULL, "
+                         /* k in JSON */
+                         "key TEXT NOT NULL, "
+                         /* kty in JSON */
+                         "type INT NOT NULL, "
+                         /* ext in JSON */
+                         "extractable INT DEFAULT 1 NOT NULL, "
+                         /* Version 1 */
+                         "json_data TEXT, "
+                         "UNIQUE (account_id, file_url));"
+
+                         "INSERT INTO tmp_encryption_keys(file_url,file_sha256,iv,version,algorithm,key,type,extractable) "
+                         "SELECT DISTINCT file_url,file_sha256,iv,version,algorithm,key,type,extractable FROM encryption_keys;"
+
+                         "CREATE TABLE IF NOT EXISTS tmp_users ("
+                         "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
+                         "account_id INTEGER REFERENCES accounts(id), "
+                         "username TEXT NOT NULL UNIQUE, "
+                         "outdated INTEGER DEFAULT 1, "
+                         "json_data TEXT "
+                         ");"
+
+                         "INSERT INTO tmp_users(id,username) "
+                         "SELECT DISTINCT id,username FROM users;"
+
+                         "DROP TABLE IF EXISTS users;"
+                         "DROP TABLE IF EXISTS encryption_keys;"
+
+                         "ALTER TABLE tmp_users RENAME TO users;"
+                         "ALTER TABLE tmp_encryption_keys RENAME TO encryption_keys;"
+
+                         "PRAGMA user_version = 2;"
+
+                         "COMMIT;"
+
+                         "PRAGMA foreign_keys=ON;",
+                         NULL, NULL, &error);
+
+  g_debug ("Migrating db to version 2, success: %d", !error);
 
   if (status == SQLITE_OK || status == SQLITE_DONE)
     return TRUE;
@@ -426,7 +637,12 @@ cm_db_migrate (CmDb  *self,
     return FALSE;
 
   case 0:
-    if (!cm_db_migrate_db_v2 (self, task))
+    if (!cm_db_migrate_db_v1 (self, task))
+      return FALSE;
+    /* fallthrough */
+
+  case 1:
+    if (!cm_db_migrate_to_v2 (self, task))
       return FALSE;
     break;
 
@@ -443,10 +659,108 @@ cm_db_migrate (CmDb  *self,
 }
 
 static int
+db_get_room_event_id (CmDb       *self,
+                      int         room_id,
+                      int        *out_sorted_id,
+                      const char *event)
+{
+  sqlite3_stmt *stmt;
+  int event_id = 0;
+
+  if (!room_id || !event || !*event)
+    return 0;
+
+  g_assert (CM_IS_DB (self));
+
+  sqlite3_prepare_v2 (self->db,
+                      "SELECT id,sorted_id FROM room_events WHERE room_id=? "
+                      "AND event_uid=?",
+                      -1, &stmt, NULL);
+  matrix_bind_int (stmt, 1, room_id, "binding when selecting event");
+  matrix_bind_text (stmt, 2, event, "binding when selecting event");
+  if (sqlite3_step (stmt) == SQLITE_ROW)
+    {
+      event_id = sqlite3_column_int (stmt, 0);
+
+      if (out_sorted_id)
+        *out_sorted_id = sqlite3_column_int (stmt, 1);
+    }
+
+  sqlite3_finalize (stmt);
+
+  return event_id;
+}
+
+static int
+db_get_first_room_event_id (CmDb *self,
+                            int   room_id,
+                            int  *out_sorted_id)
+{
+  sqlite3_stmt *stmt;
+  int event_id = 0;
+
+  g_assert (CM_IS_DB (self));
+
+  if (!room_id)
+    return 0;
+
+  sqlite3_prepare_v2 (self->db,
+                      "SELECT id,sorted_id FROM room_events WHERE room_id=? "
+                      "ORDER BY sorted_id ASC LIMIT 1",
+                      -1, &stmt, NULL);
+  matrix_bind_int (stmt, 1, room_id, "binding when selecting event");
+
+  if (sqlite3_step (stmt) == SQLITE_ROW)
+    {
+      event_id = sqlite3_column_int (stmt, 0);
+      if (out_sorted_id)
+        *out_sorted_id = sqlite3_column_int (stmt, 1);
+    }
+
+  sqlite3_finalize (stmt);
+
+  return event_id;
+}
+
+/* xxx: Merge with above method with a proper name */
+static int
+db_get_last_room_event_id (CmDb *self,
+                           int   room_id,
+                           int  *out_sorted_id)
+{
+  sqlite3_stmt *stmt;
+  int event_id = 0;
+
+  g_assert (CM_IS_DB (self));
+
+  if (!room_id)
+    return 0;
+
+  sqlite3_prepare_v2 (self->db,
+                      "SELECT id,sorted_id FROM room_events WHERE room_id=? "
+                      "ORDER BY sorted_id DESC LIMIT 1",
+                      -1, &stmt, NULL);
+  matrix_bind_int (stmt, 1, room_id, "binding when selecting event");
+
+  if (sqlite3_step (stmt) == SQLITE_ROW)
+    {
+      event_id = sqlite3_column_int (stmt, 0);
+      if (out_sorted_id)
+        *out_sorted_id = sqlite3_column_int (stmt, 1);
+    }
+
+  sqlite3_finalize (stmt);
+
+  return event_id;
+}
+
+static int
 matrix_db_get_user_id (CmDb       *self,
+                       int         account_id,
                        const char *username,
                        gboolean    insert_if_missing)
 {
+  const char *query;
   sqlite3_stmt *stmt;
   int user_id = 0;
 
@@ -455,10 +769,16 @@ matrix_db_get_user_id (CmDb       *self,
 
   g_assert (CM_IS_DB (self));
 
-  sqlite3_prepare_v2 (self->db,
-                      "SELECT id FROM users WHERE username=?",
-                      -1, &stmt, NULL);
+  if (account_id)
+    query = "SELECT id FROM users WHERE username=? AND account_id=?";
+  else
+    query = "SELECT id FROM users WHERE username=? AND account_id IS NULL";
+
+  sqlite3_prepare_v2 (self->db, query, -1, &stmt, NULL);
   matrix_bind_text (stmt, 1, username, "binding when selecting user");
+  if (account_id)
+    matrix_bind_int (stmt, 2, account_id, "binding when selecting user");
+
   if (sqlite3_step (stmt) == SQLITE_ROW)
     user_id = sqlite3_column_int (stmt, 0);
   sqlite3_finalize (stmt);
@@ -466,10 +786,16 @@ matrix_db_get_user_id (CmDb       *self,
   if (user_id || !insert_if_missing)
     return user_id;
 
-  sqlite3_prepare_v2 (self->db,
-                      "INSERT INTO users(username) VALUES(?1)",
-                      -1, &stmt, NULL);
+  if (account_id)
+    query = "INSERT INTO users(username,account_id) VALUES(?1,?2)";
+  else
+    query = "INSERT INTO users(username) VALUES(?1)";
+
+  sqlite3_prepare_v2 (self->db, query, -1, &stmt, NULL);
   matrix_bind_text (stmt, 1, username, "binding when adding user");
+  if (account_id)
+    matrix_bind_int (stmt, 2, account_id, "binding when adding user");
+
   sqlite3_step (stmt);
   sqlite3_finalize (stmt);
   user_id = sqlite3_last_insert_rowid (self->db);
@@ -492,7 +818,7 @@ matrix_db_get_user_device_id (CmDb       *self,
 
   g_assert (CM_IS_DB (self));
 
-  user_id = matrix_db_get_user_id (self, username, insert_if_missing);
+  user_id = matrix_db_get_user_id (self, 0, username, insert_if_missing);
 
   if (out_user_id)
     *out_user_id = user_id;
@@ -623,6 +949,57 @@ matrix_db_get_room_id (CmDb       *self,
   sqlite3_finalize (stmt);
 
   return room_id;
+}
+
+static int
+db_get_room_member_id (CmDb       *self,
+                       int         account_id,
+                       int         room_id,
+                       const char *member,
+                       gboolean    insert_if_missing)
+{
+  sqlite3_stmt *stmt;
+  int member_id = 0, user_id = 0;
+
+  if (!member || !*member || !room_id)
+    return 0;
+
+  sqlite3_prepare_v2 (self->db,
+                      "SELECT room_members.id FROM room_members "
+                      "INNER JOIN users ON users.username=? "
+                      "WHERE room_id=?",
+                      -1, &stmt, NULL);
+  matrix_bind_text (stmt, 1, member, "binding when getting room member id");
+  matrix_bind_int (stmt, 2, room_id, "binding when getting room member id");
+
+  if (sqlite3_step (stmt) == SQLITE_ROW)
+    {
+      member_id = sqlite3_column_int (stmt, 0);
+      sqlite3_finalize (stmt);
+
+      return member_id;
+    }
+
+  if (!insert_if_missing)
+    return 0;
+
+  user_id = matrix_db_get_user_id (self, account_id, member, insert_if_missing);
+  if (!user_id)
+    return 0;
+
+  sqlite3_prepare_v2 (self->db,
+                      "INSERT INTO room_members(room_id,user_id) "
+                      "VALUES(?1,?2)",
+                      -1, &stmt, NULL);
+  matrix_bind_int (stmt, 1, room_id, "binding when getting room member id");
+  matrix_bind_int (stmt, 2, user_id, "binding when getting room member id");
+
+  sqlite3_step (stmt);
+  member_id = sqlite3_last_insert_rowid (self->db);
+
+  sqlite3_finalize (stmt);
+
+  return member_id;
 }
 
 static void
@@ -831,35 +1208,31 @@ cm_db_get_rooms (CmDb *self,
   g_assert (CM_IS_DB (self));
   g_assert (account_id);
 
-  rooms = g_ptr_array_new_full (32, g_object_unref);
-
   sqlite3_prepare_v2 (self->db,
-                      "SELECT room_name,prev_batch,json_data FROM rooms "
+                      "SELECT id,room_name,prev_batch,json_data FROM rooms "
                       "WHERE account_id=? AND replacement_room_id IS NULL",
                       -1, &stmt, NULL);
   matrix_bind_int (stmt, 1, account_id, "binding when getting rooms");
 
   while (sqlite3_step (stmt) == SQLITE_ROW)
     {
-      char *room_id, *prev_batch, *json_str;
-      g_autoptr(JsonObject) json = NULL;
-      JsonObject *child;
+      char *room_name, *prev_batch, *json_str;
+      JsonObject *json = NULL;
       CmRoom *room;
+      int room_id;
 
-      room_id = (char *)sqlite3_column_text (stmt, 0);
-      prev_batch = (char *)sqlite3_column_text (stmt, 1);
-      json_str = (char *)sqlite3_column_text (stmt, 2);
+      if (!rooms)
+        rooms = g_ptr_array_new_full (32, g_object_unref);
 
-      room = cm_room_new (room_id);
+      room_id = sqlite3_column_int (stmt, 0);
+      room_name = (char *)sqlite3_column_text (stmt, 1);
+      prev_batch = (char *)sqlite3_column_text (stmt, 2);
+      json_str = (char *)sqlite3_column_text (stmt, 3);
+      json = cm_utils_string_to_json_object (json_str);
+
+      room = cm_room_new_from_json (room_name, json, NULL);
+      g_object_set_data (G_OBJECT (room), "-cm-room-id", GINT_TO_POINTER (room_id));
       cm_room_set_prev_batch (room, prev_batch);
-
-      if (json_str && *json_str)
-        json = cm_utils_string_to_json_object (json_str);
-
-      child = cm_utils_json_object_get_object (json, "local");
-      cm_room_set_name (room, cm_utils_json_object_get_string (child, "alias"));
-      cm_room_set_is_direct (room, cm_utils_json_object_get_bool (child, "direct"));
-      cm_room_set_is_encrypted (room, cm_utils_json_object_get_int (child, "encryption") > 0);
 
       g_ptr_array_add (rooms, room);
     }
@@ -938,9 +1311,8 @@ cm_db_save_room (CmDb  *self,
 {
   g_autofree char *json_str = NULL;
   CmRoom *room;
-  JsonObject *root, *obj;
-  const char *username, *client_device, *room_alias, *prev_batch;
-  const char *replacement;
+  const char *username, *client_device, *prev_batch;
+  const char *replacement, *json = NULL;
   sqlite3_stmt *stmt;
   int account_id, room_id = 0, replacement_id = 0;
 
@@ -952,7 +1324,7 @@ cm_db_save_room (CmDb  *self,
   username = g_object_get_data (G_OBJECT (task), "username");
   client_device = g_object_get_data (G_OBJECT (task), "client-device");
   room = g_object_get_data (G_OBJECT (task), "room");
-  room_alias = g_object_get_data (G_OBJECT (task), "room-alias");
+  json = g_object_get_data (G_OBJECT (task), "json");
   prev_batch = g_object_get_data (G_OBJECT (task), "prev-batch");
   replacement = g_object_get_data (G_OBJECT (task), "replacement");
 
@@ -977,18 +1349,8 @@ cm_db_save_room (CmDb  *self,
       return;
     }
 
-  if (cm_room_has_state_sync (room))
-    {
-      root = json_object_new ();
-      obj = json_object_new ();
-      json_object_set_object_member (root, "local", obj);
-
-      json_object_set_boolean_member (obj, "direct", cm_room_is_direct (room));
-      json_object_set_string_member (obj, "alias", room_alias);
-      json_object_set_int_member (obj, "encryption", cm_room_is_encrypted (room));
-
-      json_str = cm_utils_json_object_to_string (root, FALSE);
-    }
+  if (!cm_room_has_state_sync (room))
+    json = NULL;
 
   sqlite3_prepare_v2 (self->db,
                       "UPDATE rooms SET prev_batch=?1,json_data=?2, "
@@ -997,7 +1359,7 @@ cm_db_save_room (CmDb  *self,
                       -1, &stmt, NULL);
 
   matrix_bind_text (stmt, 1, prev_batch, "binding when saving room");
-  matrix_bind_text (stmt, 2, json_str, "binding when saving room");
+  matrix_bind_text (stmt, 2, json, "binding when saving room");
   matrix_bind_int (stmt, 3, replacement_id, "binding when saving room");
   matrix_bind_int (stmt, 4, room_id, "binding when saving room");
 
@@ -1359,6 +1721,213 @@ db_lookup_olm_session (CmDb  *self,
   g_object_set_data_full (G_OBJECT (task), "plaintext", plain_text,
                           (GDestroyNotify)cm_utils_free_buffer);
   g_task_return_pointer (task, session, g_free);
+}
+
+static void
+db_add_room_events (CmDb  *self,
+                    GTask *task)
+{
+  const char *username, *device, *room;
+  sqlite3_stmt *stmt;
+  GPtrArray *events;
+  int room_id, account_id, sorted_event_id = 0;
+  gboolean prepend;
+
+  g_assert (CM_IS_DB (self));
+  g_assert (G_IS_TASK (task));
+  g_assert (g_thread_self () == self->worker_thread);
+  g_assert (self->db);
+
+  username = g_object_get_data (G_OBJECT (task), "username");
+  device = g_object_get_data (G_OBJECT (task), "device");
+  room = g_object_get_data (G_OBJECT (task), "room");
+  events = g_object_get_data (G_OBJECT (task), "events");
+  prepend = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (task), "prepend"));
+  g_assert (events && events->len);
+
+  account_id = matrix_db_get_account_id (self, username, device, NULL, FALSE);
+  room_id = matrix_db_get_room_id (self, account_id, room, FALSE);
+
+  if (prepend)
+    db_get_first_room_event_id (self, room_id, &sorted_event_id);
+  else
+    db_get_last_room_event_id (self, room_id, &sorted_event_id);
+
+  if (sorted_event_id)
+    prepend ? (--sorted_event_id) : (++sorted_event_id);
+
+  if (!room_id)
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
+                               "Account or Room not found in db");
+      return;
+    }
+
+  /* todo: Look into sqlite transactions */
+  for (guint i = 0; i < events->len; i++)
+    {
+      g_autoptr(JsonObject) json_obj = NULL;
+      JsonObject *json, *encrypted, *local = NULL;
+      CmEvent *event = events->pdata[i];
+      g_autofree char *json_str = NULL;
+      const char *sender;
+      int member_id, replaces_id, reply_to_id;
+      int event_state;
+
+      json = cm_event_get_json (event);
+      encrypted = cm_event_get_encrypted_json (event);
+      sender = cm_event_get_sender_id (event);
+
+      member_id = db_get_room_member_id (self, account_id, room_id, sender, TRUE);
+
+      if (!member_id)
+        continue;
+
+      replaces_id = db_get_room_event_id (self, room_id, NULL,
+                                          cm_event_get_replaces_id (event));
+      reply_to_id = db_get_room_event_id (self, room_id, NULL,
+                                          cm_event_get_reply_to_id (event));
+
+      json_obj = json_object_new ();
+      if (json)
+        json_object_set_object_member (json_obj, "json", json_object_ref (json));
+      if (encrypted)
+        json_object_set_object_member (json_obj, "encrypted", json_object_ref (encrypted));
+
+      if (cm_event_get_txn_id (event))
+        {
+          local = json_object_new ();
+          json_object_set_string_member (local, "txnid",
+                                         cm_event_get_txn_id (event));
+        }
+
+      if (local)
+        json_object_set_object_member (json_obj, "local", local);
+
+      json_str = cm_utils_json_object_to_string (json_obj, FALSE);
+      event_state = db_event_state_to_int (cm_event_get_state (event));
+
+      sqlite3_prepare_v2 (self->db,
+                          /*                          1       2         3 */
+                          "INSERT INTO room_events(sorted_id,room_id,sender_id,"
+                          /*   4           5            6            7 */
+                          "event_type,event_uid,replaces_event_id,reply_to_id,"
+                          /*   8           9             10          11 */
+                          "event_state,state_key,origin_server_ts,json_data) "
+                          "VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
+                          -1, &stmt, NULL);
+      matrix_bind_int (stmt, 1, sorted_event_id, "binding when adding event");
+      matrix_bind_int (stmt, 2, room_id, "binding when adding event");
+      matrix_bind_int (stmt, 3, member_id, "binding when adding event");
+      matrix_bind_int (stmt, 4, cm_event_get_m_type (event), "binding when adding event");
+      matrix_bind_text (stmt, 5, cm_event_get_id (event), "binding when adding event");
+      /* We check if we have a replaces event id instead of replaces_id, as
+       * replaces_id can be 0 if the event is not yet in db, which also means
+       * that if the id is not NULL and 0, the event replaces some other event */
+      if (cm_event_get_replaces_id (event))
+        matrix_bind_int (stmt, 6, replaces_id, "binding when adding event");
+      if (cm_event_get_reply_to_id (event))
+        matrix_bind_int (stmt, 7, reply_to_id, "binding when adding event");
+      matrix_bind_int (stmt, 8, event_state, "binding when adding event");
+      matrix_bind_text (stmt, 9, cm_event_get_state_key (event), "binding when adding event");
+      matrix_bind_int (stmt, 10, cm_event_get_time_stamp (event), "binding when adding event");
+      matrix_bind_text (stmt, 11, json_str, "binding when adding event");
+      sqlite3_step (stmt);
+      sqlite3_finalize (stmt);
+
+      prepend ? (--sorted_event_id) : (++sorted_event_id);
+    }
+
+  g_task_return_boolean (task, TRUE);
+}
+
+static void
+db_get_past_events (CmDb  *self,
+                    GTask *task)
+{
+  const char *username, *device, *room, *event;
+  GPtrArray *events = NULL;
+  sqlite3_stmt *stmt;
+  CmRoom *cm_room;
+  int room_id, account_id, event_id, sorted_event_id = 0;
+  gboolean skip = FALSE;
+
+  g_assert (CM_IS_DB (self));
+  g_assert (G_IS_TASK (task));
+  g_assert (g_thread_self () == self->worker_thread);
+  g_assert (self->db);
+
+  room = g_object_get_data (G_OBJECT (task), "room");
+  event = g_object_get_data (G_OBJECT (task), "event");
+  device = g_object_get_data (G_OBJECT (task), "device");
+  cm_room = g_object_get_data (G_OBJECT (task), "cm-room");
+  username = g_object_get_data (G_OBJECT (task), "username");
+
+  account_id = matrix_db_get_account_id (self, username, device, NULL, FALSE);
+  room_id = matrix_db_get_room_id (self, account_id, room, FALSE);
+
+  if (event)
+    event_id = db_get_room_event_id (self, room_id, &sorted_event_id, event);
+  else
+    event_id = db_get_last_room_event_id (self, room_id, &sorted_event_id);
+
+  /* If we have an event, we want to skip the first match as the match
+   * is the event we provided */
+  if (event)
+    skip = TRUE;
+
+  if (!event_id)
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
+                               "Couldn't find event in db");
+      return;
+    }
+
+  sqlite3_prepare_v2 (self->db,
+                      "SELECT id,room_events.json_data FROM room_events "
+                      "WHERE room_id=? AND sorted_id <= ? "
+                      /* Limit to messages until chatty has better events support */
+                      "AND event_type=? "
+                      "ORDER BY sorted_id DESC, id DESC LIMIT 30",
+                      -1, &stmt, NULL);
+
+  matrix_bind_int (stmt, 1, room_id, "binding when loading past events");
+  matrix_bind_int (stmt, 2, sorted_event_id, "binding when loading past events");
+  matrix_bind_int (stmt, 3, CM_M_ROOM_MESSAGE, "binding when loading past events");
+
+  while (sqlite3_step (stmt) == SQLITE_ROW)
+    {
+      JsonObject *encrypted, *root;
+      g_autoptr(JsonObject) json = NULL;
+      CmRoomEvent *cm_event;
+
+      if (skip)
+        {
+          skip = FALSE;
+          continue;
+        }
+
+      json = cm_utils_string_to_json_object ((char *)sqlite3_column_text (stmt, 1));
+
+      if (!json)
+        continue;
+
+      root = cm_utils_json_object_get_object (json, "json");
+      encrypted = cm_utils_json_object_get_object (json, "encrypted");
+      cm_event = cm_room_event_new_from_json (cm_room, root, encrypted);
+
+      if (!cm_event)
+        continue;
+
+      if (!events)
+        events = g_ptr_array_new_full (32, g_object_unref);
+
+      g_ptr_array_add (events, cm_event);
+    }
+
+  sqlite3_finalize (stmt);
+
+  g_task_return_pointer (task, events, (GDestroyNotify)g_ptr_array_unref);
 }
 
 static void
@@ -1752,7 +2321,7 @@ cm_db_save_room_async (CmDb                *self,
                        GAsyncReadyCallback  callback,
                        gpointer             user_data)
 {
-  const char *username, *device_id, *room_alias, *prev_batch;
+  const char *username, *device_id, *prev_batch;
   const char *replacement;
   GTask *task;
 
@@ -1765,13 +2334,12 @@ cm_db_save_room_async (CmDb                *self,
 
   username = cm_client_get_user_id (client);
   device_id = cm_client_get_device_id (client);
-  room_alias = cm_room_get_name (room);
   prev_batch = cm_room_get_prev_batch (room);
   replacement = cm_room_get_replacement_room (room);
 
   g_object_set_data_full (G_OBJECT (task), "username", g_strdup (username), g_free);
   g_object_set_data_full (G_OBJECT (task), "room", g_object_ref (room), g_object_unref);
-  g_object_set_data_full (G_OBJECT (task), "room-alias", g_strdup (room_alias), g_free);
+  g_object_set_data_full (G_OBJECT (task), "json", cm_room_get_json (room), g_free);
   g_object_set_data_full (G_OBJECT (task), "prev-batch", g_strdup (prev_batch), g_free);
   g_object_set_data_full (G_OBJECT (task), "client", g_object_ref (client), g_object_unref);
   g_object_set_data_full (G_OBJECT (task), "client-device", g_strdup (device_id), g_free);
@@ -2059,7 +2627,8 @@ cm_db_lookup_olm_session (CmDb           *self,
   g_object_set_data (object, "type", GINT_TO_POINTER (type));
   g_object_set_data (object, "message-type", GUINT_TO_POINTER (message_type));
 
-  g_async_queue_push_front (self->queue, task);
+  /* Push to end as we may have to match items inserted immediately before */
+  g_async_queue_push (self->queue, task);
   g_assert (task);
 
   /* Wait until the task is completed */
@@ -2073,6 +2642,118 @@ cm_db_lookup_olm_session (CmDb           *self,
     g_debug ("Error getting session: %s", error->message);
 
   return pickle;
+}
+
+/*
+ * cm_db_add_room_events:
+ * @prepend: Whether the events should be
+ * added before or after already saved
+ * events. Set %TRUE to add before. %FALSE
+ * otherwise.
+ */
+void
+cm_db_add_room_events (CmDb      *self,
+                       CmRoom    *cm_room,
+                       GPtrArray *events,
+                       gboolean   prepend)
+{
+  const char *username, *device, *room;
+  g_autoptr(GTask) task = NULL;
+  g_autoptr(GError) error = NULL;
+  CmClient *client;
+
+  g_return_if_fail (CM_IS_DB (self));
+  g_return_if_fail (CM_IS_ROOM (cm_room));
+
+  if (!events || !events->len)
+    return;
+
+  if (g_application_get_default ())
+    g_application_hold (g_application_get_default ());
+
+  client = cm_room_get_client (cm_room);
+  username = cm_client_get_user_id (client);
+  device = cm_client_get_device_id (client);
+  room = cm_room_get_id (cm_room);
+
+  task = g_task_new (self, NULL, NULL, NULL);
+  g_object_ref (task);
+  g_object_ref (cm_room);
+  g_ptr_array_ref (events);
+  g_task_set_task_data (task, db_add_room_events, NULL);
+  g_object_set_data_full (G_OBJECT (task), "events", events, (GDestroyNotify)g_ptr_array_unref);
+  g_object_set_data_full (G_OBJECT (task), "cm-room", cm_room, g_object_unref);
+  g_object_set_data_full (G_OBJECT (task), "room", g_strdup (room), g_free);
+  g_object_set_data_full (G_OBJECT (task), "username", g_strdup (username), g_free);
+  g_object_set_data_full (G_OBJECT (task), "device", g_strdup (device), g_free);
+  g_object_set_data (G_OBJECT (task), "prepend", GINT_TO_POINTER (!!prepend));
+
+  g_async_queue_push (self->queue, task);
+
+  /* Wait until the task is completed */
+  while (!g_task_get_completed (task))
+    g_main_context_iteration (NULL, TRUE);
+
+  if (g_application_get_default ())
+    g_application_release (g_application_get_default ());
+
+  g_task_propagate_boolean (task, &error);
+
+  if (error)
+    g_debug ("Error getting session: %s", error->message);
+}
+
+void
+cm_db_get_past_events_async (CmDb                *self,
+                             CmRoom              *room,
+                             CmEvent             *from,
+                             GAsyncReadyCallback  callback,
+                             gpointer             user_data)
+{
+  const char *room_name, *username, *device, *event = NULL;
+  CmClient *client;
+  GTask *task;
+
+  g_return_if_fail (CM_IS_DB (self));
+  g_return_if_fail (CM_IS_ROOM (room));
+  g_return_if_fail (!from || CM_IS_EVENT (from));
+
+  g_object_ref (room);
+  if (from)
+    {
+      g_object_ref (from);
+      event = cm_event_get_id (from);
+    }
+
+  client = cm_room_get_client (room);
+  room_name = cm_room_get_id (room);
+  username = cm_client_get_user_id (client);
+  device = cm_client_get_device_id (client);
+  g_return_if_fail (device && *device);
+
+  task = g_task_new (self, NULL, callback, user_data);
+  g_object_set_data_full (G_OBJECT (task), "cm-room", room, g_object_unref);
+  g_object_set_data_full (G_OBJECT (task), "cm-event", from, g_object_unref);
+  g_object_set_data_full (G_OBJECT (task), "room", g_strdup (room_name), g_free);
+  g_object_set_data_full (G_OBJECT (task), "event", g_strdup (event), g_free);
+  g_object_set_data_full (G_OBJECT (task), "username", g_strdup (username), g_free);
+  g_object_set_data_full (G_OBJECT (task), "device", g_strdup (device), g_free);
+  g_task_set_source_tag (task, cm_db_get_past_events_async);
+  g_task_set_task_data (task, db_get_past_events, NULL);
+
+  g_async_queue_push (self->queue, task);
+}
+
+GPtrArray *
+cm_db_get_past_events_finish (CmDb          *self,
+                              GAsyncResult  *result,
+                              GError       **error)
+{
+  g_return_val_if_fail (CM_IS_DB (self), NULL);
+  g_return_val_if_fail (G_IS_TASK (result), NULL);
+  g_return_val_if_fail (!error || !*error, NULL);
+
+  return g_task_propagate_pointer (G_TASK (result), error);
 }
 
 void
