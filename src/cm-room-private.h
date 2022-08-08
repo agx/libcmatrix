@@ -26,6 +26,7 @@ CmRoom       *cm_room_new_from_json                (const char          *room_id
                                                     CmEvent             *last_event);
 char         *cm_room_get_json                     (CmRoom              *self);
 const char   *cm_room_get_replacement_room         (CmRoom              *self);
+CmClient     *cm_room_get_client                   (CmRoom              *self);
 void          cm_room_set_client                   (CmRoom              *self,
                                                     CmClient            *client);
 gboolean      cm_room_has_state_sync               (CmRoom              *self);
@@ -84,4 +85,11 @@ void          cm_room_is_encrypted_async           (CmRoom              *self,
 gboolean      cm_room_is_encrypted_finish          (CmRoom              *self,
                                                     GAsyncResult        *result,
                                                    GError             **error);
+void          cm_room_load_prev_batch_async        (CmRoom              *self,
+                                                    GCancellable        *cancellable,
+                                                    GAsyncReadyCallback  callback,
+                                                    gpointer             user_data);
+GPtrArray    *cm_room_load_prev_batch_finish       (CmRoom              *self,
+                                                    GAsyncResult        *result,
+                                                    GError             **error);
 G_END_DECLS
