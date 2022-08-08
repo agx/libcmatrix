@@ -559,6 +559,27 @@ cm_room_decrypt_content (CmRoom     *self,
   return plain_text;
 }
 
+JsonObject *
+cm_room_decrypt (CmRoom     *self,
+                 JsonObject *root)
+{
+  char *plain_text = NULL;
+  JsonObject *content;
+  CmEnc *enc;
+
+  g_return_val_if_fail (CM_IS_ROOM (self), NULL);
+
+  enc = cm_client_get_enc (self->client);
+
+  if (!enc || !root)
+    return NULL;
+
+  content = cm_utils_json_object_get_object (root, "content");
+  plain_text = cm_enc_handle_join_room_encrypted (enc, self->room_id, content);
+
+  return cm_utils_string_to_json_object (plain_text);
+}
+
 static void
 cm_room_parse_events (CmRoom     *self,
                       JsonObject *root)

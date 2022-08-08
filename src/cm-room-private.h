@@ -32,6 +32,8 @@ void          cm_room_set_client                   (CmRoom              *self,
 gboolean      cm_room_has_state_sync               (CmRoom              *self);
 void          cm_room_set_data                     (CmRoom              *self,
                                                     JsonObject          *object);
+JsonObject   *cm_room_decrypt                      (CmRoom              *self,
+                                                    JsonObject          *root);
 void          cm_room_user_changed                 (CmRoom              *self,
                                                     const char          *user_id);
 const char   *cm_room_get_prev_batch               (CmRoom              *self);
