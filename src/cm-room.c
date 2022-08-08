@@ -2155,18 +2155,20 @@ room_load_from_db_cb (GObject      *object,
 
   if (json_str)
     {
-      g_autoptr(JsonObject) root = NULL;
+      JsonObject *root = NULL;
       JsonObject *obj;
 
       self->initial_sync_done = TRUE;
       self->name_loaded = TRUE;
 
       root = cm_utils_string_to_json_object (json_str);
+      self->local_json = root;
       obj = cm_utils_json_object_get_object (root, "local");
       if (cm_utils_json_object_get_int (obj, "encryption"))
         self->encryption = g_strdup ("encrypted");
       cm_room_set_is_direct (self, cm_utils_json_object_get_bool (obj, "direct"));
-      cm_room_set_name (self, cm_utils_json_object_get_string (obj, "alias"));
+      g_free (self->name);
+      self->name = g_strdup (cm_utils_json_object_get_string (obj, "alias"));
       cm_room_set_prev_batch (self, prev_batch);
 
       g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_ENCRYPTED]);
