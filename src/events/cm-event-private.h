@@ -11,26 +11,35 @@
 # error "Only <cmatrix.h> can be included directly."
 #endif
 
-#include <glib-object.h>
-#include <gio/gio.h>
+#include <json-glib/json-glib.h>
+
+#include "cm-types.h"
+#include "cm-event.h"
 
 G_BEGIN_DECLS
 
-#define CM_TYPE_EVENT (cm_event_get_type ())
-
-G_DECLARE_DERIVABLE_TYPE (CmEvent, cm_event, CM, EVENT, GObject)
-
-struct _CmEventClass
-{
-  GObjectClass parent_class;
-};
-
-const char *cm_event_get_id            (CmEvent    *self);
-void        cm_event_set_id            (CmEvent    *self,
-                                        const char *id);
-const char *cm_event_get_json          (CmEvent    *self);
+const char   *cm_event_get_txn_id         (CmEvent      *self);
+void          cm_event_create_txn_id      (CmEvent      *self,
+                                           guint         id);
+const char   *cm_event_get_state_key      (CmEvent      *self);
+void          cm_event_set_id             (CmEvent      *self,
+                                           const char   *id);
+const char   *cm_event_get_replaces_id    (CmEvent      *self);
+const char   *cm_event_get_reply_to_id    (CmEvent      *self);
+void          cm_event_set_m_type         (CmEvent      *self,
+                                           CmEventType   type);
+void          cm_event_set_json           (CmEvent      *self,
+                                           JsonObject   *root,
+                                           JsonObject   *encrypted);
+const char   *cm_event_get_sender_id      (CmEvent      *self);
+void          cm_event_set_sender         (CmEvent      *self,
+                                           CmUser       *sender);
+void          cm_event_sender_is_self     (CmEvent      *self);
+char         *cm_event_get_json_str       (CmEvent      *self,
+                                           gboolean      prettify);
+JsonObject   *cm_event_get_json           (CmEvent      *self);
+JsonObject   *cm_event_get_encrypted_json (CmEvent      *self);
 const char *cm_event_get_original_json (CmEvent    *self);
-gboolean    cm_event_is_encrypted      (CmEvent    *self);
 gboolean    cm_event_is_verified       (CmEvent    *self);
 
 G_END_DECLS
