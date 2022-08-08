@@ -147,9 +147,14 @@ int
 main (int   argc,
       char *argv[])
 {
+  g_autoptr(CmMatrix) matrix = NULL;
+
   g_test_init (&argc, &argv, NULL);
 
   cm_init (TRUE);
+  matrix = cm_matrix_new (g_test_get_dir (G_TEST_BUILT),
+                          g_test_get_dir (G_TEST_BUILT),
+                          "org.example.CMatrix");
   g_test_add_func ("/enc-chat/new", test_enc_chat_new);
 
   return g_test_run ();
