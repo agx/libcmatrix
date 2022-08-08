@@ -11,33 +11,19 @@
 # error "Only <cmatrix.h> can be included directly."
 #endif
 
+#include <json-glib/json-glib.h>
 #include <glib-object.h>
 #include <gio/gio.h>
 
 #include "cm-room-event-private.h"
+#include "cm-room-message-event.h"
 
 G_BEGIN_DECLS
 
-typedef enum {
-  CM_MESSAGE_TYPE_UNKNOWN,
-  CM_MESSAGE_TYPE_AUDIO,
-  CM_MESSAGE_TYPE_EMOTE,
-  CM_MESSAGE_TYPE_FILE,
-  CM_MESSAGE_TYPE_IMAGE,
-  CM_MESSAGE_TYPE_LOCATION,
-  CM_MESSAGE_TYPE_TEXT
-} CmMessageType;
-
-#define CM_TYPE_ROOM_MESSAGE_EVENT (cm_room_message_event_get_type ())
-
-G_DECLARE_FINAL_TYPE (CmRoomMessageEvent, cm_room_message_event, CM, ROOM_MESSAGE_EVENT, CmRoomEvent)
-
-CmRoomMessageEvent *cm_room_message_event_new           (CmMessageType       type);
-CmMessageType       cm_room_message_event_get_msg_type  (CmRoomMessageEvent *self);
-/* void                cm_room_message_event_new_from_json (JsonObject         *json); */
-void                cm_room_message_event_set_plain     (CmRoomMessageEvent *self,
+CmRoomMessageEvent *cm_room_message_event_new           (CmContentType       type);
+CmRoomEvent        *cm_room_message_event_new_from_json (JsonObject         *root);
+void                cm_room_message_event_set_body      (CmRoomMessageEvent *self,
                                                          const char         *text);
-const char         *cm_room_message_event_get_plain     (CmRoomMessageEvent *self);
 void                cm_room_message_event_set_file      (CmRoomMessageEvent *self,
                                                          const char         *body,
                                                          GFile              *file);

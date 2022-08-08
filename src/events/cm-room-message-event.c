@@ -12,18 +12,27 @@
 # include "config.h"
 #endif
 
+#include "cm-utils-private.h"
 #include "cm-common.h"
+#include "cm-matrix-private.h"
 #include "cm-enums.h"
+#include "cm-client-private.h"
+#include "cm-room-private.h"
 #include "cm-room-message-event-private.h"
 
 struct _CmRoomMessageEvent
 {
   CmRoomEvent     parent_instance;
 
-  CmMessageType   type;
+  JsonObject     *json;
+  CmContentType   type;
 
-  char           *plain_text;
+  char           *body;
   GFile          *file;
+  GInputStream   *file_istream;
+  char           *mxc_uri;
+
+  gboolean       downloading_file;
 };
 
 G_DEFINE_TYPE (CmRoomMessageEvent, cm_room_message_event, CM_TYPE_ROOM_EVENT)
@@ -33,7 +42,9 @@ cm_room_message_event_finalize (GObject *object)
 {
   CmRoomMessageEvent *self = (CmRoomMessageEvent *)object;
 
-  g_free (self->plain_text);
+  g_clear_pointer (&self->json, json_object_unref);
+  g_free (self->body);
+  g_free (self->mxc_uri);
 
   G_OBJECT_CLASS (cm_room_message_event_parent_class)->finalize (object);
 }
@@ -52,7 +63,7 @@ cm_room_message_event_init (CmRoomMessageEvent *self)
 }
 
 CmRoomMessageEvent *
-cm_room_message_event_new (CmMessageType type)
+cm_room_message_event_new (CmContentType type)
 {
   CmRoomMessageEvent *self;
 
@@ -62,31 +73,72 @@ cm_room_message_event_new (CmMessageType type)
   return self;
 }
 
-CmMessageType
+CmRoomEvent *
+cm_room_message_event_new_from_json (JsonObject *root)
+{
+  CmRoomMessageEvent *self;
+  const char *type, *body;
+  JsonObject *child;
+
+  g_return_val_if_fail (root, NULL);
+
+  type = cm_utils_json_object_get_string (root, "type");
+
+  if (g_strcmp0 (type, "m.room.message") != 0)
+    g_return_val_if_reached (NULL);
+
+  self = g_object_new (CM_TYPE_ROOM_MESSAGE_EVENT, NULL);
+  self->json = json_object_ref (root);
+
+  child = cm_utils_json_object_get_object (root, "content");
+  type = cm_utils_json_object_get_string (child, "msgtype");
+  body = cm_utils_json_object_get_string (child, "body");
+  self->body = g_strdup (body);
+  self->mxc_uri = g_strdup (cm_utils_json_object_get_string (child, "url"));
+
+  if (g_strcmp0 (type, "m.text") == 0)
+    self->type = CM_CONTENT_TYPE_TEXT;
+  else if (g_strcmp0 (type, "m.file") == 0)
+    self->type = CM_CONTENT_TYPE_FILE;
+  else if (g_strcmp0 (type, "m.image") == 0)
+    self->type = CM_CONTENT_TYPE_IMAGE;
+  else if (g_strcmp0 (type, "m.audio") == 0)
+    self->type = CM_CONTENT_TYPE_AUDIO;
+  else if (g_strcmp0 (type, "m.location") == 0)
+    self->type = CM_CONTENT_TYPE_LOCATION;
+  else if (g_strcmp0 (type, "m.emote") == 0)
+    self->type = CM_CONTENT_TYPE_EMOTE;
+  else if (g_strcmp0 (type, "m.notice") == 0)
+    self->type = CM_CONTENT_TYPE_NOTICE;
+
+  return CM_ROOM_EVENT (self);
+}
+
+CmContentType
 cm_room_message_event_get_msg_type (CmRoomMessageEvent *self)
 {
-  g_return_val_if_fail (CM_IS_ROOM_MESSAGE_EVENT (self), CM_MESSAGE_TYPE_UNKNOWN);
+  g_return_val_if_fail (CM_IS_ROOM_MESSAGE_EVENT (self), CM_CONTENT_TYPE_UNKNOWN);
 
   return self->type;
 }
 
 void
-cm_room_message_event_set_plain (CmRoomMessageEvent *self,
-                                 const char    *text)
+cm_room_message_event_set_body (CmRoomMessageEvent *self,
+                                const char         *text)
 {
   g_return_if_fail (CM_IS_ROOM_MESSAGE_EVENT (self));
-  g_return_if_fail (self->type == CM_MESSAGE_TYPE_TEXT);
+  g_return_if_fail (self->type == CM_CONTENT_TYPE_TEXT);
 
-  g_free (self->plain_text);
-  self->plain_text = g_strdup (text);
+  g_free (self->body);
+  self->body = g_strdup (text);
 }
 
 const char *
-cm_room_message_event_get_plain (CmRoomMessageEvent *self)
+cm_room_message_event_get_body (CmRoomMessageEvent *self)
 {
   g_return_val_if_fail (CM_IS_ROOM_MESSAGE_EVENT (self), NULL);
 
-  return self->plain_text;
+  return self->body;
 }
 
 void
@@ -95,11 +147,12 @@ cm_room_message_event_set_file (CmRoomMessageEvent *self,
                                 GFile              *file)
 {
   g_return_if_fail (CM_IS_ROOM_MESSAGE_EVENT (self));
-  g_return_if_fail (self->type == CM_MESSAGE_TYPE_FILE);
+  g_return_if_fail (self->type == CM_CONTENT_TYPE_FILE);
   g_return_if_fail (!self->file);
 
-  self->file = g_object_ref (file);
-  self->plain_text = g_strdup (body);
+  g_set_object (&self->file, file);
+  g_free (self->body);
+  self->body = g_strdup (body);
 }
 
 GFile *
@@ -108,4 +161,164 @@ cm_room_message_event_get_file (CmRoomMessageEvent *self)
   g_return_val_if_fail (CM_IS_ROOM_MESSAGE_EVENT (self), NULL);
 
   return self->file;
+}
+
+static void
+message_file_stream_cb (GObject      *obj,
+                        GAsyncResult *result,
+                        gpointer      user_data)
+{
+  CmRoomMessageEvent *self;
+  g_autoptr(GTask) task = user_data;
+  GError *error = NULL;
+
+  g_assert (G_IS_TASK (task));
+
+  self = g_task_get_source_object (task);
+  g_assert (CM_IS_ROOM_MESSAGE_EVENT (self));
+
+  g_output_stream_splice_finish (G_OUTPUT_STREAM (obj), result, &error);
+  self->downloading_file = FALSE;
+
+  if (error) {
+    g_task_return_error (task, error);
+  } else {
+    g_autofree char *file_name = NULL;
+    GFile *out_file;
+
+    out_file = g_object_steal_data (user_data, "out-file");
+    self->file_istream = (GInputStream *)g_file_read (out_file, NULL, NULL);
+    g_object_set_data_full (G_OBJECT (self->file_istream), "out-file",
+                            out_file, g_object_unref);
+    g_task_return_pointer (task, g_object_ref (self->file_istream), g_object_unref);
+  }
+}
+
+static void
+message_event_get_file_cb (GObject      *object,
+                           GAsyncResult *result,
+                           gpointer      user_data)
+{
+  CmRoomMessageEvent *self;
+  g_autoptr(GTask) task = user_data;
+  g_autoptr(GInputStream) istream = NULL;
+  GOutputStream *out_stream = NULL;
+  GFile *out_file = NULL;
+  GError *error = NULL;
+
+  g_assert (G_IS_TASK (task));
+
+  self = g_task_get_source_object (task);
+  g_assert (CM_IS_ROOM_MESSAGE_EVENT (self));
+
+  istream = cm_client_get_file_finish (CM_CLIENT (object), result, &error);
+  self->downloading_file = FALSE;
+
+  if (error)
+    {
+      g_task_return_error (task, error);
+
+      return;
+    }
+  else
+    {
+      g_autofree char *file_path = NULL;
+      g_autofree char *file_name = NULL;
+      const char *path;
+
+      path = cm_matrix_get_data_dir ();
+      file_name = g_path_get_basename (self->mxc_uri);
+      file_path = cm_utils_get_path_for_m_type (path, CM_M_ROOM_MESSAGE, FALSE, file_name);
+      out_file = g_file_new_build_filename (file_path, NULL);
+      out_stream = (GOutputStream *)g_file_create (out_file, G_FILE_CREATE_NONE, NULL, &error);
+      g_object_set_data_full (G_OBJECT (task), "out-file", out_file, g_object_unref);
+    }
+
+  if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_EXISTS))
+    {
+      GFileIOStream *io_stream;
+
+      g_clear_error (&error);
+      io_stream = g_file_open_readwrite (out_file, NULL, &error);
+      if (io_stream)
+        {
+          g_object_set_data_full (G_OBJECT (task), "io-stream", io_stream, g_object_unref);
+          out_stream = g_io_stream_get_output_stream (G_IO_STREAM (io_stream));
+        }
+    }
+
+  if (out_stream)
+    {
+      self->downloading_file = TRUE;
+      g_output_stream_splice_async (G_OUTPUT_STREAM (out_stream), istream,
+                                    G_OUTPUT_STREAM_SPLICE_CLOSE_SOURCE |
+                                    G_OUTPUT_STREAM_SPLICE_CLOSE_TARGET,
+                                    0, NULL,
+                                    message_file_stream_cb,
+                                    g_steal_pointer (&task));
+    }
+  else
+    {
+      if (error)
+        g_task_return_error (task, error);
+      else
+        g_task_return_boolean (task, FALSE);
+    }
+}
+
+void
+cm_room_message_event_get_file_async (CmRoomMessageEvent    *self,
+                                      GCancellable          *cancellable,
+                                      GFileProgressCallback  progress_callback,
+                                      gpointer               progress_user_data,
+                                      GAsyncReadyCallback    callback,
+                                      gpointer               user_data)
+{
+  CmRoom *room;
+  GTask *task;
+
+  g_return_if_fail (CM_IS_ROOM_MESSAGE_EVENT (self));
+  g_return_if_fail (!cancellable || G_IS_CANCELLABLE (cancellable));
+  g_return_if_fail (self->type == CM_CONTENT_TYPE_FILE ||
+                    self->type == CM_CONTENT_TYPE_AUDIO ||
+                    self->type == CM_CONTENT_TYPE_IMAGE);
+
+  task = g_task_new (self, cancellable, callback, user_data);
+  g_object_set_data (G_OBJECT (task), "progress-cb", progress_callback);
+  g_object_set_data (G_OBJECT (task), "progress-cb-data", progress_user_data);
+
+  if (self->downloading_file)
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_PENDING,
+                               "File already being downloaded");
+      return;
+    }
+
+  if (self->file_istream)
+    {
+      g_task_return_pointer (task, g_object_ref (self->file_istream), g_object_unref);
+      return;
+    }
+
+  g_return_if_fail (self->mxc_uri);
+
+  self->downloading_file = TRUE;
+  room = cm_room_event_get_room (CM_ROOM_EVENT (self));
+  cm_client_get_file_async (cm_room_get_client (room),
+                            self->mxc_uri,
+                            cancellable,
+                            NULL, NULL,
+                            message_event_get_file_cb, task);
+}
+
+GInputStream *
+cm_room_message_event_get_file_finish (CmRoomMessageEvent  *self,
+                                       GAsyncResult        *result,
+                                       GError             **error)
+{
+  g_return_val_if_fail (CM_IS_ROOM_MESSAGE_EVENT (self), FALSE);
+  g_return_val_if_fail (G_IS_TASK (result), FALSE);
+  g_return_val_if_fail (!error || !*error, FALSE);
+
+  return g_task_propagate_pointer (G_TASK (result), error);
 }
