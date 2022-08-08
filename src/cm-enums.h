@@ -158,3 +158,14 @@ typedef enum {
   /* Custom */
   CM_M_USER_STATUS = 256,
 } CmEventType;
+
+typedef enum
+{
+  CM_EVENT_STATE_UNKNOWN,
+  CM_EVENT_STATE_DRAFT,
+  CM_EVENT_STATE_RECEIVED,
+  /* When saving to db consider this as failed until sent? */
+  CM_EVENT_STATE_SENDING,
+  CM_EVENT_STATE_SENT,
+  CM_EVENT_STATE_SENDING_FAILED,
+} CmEventState;
