@@ -112,6 +112,7 @@ src_inc = include_directories('src')
 gio_dep = dependency('gio-2.0', version: '>= 2.66')
 cmatrix_deps = [
   dependency('libgcrypt'),
+  dependency('libsecret-1'),
   dependency('libsoup-2.4'),
   dependency('json-glib-1.0'),
   dependency('sqlite3', version: '>=3.26.0'),

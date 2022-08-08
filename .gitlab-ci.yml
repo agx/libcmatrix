@@ -13,7 +13,7 @@ build:
   before_script:
     - apt-get update -qq && apt-get install -qq ccache meson gcovr gcc
       libsoup2.4-dev libsqlite3-dev libjson-glib-dev libgcrypt20-dev
-      libolm-dev
+      libolm-dev libsecret-1-dev
   script:
     - meson ${MESON_ARGS} -Db_coverage=true _build
     - ccache --zero-stats
@@ -39,7 +39,7 @@ doc:
   before_script:
     - apt-get update -qq && apt-get install -qq ccache meson gcovr gcc
       libsoup2.4-dev libsqlite3-dev libjson-glib-dev libgcrypt20-dev
-      libolm-dev gi-docgen libgirepository1.0-dev
+      libolm-dev gi-docgen libgirepository1.0-dev libsecret-1-dev
   variables:
     BUILD_OPTS: >-
       -Dgtk_doc=true

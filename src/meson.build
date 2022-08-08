@@ -7,6 +7,7 @@ libcmatrix_sources = [
   'cm-matrix.c',
   'cm-net.c',
   'cm-room.c',
+  'cm-secret-store.c',
   'cm-input-stream.c',
   'cm-utils.c',
   'events/cm-event.c',
