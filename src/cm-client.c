@@ -1561,7 +1561,6 @@ parse_direct_rooms (CmClient   *self,
             {
               cm_room_set_generated_name (room, user_id->data);
               cm_room_set_is_direct (room, TRUE);
-              /* cm_room_save (room); */
 
               continue;
             }
@@ -1570,7 +1569,6 @@ parse_direct_rooms (CmClient   *self,
           cm_room_set_client (room, self);
           cm_room_set_is_direct (room, TRUE);
           cm_room_set_generated_name (room, user_id->data);
-          /* cm_room_save (room); */
 
           /* This eats the ref on the new room */
           g_hash_table_insert (self->direct_rooms, g_strdup (room_id), room);
