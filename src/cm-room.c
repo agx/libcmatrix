@@ -44,6 +44,7 @@ struct _CmRoom
   char       *prev_batch;
   /* The last event in the room, if any */
   CmEvent    *last_event;
+  CmRoomEvent *tombstone_event;
 
   GQueue     *message_queue;
   guint       retry_timeout_id;
@@ -416,7 +417,10 @@ cm_room_get_replacement_room (CmRoom *self)
 {
   g_return_val_if_fail (CM_IS_ROOM (self), FALSE);
 
-  return self->replacement_room;
+  if (self->tombstone_event)
+    return cm_room_event_get_replacement_room_id (self->tombstone_event);
+
+  return NULL;
 }
 
 void
