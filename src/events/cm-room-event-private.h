@@ -11,24 +11,27 @@
 # error "Only <cmatrix.h> can be included directly."
 #endif
 
-#include "cm-event-private.h"
+#include <json-glib/json-glib.h>
+
+#include "cm-types.h"
+#include "cm-room-event.h"
 
 G_BEGIN_DECLS
 
-#define CM_TYPE_ROOM_EVENT (cm_room_event_get_type ())
-
-G_DECLARE_DERIVABLE_TYPE (CmRoomEvent, cm_room_event, CM, ROOM_EVENT, CmEvent)
-
-struct _CmRoomEventClass
-{
-  CmEventClass parent_class;
-};
-
-const char *cm_room_event_get_sender (CmRoomEvent *self);
-void        cm_room_event_set_sender (CmRoomEvent *self,
-                                      const char  *sender);
-const char *cm_room_event_get_id     (CmRoomEvent *self);
-void        cm_room_event_create_id  (CmRoomEvent *self,
-                                      guint          id);
+CmRoomEvent  *cm_room_event_new_from_json           (gpointer             room,
+                                                     JsonObject          *root,
+                                                     JsonObject          *encrypted);
+const char   *cm_room_event_get_room_name           (CmRoomEvent         *self);
+const char   *cm_room_event_get_encryption          (CmRoomEvent         *self);
+JsonObject   *cm_room_event_get_room_member_json    (CmRoomEvent         *self,
+                                                     const char         **user_id);
+void          cm_room_event_set_room_member         (CmRoomEvent         *self,
+                                                     CmUser              *user);
+const char   *cm_room_event_get_room_member_id      (CmRoomEvent         *self);
+GPtrArray    *cm_room_event_get_admin_ids           (CmRoomEvent         *self);
+void          cm_room_event_set_admin_users         (CmRoomEvent         *self,
+                                                     GPtrArray           *users);
+CmStatus      cm_room_event_get_status              (CmRoomEvent         *self);
+const char   *cm_room_event_get_replacement_room_id (CmRoomEvent         *self);
 
 G_END_DECLS

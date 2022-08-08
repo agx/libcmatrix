@@ -9,23 +9,42 @@
 # include "config.h"
 #endif
 
+#include "cm-room.h"
+#include "cm-room-private.h"
+#include "cm-utils-private.h"
+#include "cm-event-private.h"
+#include "cm-room-message-event-private.h"
 #include "cm-room-event-private.h"
+#include "cm-room-event.h"
 
 typedef struct
 {
-  char *event_id;
-  char *sender;
+  CmRoom        *room;
+  char          *room_name;
+  char          *encryption;
+  char          *member_id;
+  char          *replacement_room_id;
+  GPtrArray     *users;
+  JsonObject    *json;
+  CmStatus       member_status;
 } CmRoomEventPrivate;
 
-G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (CmRoomEvent, cm_room_event, CM_TYPE_EVENT)
+G_DEFINE_TYPE_WITH_PRIVATE (CmRoomEvent, cm_room_event, CM_TYPE_EVENT)
 
-static char *
-create_event_id (guint id)
-{
-  /* xxx: Should we use a different one so that we won't conflict with element client? */
-  return g_strdup_printf ("mc%"G_GINT64_FORMAT".%d",
-                          g_get_real_time () / G_TIME_SPAN_MILLISECOND, id);
-}
+#define ret_val_if_fail(_event, _val1, _val2, _ret) do {                \
+    CmEventType type, val;                                              \
+                                                                        \
+    val = _val1 ?: _val2;                                               \
+    type = cm_event_get_m_type (CM_EVENT (_event));                     \
+    g_return_val_if_fail (type == _val1 || type == val, _ret);          \
+  } while (0)
+
+#define ret_if_fail(_event, _expected) do {             \
+    CmEventType type;                                   \
+                                                        \
+    type = cm_event_get_m_type (CM_EVENT (_event));     \
+    g_return_if_fail (type == _expected);               \
+  } while (0)
 
 static void
 cm_room_event_finalize (GObject *object)
@@ -33,8 +52,13 @@ cm_room_event_finalize (GObject *object)
   CmRoomEvent *self = (CmRoomEvent *)object;
   CmRoomEventPrivate *priv = cm_room_event_get_instance_private (self);
 
-  g_free (priv->sender);
-  g_free (priv->event_id);
+  g_clear_object (&priv->room);
+  g_free (priv->room_name);
+  g_free (priv->encryption);
+  g_free (priv->member_id);
+  g_free (priv->replacement_room_id);
+  g_clear_pointer (&priv->users, g_ptr_array_unref);
+  g_clear_pointer (&priv->json, json_object_unref);
 
   G_OBJECT_CLASS (cm_room_event_parent_class)->finalize (object);
 }
@@ -52,46 +76,290 @@ cm_room_event_init (CmRoomEvent *self)
 {
 }
 
-const char *
-cm_room_event_get_id (CmRoomEvent *self)
+CmRoomEvent *
+cm_room_event_new_from_json (gpointer    room,
+                             JsonObject *root,
+                             JsonObject *encrypted)
+{
+  CmRoomEventPrivate *priv;
+  CmRoomEvent *self = NULL;
+  JsonObject *child;
+  const char *value, *event_type;
+  CmEventType type;
+
+  g_return_val_if_fail (CM_IS_ROOM (room), NULL);
+
+  event_type = cm_utils_json_object_get_string (root, "type");
+
+  if (!event_type || !g_str_has_prefix (event_type, "m.room."))
+    return NULL;
+
+  /* currently, only room messages are encrypted */
+  if (encrypted && root)
+    self = cm_room_message_event_new_from_json (root);
+
+  if (!self)
+    {
+      if (g_strcmp0 (event_type, "m.room.message") == 0)
+        self = cm_room_message_event_new_from_json (root);
+      else
+        self = g_object_new (CM_TYPE_ROOM_EVENT, NULL);
+    }
+
+  priv = cm_room_event_get_instance_private (self);
+  priv->room = g_object_ref (room);
+  cm_event_set_json (CM_EVENT (self), root, encrypted);
+
+  if (!root)
+    return self;
+
+  priv->json = json_object_ref (root);
+
+  if (CM_IS_ROOM_MESSAGE_EVENT (self))
+    return self;
+
+  type = cm_event_get_m_type (CM_EVENT (self));
+  child = cm_utils_json_object_get_object (root, "content");
+
+  if (type == CM_M_ROOM_NAME)
+    {
+      value = cm_utils_json_object_get_string (child, "name");
+      g_free (priv->room_name);
+      priv->room_name = g_strdup (value);
+    }
+  else if (type == CM_M_ROOM_ENCRYPTION)
+    {
+      value = cm_utils_json_object_get_string (child, "algorithm");
+      priv->encryption = g_strdup (value);
+    }
+  else if (type == CM_M_ROOM_MEMBER)
+    {
+      const char *membership;
+
+      membership = cm_utils_json_object_get_string (child, "membership");
+      priv->member_status = CM_STATUS_UNKNOWN;
+
+      if (g_strcmp0 (membership, "join") == 0)
+        priv->member_status = CM_STATUS_JOIN;
+      else if (g_strcmp0 (membership, "invite") == 0)
+        priv->member_status = CM_STATUS_INVITE;
+      else if (g_strcmp0 (membership, "leave") == 0)
+        priv->member_status = CM_STATUS_LEAVE;
+      else if (g_strcmp0 (membership, "ban") == 0)
+        priv->member_status = CM_STATUS_BAN;
+      else if (g_strcmp0 (membership, "knock") == 0)
+        priv->member_status = CM_STATUS_KNOCK;
+
+      if (priv->member_status == CM_STATUS_INVITE)
+        priv->member_id = g_strdup (cm_event_get_state_key (CM_EVENT (self)));
+      else
+        priv->member_id = g_strdup (cm_event_get_sender_id (CM_EVENT (self)));
+    }
+  else if (type == CM_M_ROOM_TOMBSTONE)
+    {
+      value = cm_utils_json_object_get_string (child, "replacement_room");
+      priv->replacement_room_id = g_strdup (value);
+    }
+
+  return self;
+}
+
+CmRoom *
+cm_room_event_get_room (CmRoomEvent *self)
 {
   CmRoomEventPrivate *priv = cm_room_event_get_instance_private (self);
 
   g_return_val_if_fail (CM_IS_ROOM_EVENT (self), NULL);
 
-  return priv->event_id;
-}
-
-void
-cm_room_event_create_id (CmRoomEvent *self,
-                         guint          id)
-{
-  CmRoomEventPrivate *priv = cm_room_event_get_instance_private (self);
-
-  g_return_if_fail (CM_IS_ROOM_EVENT (self));
-  g_return_if_fail (!priv->event_id);
-
-  priv->event_id = create_event_id (id);
+  return priv->room;
 }
 
 const char *
-cm_room_event_get_sender (CmRoomEvent *self)
+cm_room_event_get_room_name (CmRoomEvent *self)
 {
   CmRoomEventPrivate *priv = cm_room_event_get_instance_private (self);
 
   g_return_val_if_fail (CM_IS_ROOM_EVENT (self), NULL);
+  ret_val_if_fail (self, CM_M_ROOM_NAME, 0, NULL);
 
-  return priv->sender;
+  return priv->room_name;
 }
 
-void
-cm_room_event_set_sender (CmRoomEvent *self,
-                          const char  *sender)
+const char *
+cm_room_event_get_encryption (CmRoomEvent *self)
 {
   CmRoomEventPrivate *priv = cm_room_event_get_instance_private (self);
 
-  g_return_if_fail (CM_IS_ROOM_EVENT (self));
-  g_return_if_fail (!priv->sender);
+  g_return_val_if_fail (CM_IS_ROOM_EVENT (self), NULL);
+  ret_val_if_fail (self, CM_M_ROOM_ENCRYPTION, 0, NULL);
 
-  priv->sender = g_strdup (sender);
+  return priv->encryption;
+}
+
+JsonObject *
+cm_room_event_get_room_member_json (CmRoomEvent  *self,
+                                    const char  **user_id)
+{
+  CmRoomEventPrivate *priv = cm_room_event_get_instance_private (self);
+  JsonObject *child;
+
+  g_return_val_if_fail (CM_IS_ROOM_EVENT (self), NULL);
+  ret_val_if_fail (self, CM_M_ROOM_MEMBER, 0, NULL);
+
+  child = cm_utils_json_object_get_object (priv->json, "content");
+
+  if (user_id)
+    {
+      if (g_strcmp0 (cm_utils_json_object_get_string (child, "membership"), "join") == 0)
+        *user_id = cm_utils_json_object_get_string (priv->json, "sender");
+      else
+        *user_id = cm_utils_json_object_get_string (priv->json, "state_key");
+
+      if (G_UNLIKELY (!*user_id || !**user_id))
+        *user_id = cm_utils_json_object_get_string (priv->json, "sender");
+    }
+
+  return child;
+}
+
+void
+cm_room_event_set_room_member (CmRoomEvent *self,
+                               CmUser      *user)
+{
+  CmRoomEventPrivate *priv = cm_room_event_get_instance_private (self);
+  const char *user_id;
+
+  g_return_if_fail (CM_IS_ROOM_EVENT (self));
+  g_return_if_fail (CM_IS_USER (user));
+  g_return_if_fail (!priv->users);
+  ret_if_fail (self, CM_M_ROOM_MEMBER);
+
+  cm_room_event_get_room_member_json (self, &user_id);
+  g_return_if_fail (g_strcmp0 (cm_user_get_id (user), user_id) == 0);
+
+  priv->users = g_ptr_array_new_full (1, g_object_unref);
+  g_ptr_array_add (priv->users, g_object_ref (user));
+}
+
+CmUser *
+cm_room_event_get_room_member (CmRoomEvent *self)
+{
+  CmRoomEventPrivate *priv = cm_room_event_get_instance_private (self);
+
+  g_return_val_if_fail (CM_IS_ROOM_EVENT (self), NULL);
+  ret_val_if_fail (self, CM_M_ROOM_MEMBER, 0, NULL);
+  g_return_val_if_fail (priv->users, NULL);
+
+  return priv->users->pdata[0];
+}
+
+const char *
+cm_room_event_get_room_member_id (CmRoomEvent *self)
+{
+  CmRoomEventPrivate *priv = cm_room_event_get_instance_private (self);
+
+  g_return_val_if_fail (CM_IS_ROOM_EVENT (self), NULL);
+  ret_val_if_fail (self, CM_M_ROOM_MEMBER, 0, NULL);
+
+  return priv->member_id;
+}
+
+/*
+ * cm_room_event_get_power_level_admins:
+ * @self: A #CmRoomEvent
+ *
+ * Get the list of users that have power greater than
+ * the default room power level, as reported by the
+ * server.
+ *
+ * Returns: (transfer full): An GPtrArray of strings
+ */
+GPtrArray *
+cm_room_event_get_admin_ids (CmRoomEvent *self)
+{
+  CmRoomEventPrivate *priv = cm_room_event_get_instance_private (self);
+  g_autoptr(GList) users = NULL;
+  GPtrArray *admin_ids;
+  JsonObject *child;
+
+  g_return_val_if_fail (CM_IS_ROOM_EVENT (self), NULL);
+  g_return_val_if_fail (priv->json, NULL);
+  ret_val_if_fail (self, CM_M_ROOM_POWER_LEVELS, 0, NULL);
+
+  child = cm_utils_json_object_get_object (priv->json, "content");
+  child = cm_utils_json_object_get_object (child, "users");
+  if (child)
+    users = json_object_get_members (child);
+
+  admin_ids = g_ptr_array_new_full (16, g_free);
+
+  for (GList *node = users; node && node->data; node = node->next)
+    g_ptr_array_add (admin_ids, g_strdup (node->data));
+
+  return admin_ids;
+}
+
+/*
+ * cm_room_event_set_admin_users:
+ * @self: A #CmRoomEvent
+ * @users: (transfer full): An array of #CmUser
+ *
+ * Set the list of admin users, the list of user id
+ * should match cm_room_event_get_admin_ids()
+ *
+ * each member in @users should have a ref added.
+ */
+void
+cm_room_event_set_admin_users (CmRoomEvent *self,
+                               GPtrArray   *users)
+{
+  CmRoomEventPrivate *priv = cm_room_event_get_instance_private (self);
+  JsonObject *child;
+
+  g_return_if_fail (CM_IS_ROOM_EVENT (self));
+  g_return_if_fail (users);
+  g_return_if_fail (priv->json);
+  g_return_if_fail (!priv->users);
+  ret_if_fail (self, CM_M_ROOM_POWER_LEVELS);
+
+  child = cm_utils_json_object_get_object (priv->json, "content");
+  child = cm_utils_json_object_get_object (child, "users");
+  g_return_if_fail (child);
+  g_return_if_fail (json_object_get_size (child) == users->len);
+
+  for (guint i = 0; i < users->len; i++)
+    {
+      CmUser *user = users->pdata[i];
+
+      /* Never supposed to happen */
+      if (!json_object_has_member (child, cm_user_get_id (user)))
+        {
+          g_critical ("User '%s' not in list", cm_user_get_id (user));
+          return;
+        }
+    }
+
+  priv->users = users;
+}
+
+CmStatus
+cm_room_event_get_status (CmRoomEvent *self)
+{
+  CmRoomEventPrivate *priv = cm_room_event_get_instance_private (self);
+
+  g_return_val_if_fail (CM_IS_ROOM_EVENT (self), CM_STATUS_UNKNOWN);
+  ret_val_if_fail (self, CM_M_ROOM_MEMBER, 0, CM_STATUS_UNKNOWN);
+
+  return priv->member_status;
+}
+
+const char *
+cm_room_event_get_replacement_room_id (CmRoomEvent *self)
+{
+  CmRoomEventPrivate *priv = cm_room_event_get_instance_private (self);
+
+  g_return_val_if_fail (CM_IS_ROOM_EVENT (self), NULL);
+  ret_val_if_fail (self, CM_M_ROOM_TOMBSTONE, 0, NULL);
+
+  return priv->replacement_room_id;
 }
