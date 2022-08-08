@@ -482,9 +482,10 @@ cm_room_get_name (CmRoom *self)
 
   if (!self->generated_name && !self->name)
     {
-      self->generated_name = cm_room_generate_name (self);
-      if (self->generated_name)
-        self->db_save_pending = TRUE;
+      g_autofree char *name = NULL;
+
+      name = cm_room_generate_name (self);
+      cm_room_set_generated_name (self, name);
       cm_room_save (self);
     }
 
