@@ -99,15 +99,17 @@ typedef enum {
   CM_ROOM_INVITED
 } CmRoomType;
 
-/* TODO */
-/* typedef enum { */
-/*   CM_MESSAGE_TYPE_AUDIO, */
-/*   CM_MESSAGE_TYPE_EMOTE, */
-/*   CM_MESSAGE_TYPE_FILE, */
-/*   CM_MESSAGE_TYPE_IMAGE, */
-/*   CM_MESSAGE_TYPE_LOCATION, */
-/*   CM_MESSAGE_TYPE_TEXT */
-/* } CmMessageType; */
+typedef enum {
+  CM_CONTENT_TYPE_UNKNOWN,
+  CM_CONTENT_TYPE_TEXT,
+  CM_CONTENT_TYPE_EMOTE,
+  CM_CONTENT_TYPE_NOTICE,
+  CM_CONTENT_TYPE_IMAGE,
+  CM_CONTENT_TYPE_FILE,
+  CM_CONTENT_TYPE_AUDIO,
+  CM_CONTENT_TYPE_LOCATION,
+  CM_CONTENT_TYPE_VIDEO
+} CmContentType;
 
 /*
  * The order of the enum items SHOULD NEVER
