@@ -30,7 +30,7 @@ CmClient     *cm_room_get_client                   (CmRoom              *self);
 void          cm_room_set_client                   (CmRoom              *self,
                                                     CmClient            *client);
 gboolean      cm_room_has_state_sync               (CmRoom              *self);
-void          cm_room_set_data                     (CmRoom              *self,
+GPtrArray    *cm_room_set_data                     (CmRoom              *self,
                                                     JsonObject          *object);
 JsonObject   *cm_room_decrypt                      (CmRoom              *self,
                                                     JsonObject          *root);
