@@ -2423,6 +2423,8 @@ cm_client_stop_sync (CmClient *self)
   g_clear_handle_id (&self->resync_id, g_source_remove);
   g_clear_object (&self->cancellable);
   self->cancellable = g_cancellable_new ();
+
+  g_signal_emit (self, signals[STATUS_CHANGED], 0);
 }
 
 /**
