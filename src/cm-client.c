@@ -673,16 +673,27 @@ delete_secrets_cb (GObject      *object,
                    GAsyncResult *result,
                    gpointer      user_data)
 {
+  CmClient *self;
   g_autoptr(GTask) task = user_data;
   GError *error = NULL;
   gboolean ret;
 
+  g_assert (G_IS_TASK (task));
+
+  self = g_task_get_source_object (task);
+  g_assert (CM_IS_CLIENT (self));
+
   ret = cm_secret_store_delete_finish (result, &error);
 
   if (error)
-    g_task_return_error (task, error);
+    {
+      g_task_return_error (task, error);
+    }
   else
-    g_task_return_boolean (task, ret);
+    {
+      g_list_store_remove_all (self->joined_rooms);
+      g_task_return_boolean (task, ret);
+    }
 }
 
 void
@@ -695,6 +706,7 @@ cm_client_delete_secrets_async (CmClient            *self,
   g_return_if_fail (CM_IS_CLIENT (self));
 
   task = g_task_new (self, NULL, callback, user_data);
+  cm_client_set_enabled (self, FALSE);
   cm_secret_store_delete_async (self, NULL,
                                 delete_secrets_cb, task);
 }
