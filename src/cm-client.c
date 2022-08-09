@@ -1009,7 +1009,8 @@ cm_client_get_enabled (CmClient *self)
 {
   g_return_val_if_fail (CM_IS_CLIENT (self), FALSE);
 
-  return self->client_enabled;
+  return self->client_enabled || self->client_enabled_in_store ||
+    GPOINTER_TO_INT (g_object_get_data (G_OBJECT (self), "enable"));
 }
 
 /**
