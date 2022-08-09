@@ -75,8 +75,6 @@ cm_secret_store_save_async (CmClient            *client,
   if (!device_id)
     device_id = "";
 
-  g_warning ("saving %s %s", username, device_id);
-
   /* We don't use json APIs here so that we can manage memory better (and securely free them)  */
   /* TODO: Use a non-pageable memory */
   /* XXX: We use a dumb string search, so don't change the order or spacing of the format string */
