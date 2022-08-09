@@ -397,6 +397,10 @@ cm_matrix_open_async (CmMatrix            *self,
   if (!self->db_name)
     self->db_name = g_strdup (db_name);
 
+  /* Don't load libsecret in tests as password request requires X11 */
+  if (g_test_initialized ())
+    self->secrets_loaded = TRUE;
+
   if (!self->secrets_loaded)
     {
       cm_secret_store_load_async (cancellable,
