@@ -477,16 +477,30 @@ matrix_save_client_cb (GObject      *object,
                        GAsyncResult *result,
                        gpointer      user_data)
 {
+  CmMatrix *self;
   g_autoptr(GTask) task = user_data;
   GError *error = NULL;
   gboolean ret;
 
+  g_assert (G_IS_TASK (task));
+
+  self = g_task_get_source_object (task);
+  g_assert (CM_IS_MATRIX (self));
+
   ret = cm_client_save_secrets_finish (CM_CLIENT (object), result, &error);
 
   if (error)
-    g_task_return_error (task, error);
+    {
+      g_task_return_error (task, error);
+    }
   else
-    g_task_return_boolean (task, ret);
+    {
+      if (!cm_utils_get_item_position (G_LIST_MODEL (self->clients_list), object, NULL))
+        g_list_store_append (self->clients_list, object);
+      g_task_return_boolean (task, ret);
+    }
+
+  g_object_set_data (object, "enable", GPOINTER_TO_INT (FALSE));
 }
 
 void
@@ -503,6 +517,8 @@ cm_matrix_save_client_async (CmMatrix            *self,
                     cm_client_get_login_id (client));
   g_return_if_fail (cm_client_get_homeserver (client));
 
+  if (!cm_utils_get_item_position (G_LIST_MODEL (self->clients_list), client, NULL))
+    g_object_set_data (G_OBJECT (client), "enable", GINT_TO_POINTER (TRUE));
   task = g_task_new (self, NULL, callback, user_data);
   cm_client_save_secrets_async (client,
                                 matrix_save_client_cb,
