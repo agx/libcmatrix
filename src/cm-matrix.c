@@ -525,16 +525,30 @@ matrix_delete_client_cb (GObject      *object,
                          GAsyncResult *result,
                          gpointer      user_data)
 {
+  CmMatrix *self;
   g_autoptr(GTask) task = user_data;
   GError *error = NULL;
   gboolean ret;
 
+  g_assert (G_IS_TASK (task));
+
+  self = g_task_get_source_object (task);
+  g_assert (CM_IS_MATRIX (self));
+
   ret = cm_client_delete_secrets_finish (CM_CLIENT (object), result, &error);
 
   if (error)
-    g_task_return_error (task, error);
+    {
+      g_task_return_error (task, error);
+    }
   else
-    g_task_return_boolean (task, ret);
+    {
+      CmClient *client;
+
+      client = g_task_get_task_data (task);
+      cm_utils_remove_list_item (self->clients_list, client);
+      g_task_return_boolean (task, ret);
+    }
 }
 
 void
