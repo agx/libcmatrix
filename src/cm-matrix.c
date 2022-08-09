@@ -650,7 +650,6 @@ cm_matrix_add_clients_async (CmMatrix            *self,
       SecretRetrievable *secret = secrets->pdata[i];
       CmClient *client;
 
-      g_warning ("%d", i);
       client = cm_client_new_from_secret (secret, self->cm_db);
       if (client)
         g_ptr_array_add (clients, client);
