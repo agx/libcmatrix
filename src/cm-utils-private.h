@@ -16,6 +16,9 @@
 #include "cm-enums.h"
 
 GError       *cm_utils_json_node_get_error      (JsonNode            *node);
+gboolean      cm_utils_get_item_position        (GListModel          *list,
+                                                 gpointer             item,
+                                                 guint               *position);
 gboolean      cm_utils_remove_list_item         (GListStore          *store,
                                                  gpointer             item);
 char         *cm_utils_json_object_to_string    (JsonObject          *object,

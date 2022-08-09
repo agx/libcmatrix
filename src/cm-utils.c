@@ -93,6 +93,36 @@ cm_utils_json_node_get_error (JsonNode *node)
 }
 
 gboolean
+cm_utils_get_item_position (GListModel *list,
+                            gpointer    item,
+                            guint      *position)
+{
+  guint n_items;
+
+  g_return_val_if_fail (G_IS_LIST_MODEL (list), FALSE);
+  g_return_val_if_fail (item != NULL, FALSE);
+
+  n_items = g_list_model_get_n_items (list);
+
+  for (guint i = 0; i < n_items; i++)
+    {
+      g_autoptr(GObject) object = NULL;
+
+      object = g_list_model_get_item (list, i);
+
+      if (object == item)
+        {
+          if (position)
+            *position = i;
+
+          return TRUE;
+        }
+    }
+
+  return FALSE;
+}
+
+gboolean
 cm_utils_remove_list_item (GListStore *store,
                            gpointer    item)
 {
