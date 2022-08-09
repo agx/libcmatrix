@@ -468,7 +468,6 @@ cm_matrix_client_new (CmMatrix *self)
 
   client = g_object_new (CM_TYPE_CLIENT, NULL);
   cm_client_set_db (client, self->cm_db);
-  g_list_store_append (self->clients_list, client);
 
   return client;
 }
