@@ -1029,11 +1029,14 @@ cm_client_get_enabled (CmClient *self)
  * cm_client_set_sync_callback:
  * @self: A #CmClient
  * @callback: A #CmCallback
- * @object: A #GObject derived object for @callback user_data
+ * @callback_data: A #GObject derived object for @callback user_data
+ * @callback_data_destroy: (nullable): The method to destroy @callback_data
  *
  * Set the sync callback which shall be executed for the
- * events happening in @self.  You shall be able to the
- * callback only once.
+ * events happening in @self.
+ *
+ * @callback_data_destroy() shall be executead only if @callback_data
+ * is not NULL.
  */
 void
 cm_client_set_sync_callback (CmClient       *self,
@@ -1043,7 +1046,10 @@ cm_client_set_sync_callback (CmClient       *self,
 {
   g_return_if_fail (CM_IS_CLIENT (self));
   g_return_if_fail (callback);
-  g_return_if_fail (!self->callback);
+
+  if (self->cb_data &&
+      self->cb_destroy)
+    self->cb_destroy (self->cb_data);
 
   self->callback = callback;
   self->cb_data = callback_data;
