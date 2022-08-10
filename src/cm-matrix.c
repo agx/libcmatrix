@@ -467,6 +467,10 @@ cm_matrix_client_new (CmMatrix *self)
     g_error ("Database not open, See cm_matrix_open_async()");
 
   client = g_object_new (CM_TYPE_CLIENT, NULL);
+  /* Mark the client as not to save automatically unless asked explicitly
+   * with cm_matrix_save_client_async() at least once.
+   */
+  g_object_set_data (G_OBJECT (client), "no-save", GINT_TO_POINTER (TRUE));
   cm_client_set_db (client, self->cm_db);
 
   return client;
@@ -516,6 +520,8 @@ cm_matrix_save_client_async (CmMatrix            *self,
   g_return_if_fail (cm_client_get_user_id (client) ||
                     cm_client_get_login_id (client));
   g_return_if_fail (cm_client_get_homeserver (client));
+
+  g_object_set_data (G_OBJECT (client), "no-save", GINT_TO_POINTER (FALSE));
 
   if (!cm_utils_get_item_position (G_LIST_MODEL (self->clients_list), client, NULL))
     g_object_set_data (G_OBJECT (client), "enable", GINT_TO_POINTER (TRUE));
