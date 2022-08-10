@@ -97,8 +97,11 @@ struct _CmClient
   gboolean        login_success;
   gboolean        is_sync;
   gboolean        sync_failed;
+  gboolean        is_self_change;
   gboolean        save_client_pending;
+  gboolean        save_secret_pending;
   gboolean        is_saving_client;
+  gboolean        is_saving_secret;
   gboolean        homeserver_verified;
 };
 
@@ -140,6 +143,39 @@ cm_set_string_value (char       **strp,
 
   g_free (*strp);
   *strp = g_strdup (value);
+}
+
+/*
+ * client_mark_for_save:
+ * @save_client: 1 for TRUE, 0 for FALSE, ignore otherwise
+ * @save_secret: 1 for TRUE, 0 for FALSE, ignore otherwise
+ */
+static void
+client_mark_for_save (CmClient *self,
+                      int       save_client,
+                      int       save_secret)
+{
+  g_assert (CM_IS_CLIENT (self));
+
+  /* always reset to 0 when asked, as this is done after saving */
+  if (save_client == 0)
+    self->save_client_pending = save_client;
+  if (save_secret == 0)
+    self->save_secret_pending = save_secret;
+
+  if (g_object_get_data (G_OBJECT (self), "no-save"))
+    return;
+
+  if (self->is_self_change)
+    goto end;
+
+  if (save_client == 1)
+    self->save_client_pending = save_client;
+  if (save_secret == 1)
+    self->save_secret_pending = save_secret;
+
+ end:
+  cm_client_save (self);
 }
 
 static void
@@ -349,8 +385,8 @@ cm_upload_filter_cb (GObject      *obj,
   if (!self->filter_id)
     self->filter_id = g_strdup ("");
 
-  self->save_client_pending = TRUE;
-  cm_client_save (self, FALSE);
+  client_mark_for_save (self, TRUE, -1);
+  cm_client_save (self);
 
   matrix_start_sync (self, NULL);
 }
@@ -547,8 +583,13 @@ cm_client_enable_as_in_store (CmClient *self)
 {
   g_return_if_fail (CM_IS_CLIENT (self));
 
+  self->is_self_change = TRUE;
+
   if (self->client_enabled_in_store)
     cm_client_set_enabled (self, TRUE);
+
+  self->client_enabled_in_store = FALSE;
+  self->is_self_change = FALSE;
 }
 
 CmClient *
@@ -593,6 +634,7 @@ cm_client_new_from_secret (gpointer  secret_retrievable,
     password_str = g_strcompress (password);
 
   self = g_object_new (CM_TYPE_CLIENT, NULL);
+  self->is_self_change = TRUE;
   cm_client_set_db (self, db);
   cm_client_set_homeserver (self, homeserver);
   cm_client_set_login_id (self, login_username);
@@ -612,6 +654,8 @@ cm_client_new_from_secret (gpointer  secret_retrievable,
     cm_client_set_pickle_key (self, pickle);
   }
 
+  self->is_self_change = FALSE;
+
   cm_utils_free_buffer (device_id);
   cm_utils_free_buffer (password);
   cm_utils_free_buffer (password_str);
@@ -625,16 +669,32 @@ save_secrets_cb (GObject      *object,
                  GAsyncResult *result,
                  gpointer      user_data)
 {
+  CmClient *self;
   g_autoptr(GTask) task = user_data;
   GError *error = NULL;
   gboolean ret;
 
+  g_assert (G_IS_TASK (task));
+
+  self = g_task_get_source_object (task);
+  g_assert (CM_IS_CLIENT (self));
+
   ret = cm_secret_store_save_finish (result, &error);
 
   if (error)
-    g_task_return_error (task, error);
+    {
+      client_mark_for_save (self, -1, TRUE);
+      g_task_return_error (task, error);
+    }
   else
-    g_task_return_boolean (task, ret);
+    {
+      g_task_return_boolean (task, ret);
+    }
+
+  /* Unset at the end so that the client won't initiate
+   * saving the secret immediately on error.
+   */
+  self->is_saving_secret = FALSE;
 }
 
 void
@@ -642,19 +702,38 @@ cm_client_save_secrets_async (CmClient            *self,
                               GAsyncReadyCallback  callback,
                               gpointer             user_data)
 {
+  g_autoptr(GTask) task = NULL;
   char *pickle_key = NULL;
-  GTask *task;
 
   g_return_if_fail (CM_IS_CLIENT (self));
+
+  task = g_task_new (self, NULL, callback, user_data);
+
+  if (g_object_get_data (G_OBJECT (self), "no-save"))
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED,
+                               "Secrets marked not to save");
+      return;
+    }
+
+  if (self->is_saving_secret)
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_PENDING,
+                               "Secrets are already being saved");
+      return;
+    }
+
+  self->is_saving_secret = TRUE;
+  client_mark_for_save (self, -1, FALSE);
 
   if (self->cm_enc)
     pickle_key = cm_enc_get_pickle_key (self->cm_enc);
 
-  task = g_task_new (self, NULL, callback, user_data);
   cm_secret_store_save_async (self,
                               g_strdup (cm_client_get_access_token (self)),
                               pickle_key, NULL,
-                              save_secrets_cb, task);
+                              save_secrets_cb,
+                              g_steal_pointer (&task));
 }
 
 gboolean
@@ -945,6 +1024,9 @@ cm_client_set_enabled (CmClient *self,
     {
       cm_client_stop_sync (self);
     }
+
+  client_mark_for_save (self, TRUE, TRUE);
+  cm_client_save (self);
 }
 
 static void
@@ -954,12 +1036,10 @@ db_save_cb (GObject      *object,
 {
   g_autoptr(CmClient) self = user_data;
   g_autoptr(GError) error = NULL;
-  gboolean status, save_pending;
+  gboolean status;
 
   status = cm_db_save_client_finish (self->cm_db, result, &error);
   self->is_saving_client = FALSE;
-
-  save_pending = self->save_client_pending;
 
   if (error || !status)
     self->save_client_pending = TRUE;
@@ -968,8 +1048,7 @@ db_save_cb (GObject      *object,
     g_warning ("Error saving to db: %s", error->message);
 
   /* If settings changed when we were saving the current settings, repeat. */
-  if (save_pending)
-    cm_client_save (self, FALSE);
+  cm_client_save (self);
 }
 
 /*
@@ -982,25 +1061,34 @@ db_save_cb (GObject      *object,
  * db even when no changes are made
  */
 void
-cm_client_save (CmClient *self,
-                gboolean  force)
+cm_client_save (CmClient *self)
 {
-  char *pickle = NULL;
-
   g_return_if_fail (CM_IS_CLIENT (self));
 
-  if ((!self->save_client_pending && !force) ||
-      self->is_saving_client)
+  if (g_object_get_data (G_OBJECT (self), "no-save"))
     return;
 
-  self->is_saving_client = TRUE;
-  self->save_client_pending = FALSE;
+  if (!self->user_id && !self->login_user_id)
+    return;
 
-  if (self->cm_enc)
-    pickle = cm_enc_get_pickle (self->cm_enc);
-  cm_db_save_client_async (self->cm_db, self, pickle,
-                           db_save_cb,
-                           g_object_ref (self));
+  if (self->save_client_pending && !self->is_saving_client &&
+      cm_client_get_device_id (self))
+    {
+      char *pickle = NULL;
+
+      self->is_saving_client = TRUE;
+      self->save_client_pending = FALSE;
+
+      if (self->cm_enc)
+        pickle = cm_enc_get_pickle (self->cm_enc);
+
+      cm_db_save_client_async (self->cm_db, self, pickle,
+                               db_save_cb,
+                               g_object_ref (self));
+    }
+
+  if (self->save_secret_pending && !self->is_saving_secret)
+    cm_client_save_secrets_async (self, NULL, NULL);
 }
 
 /**
@@ -1080,6 +1168,8 @@ cm_client_set_user_id (CmClient   *self,
 
   g_free (self->user_id);
   self->user_id = g_ascii_strdown (matrix_user_id, -1);
+
+  client_mark_for_save (self, TRUE, TRUE);
 
   return TRUE;
 }
@@ -1187,9 +1277,16 @@ cm_client_set_homeserver (CmClient   *self,
   if (g_str_has_suffix (server->str, "/"))
     g_string_truncate (server, server->len - 1);
 
+  if (g_strcmp0 (self->homeserver, server->str) == 0)
+    {
+      g_string_free (server, TRUE);
+      return TRUE;
+    }
+
   g_free (self->homeserver);
   self->homeserver = g_string_free (server, FALSE);
   cm_net_set_homeserver (self->cm_net, homeserver);
+  client_mark_for_save (self, TRUE, TRUE);
 
   return TRUE;
 }
@@ -1238,6 +1335,8 @@ cm_client_set_password (CmClient   *self,
       self->password = gcry_malloc_secure (strlen (password) + 1);
       strcpy (self->password, password);
     }
+
+  client_mark_for_save (self, -1, TRUE);
 }
 
 /**
@@ -1593,7 +1692,8 @@ client_password_login_cb (GObject      *obj,
   self->is_logging_in = FALSE;
   cm_client_set_homeserver (self, value);
   client_set_login_state (self, FALSE, !!cm_net_get_access_token (self->cm_net));
-  cm_client_save (self, TRUE);
+  client_mark_for_save (self, TRUE, TRUE);
+  cm_client_save (self);
 
   g_debug ("Login success: %d, username: %s", self->login_success, self->login_user_id);
 
@@ -1991,7 +2091,8 @@ matrix_take_red_pill_cb (GObject      *obj,
 
   g_free (self->next_batch);
   self->next_batch = g_strdup (cm_utils_json_object_get_string (root, "next_batch"));
-  cm_client_save (self, TRUE);
+  client_mark_for_save (self, TRUE, -1);
+  cm_client_save (self);
 
   {
     g_autofree char *json_str = NULL;
