@@ -144,7 +144,8 @@ ma_olm_encrypt (OlmSession *session,
 static OlmSession *
 ma_create_olm_out_session (CmEnc      *self,
                            const char *curve_key,
-                           const char *one_time_key)
+                           const char *one_time_key,
+                           const char *room_id)
 {
   g_autofree OlmSession *session = NULL;
   cm_gcry_t buffer = NULL;
@@ -193,7 +194,7 @@ ma_create_olm_out_session (CmEnc      *self,
       pickle[length] = '\0';
 
       cm_db_add_session_async (self->cm_db, self->user_id, self->device_id,
-                               NULL, id, curve_key,
+                               room_id, id, curve_key,
                                g_steal_pointer (&pickle),
                                SESSION_OLM_V1_IN, NULL, NULL);
     }
@@ -1095,7 +1096,10 @@ cm_enc_handle_room_encrypted (CmEnc      *self,
         GHashTable *in_olm_sessions;
         g_autofree char *pickle = NULL;
         g_autofree char *id = NULL;
+        g_autofree char *room_id = NULL;
 
+        data = cm_utils_json_object_get_object (content, "content");
+        room_id = g_strdup (cm_utils_json_object_get_string (data, "room_id"));
         in_olm_sessions = g_hash_table_lookup (self->in_olm_sessions, sender_key);
 
         if (!in_olm_sessions)
@@ -1121,7 +1125,7 @@ cm_enc_handle_room_encrypted (CmEnc      *self,
         pickle[length] = '\0';
 
         cm_db_add_session_async (self->cm_db, self->user_id, self->device_id,
-                                 NULL, id, sender_key,
+                                 room_id, id, sender_key,
                                  g_steal_pointer (&pickle),
                                  SESSION_OLM_V1_IN, NULL, NULL);
       }
@@ -1418,7 +1422,7 @@ cm_enc_create_out_group_keys (CmEnc      *self,
           curve_key = cm_device_get_curve_key (device);
 
           one_time_key = cm_device_steal_one_time_key (device);
-          olm_session = ma_create_olm_out_session (self, curve_key, one_time_key);
+          olm_session = ma_create_olm_out_session (self, curve_key, one_time_key, room_id);
 
           if (!one_time_key || !curve_key || !olm_session)
             continue;
