@@ -4,6 +4,7 @@ libcmatrix_sources = [
   'cm-db.c',
   'cm-device.c',
   'cm-enc.c',
+  'cm-olm.c',
   'cm-matrix.c',
   'cm-net.c',
   'cm-room.c',
