@@ -1626,7 +1626,7 @@ cm_enc_olm_session_match (const char  *body,
   g_autofree char *body_copy = NULL;
   g_autofree char *pickle_copy = NULL;
   g_autofree OlmSession *session = NULL;
-  char *plaintext = NULL;
+  g_autofree char *plaintext = NULL;
   size_t match = 0, length, err;
 
   g_assert (out_decrypted);
@@ -1642,18 +1642,21 @@ cm_enc_olm_session_match (const char  *body,
   body_copy = g_malloc (body_len + 1);
   memcpy (body_copy, body, body_len + 1);
   length = olm_decrypt_max_plaintext_length (session, message_type, body_copy, body_len);
+  g_clear_pointer (&body_copy, g_free);
+
   plaintext = g_malloc (length + 1);
   if (length != olm_error ())
     {
       body_copy = g_malloc (body_len + 1);
       memcpy (body_copy, body, body_len + 1);
       length = olm_decrypt (session, message_type, body_copy, body_len, plaintext, length);
+      g_clear_pointer (&body_copy, g_free);
     }
 
   if (length != olm_error ())
     {
       plaintext[length] = '\0';
-      *out_decrypted = plaintext;
+      *out_decrypted = g_steal_pointer (&plaintext);
 
       return g_steal_pointer (&session);
     }
@@ -1663,12 +1666,23 @@ cm_enc_olm_session_match (const char  *body,
       body_copy = g_malloc (body_len + 1);
       memcpy (body_copy, body, body_len + 1);
       match = olm_matches_inbound_session (session, body_copy, body_len);
+      if (match == 1)
+        {
+          length = olm_decrypt (session, message_type, body_copy, body_len, plaintext, length);
+
+          if (length != olm_error ())
+            {
+              plaintext[length] = '\0';
+              *out_decrypted = g_steal_pointer (&plaintext);
+
+              return g_steal_pointer (&session);
+            }
+        }
+
+      g_clear_pointer (&body_copy, g_free);
     }
 
  end:
-  if (match == 1)
-    return g_steal_pointer (&session);
-
   olm_clear_session (session);
 
   return NULL;
