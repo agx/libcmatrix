@@ -18,6 +18,7 @@
 #include <glib/gstdio.h>
 #include <sqlite3.h>
 
+#include "cm-matrix.h"
 #include "cm-db-private.h"
 #include "cm-client.h"
 
@@ -94,6 +95,8 @@ add_matrix_account (CmDb       *db,
     client = client_array->pdata[i];
   } else {
     client = cm_client_new ();
+    /* Mark client to not save changes to db */
+    g_object_set_data (G_OBJECT (client), "no-save", GINT_TO_POINTER (TRUE));
     cm_client_set_user_id (client, username);
     cm_client_set_device_id (client, device_id);
     g_ptr_array_add (client_array, client);
@@ -479,7 +482,14 @@ int
 main (int   argc,
       char *argv[])
 {
+  g_autoptr(CmMatrix) matrix = NULL;
+
   g_test_init (&argc, &argv, NULL);
+
+  cm_init (TRUE);
+  matrix = cm_matrix_new (g_test_get_dir (G_TEST_BUILT),
+                          g_test_get_dir (G_TEST_BUILT),
+                          "org.example.CMatrix");
 
   g_test_add_func ("/cm-db/new", test_cm_db_new);
   g_test_add_func ("/cm-db/account", test_cm_db_account);
