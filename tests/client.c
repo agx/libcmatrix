@@ -23,6 +23,8 @@ test_cm_client_new (void)
   CmClient *client;
 
   client = cm_client_new ();
+  /* Mark client to not save changes to db */
+  g_object_set_data (G_OBJECT (client), "no-save", GINT_TO_POINTER (TRUE));
   g_assert (CM_IS_CLIENT (client));
 
   g_assert_null (cm_client_get_user_id (client));
