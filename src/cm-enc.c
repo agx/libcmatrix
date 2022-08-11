@@ -22,6 +22,7 @@
 #include "cm-device.h"
 #include "cm-device-private.h"
 #include "cm-db-private.h"
+#include "cm-olm-private.h"
 #include "cm-enc-private.h"
 
 #define KEY_LABEL_SIZE    6
@@ -147,59 +148,21 @@ ma_create_olm_out_session (CmEnc      *self,
                            const char *one_time_key,
                            const char *room_id)
 {
-  g_autofree OlmSession *session = NULL;
-  cm_gcry_t buffer = NULL;
-  size_t length, error;
+  CmOlm *session;
 
   g_assert (CM_ENC (self));
 
-  if (!curve_key || !one_time_key)
+  session = cm_olm_outbound_new (self->account, curve_key, one_time_key, room_id);
+
+  if (!session)
     return NULL;
 
-  session = g_malloc (olm_session_size ());
-  olm_session (session);
+  cm_olm_set_db (session, self->cm_db);
+  cm_olm_set_key (session, self->pickle_key);
+  cm_olm_set_details (session, room_id, self->user_id, self->device_id);
+  cm_olm_save (session);
 
-  length = olm_create_outbound_session_random_length (session);
-  if (length)
-    buffer = gcry_random_bytes (length, GCRY_STRONG_RANDOM);
-
-  error = olm_create_outbound_session (session,
-                                       self->account,
-                                       curve_key, strlen (curve_key),
-                                       one_time_key, strlen (one_time_key),
-                                       buffer, length);
-  gcry_free (buffer);
-
-  if (error == olm_error ())
-    {
-      g_warning ("Error creating outbound olm session: %s",
-                 olm_session_last_error (session));
-      return NULL;
-    }
-  else if (self->cm_db)
-    {
-      g_autofree char *pickle = NULL;
-      g_autofree char *id = NULL;
-
-      length = olm_session_id_length (session);
-      id = g_malloc (length + 1);
-      olm_session_id (session, id, length);
-      id[length] = '\0';
-
-      length = olm_pickle_session_length (session);
-      pickle = g_malloc (length + 1);
-      olm_pickle_session (session, self->pickle_key,
-                          strlen (self->pickle_key),
-                          pickle, length);
-      pickle[length] = '\0';
-
-      cm_db_add_session_async (self->cm_db, self->user_id, self->device_id,
-                               room_id, id, curve_key,
-                               g_steal_pointer (&pickle),
-                               SESSION_OLM_V1_IN, NULL, NULL);
-    }
-
-  return g_steal_pointer (&session);
+  return cm_olm_steal_session (session);
 }
 
 /*
