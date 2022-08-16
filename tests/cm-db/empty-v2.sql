@@ -92,6 +92,7 @@ CREATE TABLE session(
   pickle TEXT NOT NULL,
   time INT,
   json_data TEXT,
+  chain_index INTEGER,
   UNIQUE (account_id, sender_key, session_id)
 );
 

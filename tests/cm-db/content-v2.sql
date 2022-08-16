@@ -92,6 +92,7 @@ CREATE TABLE session(
   pickle TEXT NOT NULL,
   time INT,
   json_data TEXT,
+  chain_index INTEGER,
   UNIQUE (account_id, sender_key, session_id)
 );
 
@@ -117,10 +118,10 @@ INSERT INTO rooms VALUES(5, 3, 'alice example net room C', 'prev batch 3', NULL,
 INSERT INTO rooms VALUES(9, 4, 'bob example com room B', 'bob com batch 2', NULL, NULL);
 INSERT INTO rooms VALUES(2, 3, 'alice example net room D', 'prev batch 4', NULL, NULL);
 
-INSERT INTO session VALUES(1, 1, 'alice com key 1', 'alice com id 1', 1, 'alice com id 1', 11111111, NULL);
-INSERT INTO session VALUES(2, 4, 'bob key 1', 'bob id 1', 1, 'bob id 1', 22222222, NULL);
-INSERT INTO session VALUES(3, 4, 'bob key 2', 'bob id 2', 1, 'bob id 2', 33333333, NULL);
-INSERT INTO session VALUES(4, 4, 'bob key 3', 'bob id 3', 2, 'bob id 3', 44444444, NULL);
-INSERT INTO session VALUES(5, 3, 'net key 1', 'net id 1', 1, 'netid 1', 555555, NULL);
+INSERT INTO session VALUES(1, 1, 'alice com key 1', 'alice com id 1', 1, 'alice com id 1', 11111111, NULL, NULL);
+INSERT INTO session VALUES(2, 4, 'bob key 1', 'bob id 1', 1, 'bob id 1', 22222222, NULL, NULL);
+INSERT INTO session VALUES(3, 4, 'bob key 2', 'bob id 2', 1, 'bob id 2', 33333333, NULL, NULL);
+INSERT INTO session VALUES(4, 4, 'bob key 3', 'bob id 3', 2, 'bob id 3', 44444444, NULL, NULL);
+INSERT INTO session VALUES(5, 3, 'net key 1', 'net id 1', 1, 'netid 1', 555555, NULL, NULL);
 
 COMMIT;

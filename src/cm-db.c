@@ -315,6 +315,8 @@ cm_db_create_schema (CmDb  *self,
     "room_id INTEGER REFERENCES rooms(id), "
     /* Version 1 */
     "json_data TEXT, "
+    /* v2 */
+    "chain_index INTEGER, "
     "UNIQUE (account_id, sender_key, session_id));"
 
     "COMMIT;";
@@ -593,6 +595,8 @@ cm_db_migrate_to_v2 (CmDb  *self,
 
                          "ALTER TABLE tmp_users RENAME TO users;"
                          "ALTER TABLE tmp_encryption_keys RENAME TO encryption_keys;"
+
+                         "ALTER TABLE session ADD COLUMN chain_index INTEGER;"
 
                          "PRAGMA user_version = 2;"
 
