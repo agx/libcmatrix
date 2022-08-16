@@ -21,7 +21,8 @@ G_DECLARE_FINAL_TYPE (CmMatrix, cm_matrix, CM, MATRIX, GObject)
 
 CmMatrix   *cm_matrix_new                (const char          *data_dir,
                                           const char          *cache_dir,
-                                          const char          *app_id);
+                                          const char          *app_id,
+                                          gboolean             disable_auto_login);
 void        cm_init                      (gboolean             init_gcrypt);
 void        cm_matrix_open_async         (CmMatrix            *self,
                                           const char          *db_path,

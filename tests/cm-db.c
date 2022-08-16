@@ -489,7 +489,8 @@ main (int   argc,
   cm_init (TRUE);
   matrix = cm_matrix_new (g_test_get_dir (G_TEST_BUILT),
                           g_test_get_dir (G_TEST_BUILT),
-                          "org.example.CMatrix");
+                          "org.example.CMatrix",
+                          FALSE);
 
   g_test_add_func ("/cm-db/new", test_cm_db_new);
   g_test_add_func ("/cm-db/account", test_cm_db_account);

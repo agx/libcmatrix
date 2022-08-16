@@ -163,7 +163,7 @@ main (void)
   /* Create a matrix object */
   data_dir = g_build_filename (g_get_user_data_dir (), "CMatrix", "simple-client", NULL);
   cache_dir = g_build_filename (g_get_user_cache_dir (), "CMatrix", "simple-client", NULL);
-  matrix = cm_matrix_new (data_dir, cache_dir, "com.example.CMatrix");
+  matrix = cm_matrix_new (data_dir, cache_dir, "com.example.CMatrix", FALSE);
 
   /* Ask matrix to open/create the db which will be used to store keys, session data, etc. */
   db_dir = g_build_filename (g_get_user_data_dir (), "CMatrix", "simple-client", NULL);

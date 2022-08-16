@@ -51,6 +51,7 @@ struct _CmMatrix
   gboolean db_loaded;
   gboolean is_opening;
   gboolean loading_accounts;
+  gboolean disable_auto_login;
 };
 
 char *cmatrix_data_dir, *cmatrix_app_id;
@@ -160,6 +161,7 @@ cm_matrix_init (CmMatrix *self)
  * @data_dir: The data directory
  * @cache_dir: The cache directory
  * @app_id: The app id string (unused)
+ * @disable_auto_login: Disable auto login
  *
  * Create a new #CmMatrix with the provided details
  *
@@ -184,7 +186,8 @@ cm_matrix_init (CmMatrix *self)
 CmMatrix *
 cm_matrix_new (const char *data_dir,
                const char *cache_dir,
-               const char *app_id)
+               const char *app_id,
+               gboolean    disable_auto_login)
 {
   CmMatrix *self;
   char *dir;
@@ -194,6 +197,7 @@ cm_matrix_new (const char *data_dir,
   g_return_val_if_fail (g_application_id_is_valid (app_id), NULL);
 
   self = g_object_new (CM_TYPE_MATRIX, NULL);
+  self->disable_auto_login = !!disable_auto_login;
   self->data_dir = g_build_filename (data_dir, "cmatrix", NULL);
   cmatrix_data_dir = g_strdup (self->data_dir);
   cmatrix_app_id = g_strdup (app_id);
@@ -259,7 +263,8 @@ load_accounts_from_secrets (CmMatrix  *self,
 
       client = cm_client_new_from_secret (accounts->pdata[i], self->cm_db);
       g_list_store_append (self->clients_list, client);
-      cm_client_enable_as_in_store (client);
+      if (!self->disable_auto_login)
+        cm_client_enable_as_in_store (client);
     }
 }
 
