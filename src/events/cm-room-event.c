@@ -264,6 +264,83 @@ cm_room_event_get_room_member_id (CmRoomEvent *self)
   return priv->member_id;
 }
 
+gboolean
+cm_room_event_user_has_power (CmRoomEvent *self,
+                              const char  *user_id,
+                              CmEventType  event)
+{
+  CmRoomEventPrivate *priv = cm_room_event_get_instance_private (self);
+  JsonObject *child, *content;
+  int user_power = 0;
+
+  g_return_val_if_fail (CM_IS_ROOM_EVENT (self), FALSE);
+  g_return_val_if_fail (user_id && *user_id == '@', FALSE);
+  g_return_val_if_fail (priv->json, FALSE);
+  ret_val_if_fail (self, CM_M_ROOM_POWER_LEVELS, 0, FALSE);
+
+  if (!priv->json)
+    return FALSE;
+
+  content = cm_utils_json_object_get_object (priv->json, "content");
+  child = cm_utils_json_object_get_object (content, "users");
+  user_power = cm_utils_json_object_get_int (child, user_id);
+
+  if (!user_power)
+    user_power = cm_utils_json_object_get_int (content, "users_default");
+
+  child = cm_utils_json_object_get_object (content, "events");
+
+  if (event == CM_M_ROOM_NAME)
+    return user_power >= cm_utils_json_object_get_int (child, "m.room.name");
+
+  if (event == CM_M_ROOM_POWER_LEVELS)
+    return user_power >= cm_utils_json_object_get_int (child, "m.room.power_levels");
+
+  if (event == CM_M_ROOM_HISTORY_VISIBILITY)
+    return user_power >= cm_utils_json_object_get_int (child, "m.room.history_visibility");
+
+  if (event == CM_M_ROOM_CANONICAL_ALIAS)
+    return user_power >= cm_utils_json_object_get_int (child, "m.room.canonical_alias");
+
+  if (event == CM_M_ROOM_AVATAR)
+    return user_power >= cm_utils_json_object_get_int (child, "m.room.avatar");
+
+  if (event == CM_M_ROOM_TOMBSTONE)
+    return user_power >= cm_utils_json_object_get_int (child, "m.room.tombstone");
+
+  if (event == CM_M_ROOM_SERVER_ACL)
+    return user_power >= cm_utils_json_object_get_int (child, "m.room.server_acl");
+
+  if (event == CM_M_ROOM_ENCRYPTION)
+    return user_power >= cm_utils_json_object_get_int (child, "m.room.encryption");
+
+  if (event == CM_M_ROOM_INVITE)
+    {
+      if (!cm_utils_json_object_has_member (content, "invite"))
+        return user_power >= 50;
+
+      return user_power >= cm_utils_json_object_get_int (content, "invite");
+    }
+
+  if (event == CM_M_ROOM_BAN)
+    {
+      if (!cm_utils_json_object_has_member (content, "ban"))
+        return user_power >= 50;
+
+      return user_power >= cm_utils_json_object_get_int (content, "ban");
+    }
+
+  if (event == CM_M_ROOM_KICK)
+    {
+      if (!cm_utils_json_object_has_member (content, "kick"))
+        return user_power >= 50;
+
+      return user_power >= cm_utils_json_object_get_int (content, "kick");
+    }
+
+  return user_power >= cm_utils_json_object_get_int (content, "events_default");
+}
+
 /*
  * cm_room_event_get_power_level_admins:
  * @self: A #CmRoomEvent

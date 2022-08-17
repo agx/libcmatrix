@@ -28,6 +28,10 @@ JsonObject   *cm_room_event_get_room_member_json    (CmRoomEvent         *self,
 void          cm_room_event_set_room_member         (CmRoomEvent         *self,
                                                      CmUser              *user);
 const char   *cm_room_event_get_room_member_id      (CmRoomEvent         *self);
+gboolean      cm_room_event_user_has_power          (CmRoomEvent         *self,
+                                                     const char          *user_id,
+                                                     CmEventType          event);
+
 GPtrArray    *cm_room_event_get_admin_ids           (CmRoomEvent         *self);
 void          cm_room_event_set_admin_users         (CmRoomEvent         *self,
                                                      GPtrArray           *users);
