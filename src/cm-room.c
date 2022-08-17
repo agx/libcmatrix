@@ -733,7 +733,8 @@ cm_room_parse_events (CmRoom     *self,
         }
       else if (type == CM_M_ROOM_POWER_LEVELS)
         {
-          JsonObject *power, *local;
+          g_autoptr(JsonObject) power = NULL;
+          JsonObject *local;
 
           power = cm_event_get_json (CM_EVENT (event));
 
@@ -741,11 +742,16 @@ cm_room_parse_events (CmRoom     *self,
             continue;
 
           if (!self->local_json)
-            room_generate_json (self);
+            {
+              room_generate_json (self);
+            }
+          else
+            {
+              local = cm_utils_json_object_get_object (self->local_json, "local");
+              json_object_set_object_member (local, "m.room.power_levels",
+                                             g_steal_pointer (&power));
+            }
 
-          local = cm_utils_json_object_get_object (self->local_json, "local");
-          json_object_set_object_member (local, "m.room.power_levels",
-                                         json_object_ref (power));
           self->db_save_pending = TRUE;
         }
       else if (type == CM_M_ROOM_ENCRYPTION)

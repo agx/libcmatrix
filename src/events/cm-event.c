@@ -351,7 +351,7 @@ cm_event_get_json_str (CmEvent  *self,
  * Can return %NULL, eg: when the event is encrypted,
  * and was not able to decrypt.
  *
- * Returns: (transfer none) (nullable)
+ * Returns: (transfer full) (nullable)
  */
 JsonObject *
 cm_event_get_json (CmEvent *self)
@@ -360,7 +360,10 @@ cm_event_get_json (CmEvent *self)
 
   g_return_val_if_fail (CM_IS_EVENT (self), NULL);
 
-  return priv->json;
+  if (priv->json)
+    return json_object_ref (priv->json);
+
+  return NULL;
 }
 
 JsonObject *
@@ -370,5 +373,8 @@ cm_event_get_encrypted_json (CmEvent *self)
 
   g_return_val_if_fail (CM_IS_EVENT (self), NULL);
 
-  return priv->encrypted_json;
+  if (priv->encrypted_json)
+    return json_object_ref (priv->encrypted_json);
+
+  return NULL;
 }

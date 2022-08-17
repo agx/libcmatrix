@@ -1770,8 +1770,10 @@ db_add_room_events (CmDb  *self,
   /* todo: Look into sqlite transactions */
   for (guint i = 0; i < events->len; i++)
     {
+      g_autoptr(JsonObject) encrypted = NULL;
       g_autoptr(JsonObject) json_obj = NULL;
-      JsonObject *json, *encrypted, *local = NULL;
+      g_autoptr(JsonObject) json = NULL;
+      JsonObject *local = NULL;
       CmEvent *event = events->pdata[i];
       g_autofree char *json_str = NULL;
       const char *sender;
@@ -1794,9 +1796,9 @@ db_add_room_events (CmDb  *self,
 
       json_obj = json_object_new ();
       if (json)
-        json_object_set_object_member (json_obj, "json", json_object_ref (json));
+        json_object_set_object_member (json_obj, "json", g_steal_pointer (&json));
       if (encrypted)
-        json_object_set_object_member (json_obj, "encrypted", json_object_ref (encrypted));
+        json_object_set_object_member (json_obj, "encrypted", g_steal_pointer (&encrypted));
 
       if (cm_event_get_txn_id (event))
         {
