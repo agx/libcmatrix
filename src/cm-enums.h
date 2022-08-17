@@ -136,6 +136,9 @@ typedef enum {
 
   /* Custom */
   CM_M_USER_STATUS = 256,
+  CM_M_ROOM_INVITE,
+  CM_M_ROOM_BAN,
+  CM_M_ROOM_KICK,
 } CmEventType;
 
 typedef enum
