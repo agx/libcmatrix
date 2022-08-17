@@ -42,8 +42,10 @@ struct _CmRoom
   char       *replacement_room;
   char       *encryption;
   char       *prev_batch;
+
   /* The last event in the room, if any */
-  CmEvent    *last_event;
+  CmEvent     *last_event;
+  CmEvent     *power_level_event;
   CmRoomEvent *tombstone_event;
 
   GQueue     *message_queue;
@@ -252,6 +254,9 @@ cm_room_finalize (GObject *object)
   g_clear_object (&self->invited_members);
 
   g_clear_object (&self->last_event);
+  g_clear_object (&self->tombstone_event);
+  g_clear_object (&self->power_level_event);
+
   g_clear_object (&self->client);
   g_free (self->room_id);
 
@@ -349,15 +354,17 @@ cm_room_new_from_json (const char *room_id,
 
   if (root)
     {
-      JsonObject *child;
+      JsonObject *child, *local;
 
       self->local_json = root;
-      child = cm_utils_json_object_get_object (root, "local");
-      self->name = g_strdup (cm_utils_json_object_get_string (child, "alias"));
-      cm_room_set_is_direct (self, cm_utils_json_object_get_bool (child, "direct"));
-      if (cm_utils_json_object_get_int (child, "encryption") > 0)
+      local = cm_utils_json_object_get_object (root, "local");
+      self->name = g_strdup (cm_utils_json_object_get_string (local, "alias"));
+      cm_room_set_is_direct (self, cm_utils_json_object_get_bool (local, "direct"));
+      if (cm_utils_json_object_get_int (local, "encryption") > 0)
         self->encryption = g_strdup ("encrypted");
 
+      child = cm_utils_json_object_get_object (local, "m.room.power_levels");
+      self->power_level_event = (CmEvent *)cm_room_event_new_from_json (self, child, NULL);
       self->last_event = last_event;
     }
 
@@ -384,6 +391,11 @@ room_generate_json (CmRoom *self)
   json_object_set_string_member (child, "last_alias", cm_room_get_name (self));
   json_object_set_boolean_member (child, "direct", cm_room_is_direct (self));
   json_object_set_int_member (child, "encryption", cm_room_is_encrypted (self));
+
+  if (self->power_level_event)
+    json_object_set_object_member (child, "m.room.power_levels",
+                                   cm_event_get_json (self->power_level_event));
+
   /* todo */
   /* Set only if there is only one member in the room */
   /* json_object_set_string_member (child, "m.room.member", "bad"); */
@@ -393,7 +405,6 @@ room_generate_json (CmRoom *self)
   /* json_object_set_object_member (child, "m.room.join_rules", "bad"); */
   /* json_object_set_object_member (child, "m.room.name", "bad"); */
   /* json_object_set_object_member (child, "m.room.canonical_alias", "bad"); */
-  /* json_object_set_object_member (child, "m.room.power_levels", "bad"); */
   /* json_object_set_object_member (child, "m.room.guest_access", "bad"); */
   /* json_object_set_object_member (child, "summary", "bad"); */
   /* json_object_set_object_member (child, "unread_notifications", "bad"); */
@@ -479,6 +490,20 @@ cm_room_get_id (CmRoom *self)
   g_return_val_if_fail (CM_IS_ROOM (self), NULL);
 
   return self->room_id;
+}
+
+gboolean
+cm_room_self_has_power_for_event (CmRoom      *self,
+                                  CmEventType  event)
+{
+  g_return_val_if_fail (CM_IS_ROOM (self), FALSE);
+
+  if (!self->power_level_event)
+    return FALSE;
+
+  return cm_room_event_user_has_power (CM_ROOM_EVENT (self->power_level_event),
+                                       cm_client_get_user_id (self->client),
+                                       event);
 }
 
 /**
@@ -741,6 +766,7 @@ cm_room_parse_events (CmRoom     *self,
           if (!power)
             continue;
 
+          g_set_object (&self->power_level_event, CM_EVENT (event));
           if (!self->local_json)
             {
               room_generate_json (self);

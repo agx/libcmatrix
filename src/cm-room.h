@@ -25,6 +25,8 @@ G_BEGIN_DECLS
 G_DECLARE_FINAL_TYPE (CmRoom, cm_room, CM, ROOM, GObject)
 
 const char   *cm_room_get_id                      (CmRoom                *self);
+gboolean      cm_room_self_has_power_for_event    (CmRoom                *self,
+                                                   CmEventType            event);
 const char   *cm_room_get_name                    (CmRoom                *self);
 gboolean      cm_room_is_encrypted                (CmRoom                *self);
 GListModel   *cm_room_get_joined_members          (CmRoom                *self);
