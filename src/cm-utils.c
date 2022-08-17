@@ -410,6 +410,20 @@ cm_utils_string_to_json_object (const char *json_str)
   return json_node_dup_object (node);
 }
 
+gboolean
+cm_utils_json_object_has_member (JsonObject *object,
+                                 const char *member)
+{
+  JsonNode *node;
+
+  if (!object || !member || !*member)
+    return 0;
+
+  node = json_object_get_member (object, member);
+
+  return !!node;
+}
+
 gint64
 cm_utils_json_object_get_int (JsonObject *object,
                               const char *member)

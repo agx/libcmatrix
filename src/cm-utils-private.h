@@ -26,6 +26,8 @@ char         *cm_utils_json_object_to_string    (JsonObject          *object,
 GString      *cm_utils_json_get_canonical       (JsonObject          *object,
                                                  GString             *out);
 JsonObject   *cm_utils_string_to_json_object    (const char          *json_str);
+gboolean      cm_utils_json_object_has_member   (JsonObject          *object,
+                                                 const char          *member);
 gint64        cm_utils_json_object_get_int      (JsonObject          *object,
                                                  const char          *member);
 gboolean      cm_utils_json_object_get_bool     (JsonObject          *object,
