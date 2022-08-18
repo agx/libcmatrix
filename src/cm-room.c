@@ -1883,6 +1883,7 @@ room_load_prev_batch_cb (GObject      *obj,
     end = NULL;
 
   cm_room_set_prev_batch (self, end);
+  self->db_save_pending = TRUE;
   cm_room_save (self);
 
   events = g_ptr_array_new_full (64, g_object_unref);
