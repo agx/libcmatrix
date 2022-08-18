@@ -21,6 +21,7 @@ gboolean      cm_utils_get_item_position        (GListModel          *list,
                                                  guint               *position);
 gboolean      cm_utils_remove_list_item         (GListStore          *store,
                                                  gpointer             item);
+const char   *cm_utils_get_event_type_str       (CmEventType          type);
 char         *cm_utils_json_object_to_string    (JsonObject          *object,
                                                  gboolean             prettify);
 GString      *cm_utils_json_get_canonical       (JsonObject          *object,

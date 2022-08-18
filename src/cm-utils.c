@@ -154,6 +154,200 @@ cm_utils_remove_list_item (GListStore *store,
   return FALSE;
 }
 
+const char *
+cm_utils_get_event_type_str (CmEventType type)
+{
+  switch (type)
+    {
+    case CM_M_CALL_ANSWER:
+      return "m.call.answer";
+
+    case CM_M_CALL_ASSERTED_IDENTITY:
+      return "m.call.asserted_identity";
+
+    case CM_M_CALL_ASSERTED_IDENTITY_PREFIX:
+      return "m.call.asserted_identity_prefix";
+
+    case CM_M_CALL_CANDIDATES:
+      return "m.call.candidates";
+
+    case CM_M_CALL_HANGUP:
+      return "m.call.hangup";
+
+    case CM_M_CALL_INVITE:
+      return "m.call.invite";
+
+    case CM_M_CALL_NEGOTIATE:
+      return "m.call.negotiate";
+
+    case CM_M_CALL_REJECT:
+      return "m.call.reject";
+
+    case CM_M_CALL_REPLACES:
+      return "m.call.replaces";
+
+    case CM_M_CALL_SELECT_ANSWER:
+      return "m.call_select_answer";
+
+    case CM_M_DIRECT:
+      return "m.direct";
+
+    case CM_M_DUMMY:
+      return "m.dummy";
+
+    case CM_M_FORWARDED_ROOM_KEY:
+      return "m.forwarded_room_key";
+
+    case CM_M_FULLY_READ:
+      return "m.fully_read";
+
+    case CM_M_IGNORED_USER_LIST:
+      return "m.ignored_user_list";
+
+    case CM_M_KEY_VERIFICATION_ACCEPT:
+      return "m.key.verification_accept";
+
+    case CM_M_KEY_VERIFICATION_CANCEL:
+      return "m.key.verification_cancel";
+
+    case CM_M_KEY_VERIFICATION_DONE:
+      return "m.key.verification_done";
+
+    case CM_M_KEY_VERIFICATION_KEY:
+      return "m.key.verification_key";
+
+    case CM_M_KEY_VERIFICATION_MAC:
+      return "m.key.verification_mac";
+
+    case CM_M_KEY_VERIFICATION_READY:
+      return "m.key.verification_ready";
+
+    case CM_M_KEY_VERIFICATION_REQUEST:
+      return "m.key.verification_request";
+
+    case CM_M_KEY_VERIFICATION_START:
+      return "m.key.verification_start";
+
+    case CM_M_PRESENCE:
+      return "m.presence";
+
+    case CM_M_PUSH_RULES:
+      return "m.push_rules";
+
+    case CM_M_REACTION:
+      return "m.reaction";
+
+    case CM_M_RECEIPT:
+      return "m.receipt";
+
+    case CM_M_ROOM_ALIASES:
+      return "m.room.aliases";
+
+    case CM_M_ROOM_AVATAR:
+      return "m.room.avatar";
+
+    case CM_M_ROOM_CANONICAL_ALIAS:
+      return "m.room.canonical_alias";
+
+    case CM_M_ROOM_CREATE:
+      return "m.room.create";
+
+    case CM_M_ROOM_ENCRYPTED:
+      return "m.room.encrypted";
+
+    case CM_M_ROOM_ENCRYPTION:
+      return "m.room.encryption";
+
+    case CM_M_ROOM_GUEST_ACCESS:
+      return "m.room.guest_access";
+
+    case CM_M_ROOM_HISTORY_VISIBILITY:
+      return "m.room.history_visibility";
+
+    case CM_M_ROOM_JOIN_RULES:
+      return "m.room.join_rules";
+
+    case CM_M_ROOM_KEY:
+      return "m.room_key";
+
+    case CM_M_ROOM_KEY_REQUEST:
+      return "m.room_key.request";
+
+    case CM_M_ROOM_MEMBER:
+      return "m.room.member";
+
+    case CM_M_ROOM_MESSAGE:
+      return "m.room.message";
+
+    case CM_M_ROOM_MESSAGE_FEEDBACK:
+      return "m.room.message_feedback";
+
+    case CM_M_ROOM_NAME:
+      return "m.room.name";
+
+    case CM_M_ROOM_PINNED_EVENTS:
+      return "m.room.pinned_events";
+
+    case CM_M_ROOM_PLUMBING:
+      return "m.room.plumbing";
+
+    case CM_M_ROOM_POWER_LEVELS:
+      return "m.room.power_levels";
+
+    case CM_M_ROOM_REDACTION:
+      return "m.room.redaction";
+
+    case CM_M_ROOM_RELATED_GROUPS:
+      return "m.room.related_groups";
+
+    case CM_M_ROOM_SERVER_ACL:
+      return "m.room.server_acl";
+
+    case CM_M_ROOM_THIRD_PARTY_INVITE:
+      return "m.room.third_party_invite";
+
+    case CM_M_ROOM_TOMBSTONE:
+      return "m.room.tombstone";
+
+    case CM_M_ROOM_TOPIC:
+      return "m.room.topic";
+
+    case CM_M_SECRET_REQUEST:
+      return "m.secret.request";
+
+    case CM_M_SECRET_SEND:
+      return "m.secret.send";
+
+    case CM_M_SECRET_STORAGE_DEFAULT_KEY:
+      return "m.secret_storage.default_key";
+
+    case CM_M_SPACE_CHILD:
+      return "m.space.child";
+
+    case CM_M_SPACE_PARENT:
+      return "m.space.parent";
+
+    case CM_M_STICKER:
+      return "m.sticker";
+
+    case CM_M_TAG:
+      return "m.tag";
+
+    case CM_M_TYPING:
+      return "m.typing";
+
+    case CM_M_UNKNOWN:
+    case CM_M_USER_STATUS:
+    case CM_M_ROOM_INVITE:
+    case CM_M_ROOM_BAN:
+    case CM_M_ROOM_KICK:
+    default:
+      g_return_val_if_reached (NULL);
+    }
+
+  return NULL;
+}
+
 void
 cm_utils_clear (char   *buffer,
                 size_t  length)
