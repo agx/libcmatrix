@@ -642,7 +642,8 @@ cm_room_parse_events (CmRoom     *self,
                       JsonObject *root,
                       GPtrArray  *events,
                       gboolean    state_events,
-                      gboolean    past)
+                      gboolean    past,
+                      gboolean    add)
 {
   JsonObject *child;
   JsonArray *array;
@@ -802,6 +803,23 @@ cm_room_parse_events (CmRoom     *self,
           self->tombstone_event = g_object_ref (event);
         }
     }
+
+  if (add && !state_events && events && events->len)
+    {
+      guint position;
+
+      if (past)
+        position = 0;
+      else
+        position = g_list_model_get_n_items (G_LIST_MODEL (self->events_list));
+
+      if (position)
+        --position;
+
+      g_list_store_splice (self->events_list,
+                           position, 0, events->pdata, events->len);
+    }
+
 }
 
 GPtrArray *
@@ -818,10 +836,10 @@ cm_room_set_data (CmRoom     *self,
 
   events = g_ptr_array_new_full (100, g_object_unref);
   child = cm_utils_json_object_get_object (object, "state");
-  cm_room_parse_events (self, child, events, TRUE, FALSE);
+  cm_room_parse_events (self, child, events, TRUE, FALSE, FALSE);
 
   child = cm_utils_json_object_get_object (object, "timeline");
-  cm_room_parse_events (self, child, events, FALSE, FALSE);
+  cm_room_parse_events (self, child, events, FALSE, FALSE, TRUE);
 
   if (cm_utils_json_object_get_bool (child, "limited"))
     {
@@ -1868,7 +1886,7 @@ room_load_prev_batch_cb (GObject      *obj,
   cm_room_save (self);
 
   events = g_ptr_array_new_full (64, g_object_unref);
-  cm_room_parse_events (self, object, events, FALSE, TRUE);
+  cm_room_parse_events (self, object, events, FALSE, TRUE, TRUE);
   g_task_return_pointer (task, events, (GDestroyNotify)g_ptr_array_unref);
 }
 
@@ -1944,11 +1962,25 @@ room_prev_batch_cb (GObject      *object,
     {
       g_task_return_error (task, error);
     }
-  else
+  else if (events)
     {
+      g_autoptr(GPtrArray) reversed = NULL;
+
       cm_db_add_room_events (cm_client_get_db (self->client),
                              self, events, TRUE);
+
+      reversed = g_ptr_array_new_full (events->len, g_object_unref);
+
+      while (events->len)
+        g_ptr_array_add (reversed, g_ptr_array_steal_index (events, events->len - 1));
+
+      g_list_store_splice (self->events_list,
+                           0, 0, reversed->pdata, reversed->len);
       g_task_return_pointer (task, events, (GDestroyNotify)g_ptr_array_unref);
+    }
+  else
+    {
+      g_task_return_pointer (task, NULL, NULL);
     }
 }
 
@@ -1984,6 +2016,18 @@ room_get_past_db_events_cb (GObject      *object,
                          cm_client_get_user_id (self->client)) == 0)
             cm_event_sender_is_self (event);
         }
+
+      {
+        g_autoptr(GPtrArray) reversed = NULL;
+
+        reversed = g_ptr_array_new_full (events->len, g_object_unref);
+
+        while (events->len)
+          g_ptr_array_add (reversed, g_ptr_array_steal_index (events, events->len - 1));
+
+        g_list_store_splice (self->events_list,
+                             0, 0, reversed->pdata, reversed->len);
+      }
 
       g_task_return_pointer (task, g_steal_pointer (&events),
                              (GDestroyNotify)g_ptr_array_unref);
@@ -2286,7 +2330,7 @@ get_room_state_cb (GObject      *object,
 
   root = json_object_new ();
   json_object_set_array_member (root, "events", array);
-  cm_room_parse_events (self, root, NULL, TRUE, FALSE);
+  cm_room_parse_events (self, root, NULL, TRUE, FALSE, TRUE);
   self->initial_sync_done = TRUE;
 
   self->db_save_pending = TRUE;
