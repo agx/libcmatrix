@@ -30,6 +30,7 @@ struct _CmRoom
 {
   GObject parent_instance;
 
+  GListStore *events_list;
   GListStore *joined_members;
   GHashTable *joined_members_table;
   GListStore *invited_members;
@@ -253,6 +254,7 @@ cm_room_finalize (GObject *object)
   g_hash_table_unref (self->invited_members_table);
   g_clear_object (&self->invited_members);
 
+  g_clear_object (&self->events_list);
   g_clear_object (&self->last_event);
   g_clear_object (&self->tombstone_event);
   g_clear_object (&self->power_level_event);
@@ -312,6 +314,7 @@ cm_room_class_init (CmRoomClass *klass)
 static void
 cm_room_init (CmRoom *self)
 {
+  self->events_list = g_list_store_new (CM_TYPE_EVENT);
   self->joined_members = g_list_store_new (CM_TYPE_ROOM_MEMBER);
   self->joined_members_table = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                       g_free, g_object_unref);
@@ -560,6 +563,14 @@ cm_room_get_joined_members (CmRoom *self)
   g_return_val_if_fail (CM_IS_ROOM (self), NULL);
 
   return G_LIST_MODEL (self->joined_members);
+}
+
+GListModel *
+cm_room_get_events_list (CmRoom *self)
+{
+  g_return_val_if_fail (CM_IS_ROOM (self), NULL);
+
+  return G_LIST_MODEL (self->events_list);
 }
 
 CmRoomType
