@@ -18,6 +18,18 @@
 
 G_BEGIN_DECLS
 
+/* The order if the enum SHOULD NEVER be changed,
+ * as it's used in db
+ */
+typedef enum {
+  CM_RELATION_NONE,
+  CM_RELATION_UNKNOWN,
+  CM_RELATION_ANNOTATION,
+  CM_RELATION_REPLACE,
+  CM_RELATION_REFERENCE,
+  CM_RELATION_THREAD
+} CmRelationType;
+
 const char   *cm_event_get_txn_id         (CmEvent      *self);
 void          cm_event_create_txn_id      (CmEvent      *self,
                                            guint         id);
