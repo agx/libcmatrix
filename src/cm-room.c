@@ -1960,29 +1960,9 @@ room_prev_batch_cb (GObject      *object,
   self->loading_past_events = FALSE;
 
   if (error)
-    {
-      g_task_return_error (task, error);
-    }
-  else if (events)
-    {
-      g_autoptr(GPtrArray) reversed = NULL;
-
-      cm_db_add_room_events (cm_client_get_db (self->client),
-                             self, events, TRUE);
-
-      reversed = g_ptr_array_new_full (events->len, g_object_unref);
-
-      while (events->len)
-        g_ptr_array_add (reversed, g_ptr_array_steal_index (events, events->len - 1));
-
-      g_list_store_splice (self->events_list,
-                           0, 0, reversed->pdata, reversed->len);
-      g_task_return_pointer (task, events, (GDestroyNotify)g_ptr_array_unref);
-    }
+    g_task_return_error (task, error);
   else
-    {
-      g_task_return_pointer (task, NULL, NULL);
-    }
+    g_task_return_boolean (task, !!events);
 }
 
 static void
@@ -2030,8 +2010,7 @@ room_get_past_db_events_cb (GObject      *object,
                              0, 0, reversed->pdata, reversed->len);
       }
 
-      g_task_return_pointer (task, g_steal_pointer (&events),
-                             (GDestroyNotify)g_ptr_array_unref);
+      g_task_return_boolean (task, TRUE);
     }
   else if (self->prev_batch)
     {
@@ -2041,16 +2020,16 @@ room_get_past_db_events_cb (GObject      *object,
     }
   else
     {
-      g_task_return_pointer (task, NULL, NULL);
+      g_task_return_boolean (task, FALSE);
     }
 }
 
 void
-cm_room_get_past_events_async (CmRoom              *self,
-                               CmEvent             *from,
-                               GAsyncReadyCallback  callback,
-                               gpointer             user_data)
+cm_room_load_past_events_async (CmRoom              *self,
+                                GAsyncReadyCallback  callback,
+                                gpointer             user_data)
 {
+  g_autoptr(CmEvent) from = NULL;
   g_autoptr(GTask) task = NULL;
 
   g_return_if_fail (CM_IS_ROOM (self));
@@ -2067,22 +2046,23 @@ cm_room_get_past_events_async (CmRoom              *self,
 
   self->loading_past_events = TRUE;
 
+  from = g_list_model_get_item (G_LIST_MODEL (self->events_list), 0);
   cm_db_get_past_events_async (cm_client_get_db (self->client),
                                self, from,
                                room_get_past_db_events_cb,
                                g_steal_pointer (&task));
 }
 
-GPtrArray *
-cm_room_get_past_events_finish (CmRoom        *self,
-                                GAsyncResult  *result,
-                                GError       **error)
+gboolean
+cm_room_load_past_events_finish (CmRoom        *self,
+                                 GAsyncResult  *result,
+                                 GError       **error)
 {
-  g_return_val_if_fail (CM_IS_ROOM (self), NULL);
-  g_return_val_if_fail (G_IS_TASK (result), NULL);
-  g_return_val_if_fail (!error || !*error, NULL);
+  g_return_val_if_fail (CM_IS_ROOM (self), FALSE);
+  g_return_val_if_fail (G_IS_TASK (result), FALSE);
+  g_return_val_if_fail (!error || !*error, FALSE);
 
-  return g_task_propagate_pointer (G_TASK (result), error);
+  return g_task_propagate_boolean (G_TASK (result), error);
 }
 
 static void

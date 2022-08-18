@@ -82,11 +82,10 @@ void          cm_room_set_read_marker_async       (CmRoom                *self,
 gboolean      cm_room_set_read_marker_finish      (CmRoom                *self,
                                                    GAsyncResult          *result,
                                                    GError               **error);
-void          cm_room_get_past_events_async       (CmRoom                *self,
-                                                   CmEvent               *from,
+void          cm_room_load_past_events_async      (CmRoom                *self,
                                                    GAsyncReadyCallback    callback,
                                                    gpointer               user_data);
-GPtrArray    *cm_room_get_past_events_finish      (CmRoom                *self,
+gboolean      cm_room_load_past_events_finish     (CmRoom                *self,
                                                    GAsyncResult          *result,
                                                    GError               **error);
 G_END_DECLS
