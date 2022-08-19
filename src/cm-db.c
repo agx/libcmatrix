@@ -1910,7 +1910,7 @@ db_add_room_events (CmDb  *self,
       /* We check if we have a replaces event id instead of replaces_id, as
        * replaces_id can be 0 if the event is not yet in db, which also means
        * that if the id is not NULL and 0, the event replaces some other event */
-      if (cm_event_get_replaces_id (event))
+      if (replaces_id)
         matrix_bind_int (stmt, 6, replaces_id, "binding when adding event");
       if (replaces_cache_id)
         matrix_bind_int (stmt, 7, replaces_cache_id, "binding when adding event");
@@ -1940,6 +1940,12 @@ db_add_room_events (CmDb  *self,
               sqlite3_step (stmt);
               sqlite3_finalize (stmt);
             }
+        }
+      else
+        {
+          g_warning ("Failed to save event: %s, error: %s",
+                     cm_event_get_id (event),
+                     sqlite3_errmsg (self->db));
         }
 
       prepend ? (--sorted_event_id) : (++sorted_event_id);
