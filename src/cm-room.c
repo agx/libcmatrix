@@ -740,9 +740,9 @@ cm_room_parse_events (CmRoom     *self,
 
   for (guint i = 0; i < length; i++)
     {
+      g_autoptr(CmRoomEvent) event = NULL;
       JsonObject *decrypted = NULL;
       CmRoomMember *member;
-      CmRoomEvent *event;
       const char *value;
       CmEventType type;
       gboolean encrypted = FALSE;
@@ -770,7 +770,9 @@ cm_room_parse_events (CmRoom     *self,
                      cm_client_get_user_id (self->client)) == 0)
         cm_event_sender_is_self (CM_EVENT (event));
 
-      g_ptr_array_add (events, event);
+      if (!state_events)
+        g_ptr_array_add (events, g_object_ref (event));
+
       type = cm_event_get_m_type (CM_EVENT (event));
 
       if (type == CM_M_ROOM_MEMBER)
