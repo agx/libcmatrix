@@ -2076,9 +2076,8 @@ room_load_prev_batch_cb (GObject      *obj,
   cm_room_save (self);
 
   events = g_ptr_array_new_full (64, g_object_unref);
-  g_warning ("%s", cm_utils_json_object_to_string (object, TRUE));
-
   cm_room_parse_events (self, object, events, FALSE, TRUE, TRUE);
+  cm_db_add_room_events (cm_client_get_db (self->client), self, events, TRUE);
 
   g_task_return_pointer (task, events, (GDestroyNotify)g_ptr_array_unref);
 }
