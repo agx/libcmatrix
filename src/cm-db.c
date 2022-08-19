@@ -2679,7 +2679,7 @@ cm_db_lookup_session (CmDb          *self,
   g_object_set_data_full (object, "session-id", g_strdup (session_id), g_free);
   g_object_set_data_full (object, "sender-key", g_strdup (sender_key), g_free);
   g_object_set_data (object, "type", GINT_TO_POINTER (type));
-  g_async_queue_push_front (self->queue, task);
+  g_async_queue_push (self->queue, task);
   g_assert (task);
 
   /* Wait until the task is completed */
