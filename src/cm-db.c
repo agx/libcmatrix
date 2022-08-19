@@ -1813,7 +1813,7 @@ db_add_room_events (CmDb  *self,
   const char *username, *device, *room;
   sqlite3_stmt *stmt;
   GPtrArray *events;
-  int room_id, account_id, sorted_event_id = 0;
+  int room_id, account_id, sorted_event_id = 0, match_id = 0;
   gboolean prepend;
 
   g_assert (CM_IS_DB (self));
@@ -1832,11 +1832,11 @@ db_add_room_events (CmDb  *self,
   room_id = matrix_db_get_room_id (self, account_id, room, FALSE);
 
   if (prepend)
-    db_get_first_room_event_id (self, room_id, &sorted_event_id);
+    match_id = db_get_first_room_event_id (self, room_id, &sorted_event_id);
   else
-    db_get_last_room_event_id (self, room_id, &sorted_event_id);
+    match_id = db_get_last_room_event_id (self, room_id, &sorted_event_id);
 
-  if (sorted_event_id)
+  if (match_id)
     prepend ? (--sorted_event_id) : (++sorted_event_id);
 
   if (!room_id)
