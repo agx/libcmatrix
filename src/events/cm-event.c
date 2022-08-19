@@ -39,6 +39,40 @@ create_txn_id (guint id)
 }
 
 static void
+event_parse_relations (CmEvent    *self,
+                       JsonObject *root)
+{
+  CmEventPrivate *priv = cm_event_get_instance_private (self);
+  JsonObject *child;
+  const char *type, *value;
+
+  g_assert (CM_IS_EVENT (self));
+
+  child = cm_utils_json_object_get_object (root, "content");
+  child = cm_utils_json_object_get_object (child, "m.relates_to");
+
+  type = cm_utils_json_object_get_string (child, "rel_type");
+  value = cm_utils_json_object_get_string (child, "event_id");
+
+  if (g_strcmp0 (type, "m.replace") == 0)
+    priv->replaces_event_id = g_strdup (value);
+
+  if (!priv->replaces_event_id)
+    {
+      child = cm_utils_json_object_get_object (root, "unsigned");
+      priv->replaces_event_id = g_strdup (cm_utils_json_object_get_string (child, "replaces_state"));
+    }
+
+  if (!priv->replaces_event_id)
+    {
+      child = cm_utils_json_object_get_object (root, "unsigned");
+      child = cm_utils_json_object_get_object (child, "m.relations");
+      child = cm_utils_json_object_get_object (child, "m.replace");
+      priv->replaces_event_id = g_strdup (cm_utils_json_object_get_string (child, "event_id"));
+    }
+}
+
+static void
 cm_event_finalize (GObject *object)
 {
   CmEvent *self = (CmEvent *)object;
@@ -203,7 +237,7 @@ cm_event_set_json (CmEvent    *self,
   if (!root)
     return;
 
-  priv->replaces_event_id = g_strdup (cm_utils_json_object_get_string (root, "replaces_state"));
+  event_parse_relations (self, root);
   priv->state_key = g_strdup (cm_utils_json_object_get_string (root, "state_key"));
   priv->json = json_object_ref (root);
 
