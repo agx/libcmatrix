@@ -203,11 +203,14 @@ cm_db_create_schema (CmDb  *self,
     /* v2 */
     "account_id INTEGER REFERENCES accounts(id), "
     /* Version 1: Unique */
-    "username TEXT NOT NULL UNIQUE, "
+    /* v2: Remove Unique */
+    "username TEXT NOT NULL, "
     /* Version 1 */
     "outdated INTEGER DEFAULT 1, "
     /* Version 1 */
-    "json_data TEXT);"
+    "json_data TEXT,"
+    /* v2 */
+    "UNIQUE (account_id, username));"
 
     /* Version 1 */
     "CREATE TABLE IF NOT EXISTS user_devices ("
@@ -258,6 +261,16 @@ cm_db_create_schema (CmDb  *self,
     "UNIQUE (room_id, user_id));"
 
     /* v2 */
+    "CREATE TABLE IF NOT EXISTS room_events_cache ("
+    "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
+    "room_id INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE, "
+    "sender_id INTEGER REFERENCES room_members(id), "
+    "event_uid TEXT NOT NULL, "
+    "origin_server_ts INTEGER, "
+    "json_data TEXT, "
+    "UNIQUE (room_id, event_uid));"
+
+    /* v2 */
     "CREATE TABLE IF NOT EXISTS room_events ("
     "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
     /* 'id' above only increments, 'sorted_id' increments
@@ -269,10 +282,9 @@ cm_db_create_schema (CmDb  *self,
     "event_type INTEGER NOT NULL, "
     "event_uid TEXT NOT NULL, "
     "txnid TEXT, "
-    /* If set to 0, this event replaces some other, which is not yet in db */
-    "replaces_event_id INTEGER REFERENCES room_events(id), "
     /* If set to 0, this event is a reply to some other, which is not yet in db */
-    "reply_to_id INTEGER REFERENCES room_events(id), "
+    "replaces_event_id INTEGER REFERENCES room_events(id), "
+    "replaces_event_cache_id INTEGER REFERENCES room_events_cache(id), "
     /* sending, sent, sending failed, */
     "event_state INTEGER, "
     "state_key TEXT, "
@@ -318,6 +330,14 @@ cm_db_create_schema (CmDb  *self,
     /* v2 */
     "chain_index INTEGER, "
     "UNIQUE (account_id, sender_key, session_id));"
+
+    /* v2 */
+    "CREATE UNIQUE INDEX IF NOT EXISTS room_event_idx ON room_events (room_id, event_uid);"
+    "CREATE INDEX IF NOT EXISTS room_event_state_idx ON room_events (state_key);"
+    "CREATE UNIQUE INDEX IF NOT EXISTS room_event_cache_idx ON room_events_cache (room_id, event_uid);"
+    "CREATE UNIQUE INDEX IF NOT EXISTS encryption_key_idx ON encryption_keys (account_id, file_url);"
+    "CREATE INDEX IF NOT EXISTS session_sender_idx ON session (account_id, sender_key);"
+    "CREATE INDEX IF NOT EXISTS user_idx ON users (username);"
 
     "COMMIT;";
 
@@ -533,6 +553,16 @@ cm_db_migrate_to_v2 (CmDb  *self,
                          "json_data TEXT, "
                          "UNIQUE (room_id, user_id));"
 
+                         /* v2 */
+                         "CREATE TABLE IF NOT EXISTS room_events_cache ("
+                         "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
+                         "room_id INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE, "
+                         "sender_id INTEGER REFERENCES room_members(id), "
+                         "event_uid TEXT NOT NULL, "
+                         "origin_server_ts INTEGER, "
+                         "json_data TEXT, "
+                         "UNIQUE (room_id, event_uid));"
+
                          "CREATE TABLE IF NOT EXISTS room_events ("
                          "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
                          /* 'id' above only increments, 'sorted_id' increments
@@ -544,8 +574,9 @@ cm_db_migrate_to_v2 (CmDb  *self,
                          "event_type INTEGER NOT NULL, "
                          "event_uid TEXT NOT NULL, "
                          "txnid TEXT, "
+                         /* If set to 0, this event is a reply to some other, which is not yet in db */
                          "replaces_event_id INTEGER REFERENCES room_events(id), "
-                         "reply_to_id INTEGER REFERENCES room_events(id), "
+                         "replaces_event_cache_id INTEGER REFERENCES room_events_cache(id), "
                          /* sending, sent, sending failed, */
                          "event_state INTEGER, "
                          "state_key TEXT, "
@@ -582,10 +613,10 @@ cm_db_migrate_to_v2 (CmDb  *self,
                          "CREATE TABLE IF NOT EXISTS tmp_users ("
                          "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
                          "account_id INTEGER REFERENCES accounts(id), "
-                         "username TEXT NOT NULL UNIQUE, "
+                         "username TEXT NOT NULL, "
                          "outdated INTEGER DEFAULT 1, "
-                         "json_data TEXT "
-                         ");"
+                         "json_data TEXT, "
+                         "UNIQUE (account_id, username));"
 
                          "INSERT INTO tmp_users(id,username) "
                          "SELECT DISTINCT id,username FROM users;"
@@ -597,6 +628,13 @@ cm_db_migrate_to_v2 (CmDb  *self,
                          "ALTER TABLE tmp_encryption_keys RENAME TO encryption_keys;"
 
                          "ALTER TABLE session ADD COLUMN chain_index INTEGER;"
+
+                         "CREATE UNIQUE INDEX IF NOT EXISTS room_event_idx ON room_events (room_id, event_uid, state_key);"
+                         "CREATE INDEX IF NOT EXISTS room_event_state_idx ON room_events (state_key);"
+                         "CREATE UNIQUE INDEX IF NOT EXISTS room_event_cache_idx ON room_events_cache (room_id, event_uid);"
+                         "CREATE UNIQUE INDEX IF NOT EXISTS encryption_key_idx ON encryption_keys (account_id, file_url);"
+                         "CREATE INDEX IF NOT EXISTS session_sender_idx ON session (account_id, sender_key);"
+                         "CREATE INDEX IF NOT EXISTS user_idx ON users (username);"
 
                          "PRAGMA user_version = 2;"
 
@@ -693,6 +731,47 @@ db_get_room_event_id (CmDb       *self,
   sqlite3_finalize (stmt);
 
   return event_id;
+}
+
+static int
+db_get_room_cache_event_id (CmDb       *self,
+                            int         room_id,
+                            const char *event,
+                            gboolean    insert_if_missing)
+{
+  sqlite3_stmt *stmt;
+  int event_cache_id = 0;
+
+  if (!room_id || !event || !*event)
+    return 0;
+
+  g_assert (CM_IS_DB (self));
+
+  sqlite3_prepare_v2 (self->db,
+                      "SELECT id FROM room_events_cache "
+                      "WHERE room_id=? AND event_uid=?",
+                      -1, &stmt, NULL);
+  matrix_bind_int (stmt, 1, room_id, "binding when selecting cache event");
+  matrix_bind_text (stmt, 2, event, "binding when selecting cache event");
+
+  if (sqlite3_step (stmt) == SQLITE_ROW)
+    event_cache_id = sqlite3_column_int (stmt, 0);
+  sqlite3_finalize (stmt);
+
+  if (event_cache_id || !insert_if_missing)
+    return event_cache_id;
+
+  sqlite3_prepare_v2 (self->db,
+                      "INSERT INTO room_events_cache (room_id,event_uid) VALUES(?1,?2)",
+                      -1, &stmt, NULL);
+  matrix_bind_int (stmt, 1, room_id, "binding when adding cache event");
+  matrix_bind_text (stmt, 2, event, "binding when adding cache event");
+  sqlite3_step (stmt);
+  sqlite3_finalize (stmt);
+
+  event_cache_id = sqlite3_last_insert_rowid (self->db);
+
+  return event_cache_id;
 }
 
 static int
@@ -1777,8 +1856,8 @@ db_add_room_events (CmDb  *self,
       CmEvent *event = events->pdata[i];
       g_autofree char *json_str = NULL;
       const char *sender;
-      int member_id, replaces_id, reply_to_id;
-      int event_state;
+      int member_id, replaces_id, replaces_cache_id = 0;
+      int event_state, status;
 
       json = cm_event_get_json (event);
       encrypted = cm_event_get_encrypted_json (event);
@@ -1791,8 +1870,9 @@ db_add_room_events (CmDb  *self,
 
       replaces_id = db_get_room_event_id (self, room_id, NULL,
                                           cm_event_get_replaces_id (event));
-      reply_to_id = db_get_room_event_id (self, room_id, NULL,
-                                          cm_event_get_reply_to_id (event));
+      if (cm_event_get_replaces_id (event) && !replaces_id)
+        replaces_cache_id = db_get_room_cache_event_id (self, room_id,
+                                                        cm_event_get_replaces_id (event), TRUE);
 
       json_obj = json_object_new ();
       if (json)
@@ -1816,8 +1896,8 @@ db_add_room_events (CmDb  *self,
       sqlite3_prepare_v2 (self->db,
                           /*                          1       2         3 */
                           "INSERT INTO room_events(sorted_id,room_id,sender_id,"
-                          /*   4           5            6            7 */
-                          "event_type,event_uid,replaces_event_id,reply_to_id,"
+                          /*   4           5            6                   7 */
+                          "event_type,event_uid,replaces_event_id,replaces_event_cache_id,"
                           /*   8           9             10          11 */
                           "event_state,state_key,origin_server_ts,json_data) "
                           "VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
@@ -1832,14 +1912,35 @@ db_add_room_events (CmDb  *self,
        * that if the id is not NULL and 0, the event replaces some other event */
       if (cm_event_get_replaces_id (event))
         matrix_bind_int (stmt, 6, replaces_id, "binding when adding event");
-      if (cm_event_get_reply_to_id (event))
-        matrix_bind_int (stmt, 7, reply_to_id, "binding when adding event");
+      if (replaces_cache_id)
+        matrix_bind_int (stmt, 7, replaces_cache_id, "binding when adding event");
       matrix_bind_int (stmt, 8, event_state, "binding when adding event");
       matrix_bind_text (stmt, 9, cm_event_get_state_key (event), "binding when adding event");
       matrix_bind_int (stmt, 10, cm_event_get_time_stamp (event), "binding when adding event");
       matrix_bind_text (stmt, 11, json_str, "binding when adding event");
-      sqlite3_step (stmt);
+      status = sqlite3_step (stmt);
       sqlite3_finalize (stmt);
+
+      if (status == SQLITE_DONE)
+        {
+          int event_id, event_cache_id;
+
+          event_id = sqlite3_last_insert_rowid (self->db);
+          event_cache_id = db_get_room_cache_event_id (self, room_id,
+                                                     cm_event_get_id (event), FALSE);
+
+          if (event_id && event_cache_id)
+            {
+              sqlite3_prepare_v2 (self->db,
+                                  "UPDATE room_events SET replaces_event_id=?"
+                                  "WHERE replaces_event_cache_id=?;",
+                                  -1, &stmt, NULL);
+              matrix_bind_int (stmt, 1, event_id, "binding when adding event");
+              matrix_bind_int (stmt, 2, event_cache_id, "binding when adding event");
+              sqlite3_step (stmt);
+              sqlite3_finalize (stmt);
+            }
+        }
 
       prepend ? (--sorted_event_id) : (++sorted_event_id);
     }

@@ -6,9 +6,10 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE users(
   id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
   account_id INTEGER REFERENCES accounts(id),
-  username TEXT NOT NULL UNIQUE,
+  username TEXT NOT NULL,
   outdated INTEGER DEFAULT 1,
-  json_data TEXT
+  json_data TEXT,
+  UNIQUE (account_id, username)
 );
 
 CREATE TABLE user_devices(
@@ -49,6 +50,16 @@ CREATE TABLE IF NOT EXISTS room_members (
   user_state INTEGER NOT NULL DEFAULT 0,
   json_data TEXT,
   UNIQUE (room_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS room_events_cache (
+  id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  room_id INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  sender_id INTEGER REFERENCES room_members(id),
+  event_uid TEXT NOT NULL,
+  origin_server_ts INTEGER,
+  json_data TEXT,
+  UNIQUE (room_id, event_uid)
 );
 
 CREATE TABLE IF NOT EXISTS room_events (
@@ -95,6 +106,13 @@ CREATE TABLE session(
   chain_index INTEGER,
   UNIQUE (account_id, sender_key, session_id)
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS room_event_idx ON room_events (room_id, event_uid);
+CREATE INDEX IF NOT EXISTS room_event_state_idx ON room_events (state_key);
+CREATE UNIQUE INDEX IF NOT EXISTS room_event_cache_idx ON room_events_cache (room_id, event_uid);
+CREATE UNIQUE INDEX IF NOT EXISTS encryption_key_idx ON encryption_keys (account_id, file_url);
+CREATE INDEX IF NOT EXISTS session_sender_idx ON session (account_id, sender_key);
+CREATE INDEX IF NOT EXISTS user_idx ON users (username);
 
 INSERT INTO users VALUES(1,NULL,'@alice:example.com', 1, NULL);
 INSERT INTO users VALUES(2,NULL,'@alice:example.net', 1, NULL);
