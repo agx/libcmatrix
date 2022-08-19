@@ -88,11 +88,9 @@ cm_room_event_new_from_json (gpointer    room,
   CmEventType type;
 
   g_return_val_if_fail (CM_IS_ROOM (room), NULL);
+  g_return_val_if_fail (root || encrypted, NULL);
 
   event_type = cm_utils_json_object_get_string (root, "type");
-
-  if (!event_type || !g_str_has_prefix (event_type, "m.room."))
-    return NULL;
 
   /* currently, only room messages are encrypted */
   if (encrypted && root)
