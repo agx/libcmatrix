@@ -994,21 +994,30 @@ cm_room_parse_events (CmRoom     *self,
 
   if (add && !state_events && events && events->len)
     {
-      guint position;
-
       if (past)
-        position = 0;
+        {
+          g_autoptr(GPtrArray) reversed = NULL;
+
+          reversed = g_ptr_array_sized_new (events->len);
+
+          for (guint i = 0; i < events->len; i++)
+            g_ptr_array_insert (reversed, 0, events->pdata[i]);
+          g_list_store_splice (self->events_list,
+                               0, 0, reversed->pdata, reversed->len);
+        }
       else
-        position = g_list_model_get_n_items (G_LIST_MODEL (self->events_list));
+        {
+          guint position;
 
-      if (position)
-        --position;
+          position = g_list_model_get_n_items (G_LIST_MODEL (self->events_list));
 
-      g_warning ("here: %u", events->len);
-      g_list_store_splice (self->events_list,
-                           position, 0, events->pdata, events->len);
+          if (position)
+            --position;
+
+          g_list_store_splice (self->events_list,
+                               position, 0, events->pdata, events->len);
+        }
     }
-
 }
 
 GPtrArray *
