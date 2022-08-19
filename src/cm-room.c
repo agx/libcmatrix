@@ -1004,6 +1004,7 @@ cm_room_parse_events (CmRoom     *self,
       if (position)
         --position;
 
+      g_warning ("here: %u", events->len);
       g_list_store_splice (self->events_list,
                            position, 0, events->pdata, events->len);
     }
@@ -2075,7 +2076,10 @@ room_load_prev_batch_cb (GObject      *obj,
   cm_room_save (self);
 
   events = g_ptr_array_new_full (64, g_object_unref);
+  g_warning ("%s", cm_utils_json_object_to_string (object, TRUE));
+
   cm_room_parse_events (self, object, events, FALSE, TRUE, TRUE);
+
   g_task_return_pointer (task, events, (GDestroyNotify)g_ptr_array_unref);
 }
 
@@ -2499,7 +2503,7 @@ get_room_state_cb (GObject      *object,
 
   root = json_object_new ();
   json_object_set_array_member (root, "events", array);
-  cm_room_parse_events (self, root, NULL, TRUE, FALSE, TRUE);
+  cm_room_parse_events (self, root, NULL, TRUE, FALSE, FALSE);
   self->initial_sync_done = TRUE;
 
   self->db_save_pending = TRUE;
