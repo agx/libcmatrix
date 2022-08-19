@@ -373,6 +373,7 @@ cm_room_new_from_json (const char *room_id,
       JsonObject *child, *local;
 
       self->local_json = root;
+      self->initial_sync_done = TRUE;
       local = cm_utils_json_object_get_object (root, "local");
       self->name = g_strdup (cm_utils_json_object_get_string (local, "alias"));
       cm_room_set_is_direct (self, cm_utils_json_object_get_bool (local, "direct"));
