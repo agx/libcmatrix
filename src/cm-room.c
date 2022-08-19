@@ -46,8 +46,15 @@ struct _CmRoom
 
   /* The last event in the room, if any */
   CmEvent     *last_event;
+  CmEvent     *room_create_event;
+  CmEvent     *room_name_event;
+  CmEvent     *canonical_alias_event;
+  CmEvent     *room_topic_event;
   CmEvent     *power_level_event;
-  CmRoomEvent *tombstone_event;
+  CmEvent     *guest_access_event;
+  CmEvent     *join_rules_event;
+  CmEvent     *history_visibility_event;
+  CmEvent     *tombstone_event;
 
   GQueue     *message_queue;
   guint       retry_timeout_id;
@@ -256,8 +263,14 @@ cm_room_finalize (GObject *object)
 
   g_clear_object (&self->events_list);
   g_clear_object (&self->last_event);
-  g_clear_object (&self->tombstone_event);
+  g_clear_object (&self->room_create_event);
+  g_clear_object (&self->canonical_alias_event);
+  g_clear_object (&self->room_topic_event);
   g_clear_object (&self->power_level_event);
+  g_clear_object (&self->guest_access_event);
+  g_clear_object (&self->join_rules_event);
+  g_clear_object (&self->history_visibility_event);
+  g_clear_object (&self->tombstone_event);
 
   g_clear_object (&self->client);
   g_free (self->room_id);
@@ -366,8 +379,42 @@ cm_room_new_from_json (const char *room_id,
       if (cm_utils_json_object_get_int (local, "encryption") > 0)
         self->encryption = g_strdup ("encrypted");
 
-      child = cm_utils_json_object_get_object (local, "m.room.power_levels");
-      self->power_level_event = (CmEvent *)cm_room_event_new_from_json (self, child, NULL);
+      child = cm_utils_json_object_get_object (local, cm_utils_get_event_type_str (CM_M_ROOM_CREATE));
+      if (child)
+        self->room_create_event = (CmEvent *)cm_room_event_new_from_json (self, child, NULL);
+
+      child = cm_utils_json_object_get_object (local, cm_utils_get_event_type_str (CM_M_ROOM_NAME));
+      if (child)
+        self->room_name_event = (CmEvent *)cm_room_event_new_from_json (self, child, NULL);
+
+      child = cm_utils_json_object_get_object (local, cm_utils_get_event_type_str (CM_M_ROOM_CANONICAL_ALIAS));
+      if (child)
+        self->canonical_alias_event = (CmEvent *)cm_room_event_new_from_json (self, child, NULL);
+
+      child = cm_utils_json_object_get_object (local, cm_utils_get_event_type_str (CM_M_ROOM_TOPIC));
+      if (child)
+        self->room_topic_event = (CmEvent *)cm_room_event_new_from_json (self, child, NULL);
+
+      child = cm_utils_json_object_get_object (local, cm_utils_get_event_type_str (CM_M_ROOM_POWER_LEVELS));
+      if (child)
+        self->power_level_event = (CmEvent *)cm_room_event_new_from_json (self, child, NULL);
+
+      child = cm_utils_json_object_get_object (local, cm_utils_get_event_type_str (CM_M_ROOM_GUEST_ACCESS));
+      if (child)
+        self->guest_access_event = (CmEvent *)cm_room_event_new_from_json (self, child, NULL);
+
+      child = cm_utils_json_object_get_object (local, cm_utils_get_event_type_str (CM_M_ROOM_JOIN_RULES));
+      if (child)
+        self->join_rules_event = (CmEvent *)cm_room_event_new_from_json (self, child, NULL);
+
+      child = cm_utils_json_object_get_object (local, cm_utils_get_event_type_str (CM_M_ROOM_HISTORY_VISIBILITY));
+      if (child)
+        self->history_visibility_event = (CmEvent *)cm_room_event_new_from_json (self, child, NULL);
+
+      child = cm_utils_json_object_get_object (local, cm_utils_get_event_type_str (CM_M_ROOM_TOMBSTONE));
+      if (child)
+        self->tombstone_event = (CmEvent *)cm_room_event_new_from_json (self, child, NULL);
+
       self->last_event = last_event;
     }
 
@@ -395,20 +442,54 @@ room_generate_json (CmRoom *self)
   json_object_set_boolean_member (child, "direct", cm_room_is_direct (self));
   json_object_set_int_member (child, "encryption", cm_room_is_encrypted (self));
 
+  if (self->room_create_event)
+    json_object_set_object_member (child,
+                                   cm_utils_get_event_type_str (CM_M_ROOM_CREATE),
+                                   cm_event_get_json (self->room_create_event));
+
+  if (self->room_name_event)
+    json_object_set_object_member (child,
+                                   cm_utils_get_event_type_str (CM_M_ROOM_NAME),
+                                   cm_event_get_json (self->room_name_event));
+
+  if (self->canonical_alias_event)
+    json_object_set_object_member (child,
+                                   cm_utils_get_event_type_str (CM_M_ROOM_CANONICAL_ALIAS),
+                                   cm_event_get_json (self->canonical_alias_event));
+
+  if (self->room_topic_event)
+    json_object_set_object_member (child,
+                                   cm_utils_get_event_type_str (CM_M_ROOM_TOPIC),
+                                   cm_event_get_json (self->room_topic_event));
+
   if (self->power_level_event)
-    json_object_set_object_member (child, "m.room.power_levels",
+    json_object_set_object_member (child,
+                                   cm_utils_get_event_type_str (CM_M_ROOM_POWER_LEVELS),
                                    cm_event_get_json (self->power_level_event));
+
+  if (self->guest_access_event)
+    json_object_set_object_member (child,
+                                   cm_utils_get_event_type_str (CM_M_ROOM_GUEST_ACCESS),
+                                   cm_event_get_json (self->guest_access_event));
+
+  if (self->join_rules_event)
+    json_object_set_object_member (child,
+                                   cm_utils_get_event_type_str (CM_M_ROOM_JOIN_RULES),
+                                   cm_event_get_json (self->join_rules_event));
+
+  if (self->history_visibility_event)
+    json_object_set_object_member (child,
+                                   cm_utils_get_event_type_str (CM_M_ROOM_HISTORY_VISIBILITY),
+                                   cm_event_get_json (self->history_visibility_event));
+
+  if (self->tombstone_event)
+    json_object_set_object_member (child,
+                                   cm_utils_get_event_type_str (CM_M_ROOM_TOMBSTONE),
+                                   cm_event_get_json (self->tombstone_event));
 
   /* todo */
   /* Set only if there is only one member in the room */
   /* json_object_set_string_member (child, "m.room.member", "bad"); */
-  /* json_object_set_string_member (child, "topic", "bad"); */
-  /* json_object_set_object_member (child, "m.room.history_visibility", "bad"); */
-  /* json_object_set_object_member (child, "m.room.create", "bad"); */
-  /* json_object_set_object_member (child, "m.room.join_rules", "bad"); */
-  /* json_object_set_object_member (child, "m.room.name", "bad"); */
-  /* json_object_set_object_member (child, "m.room.canonical_alias", "bad"); */
-  /* json_object_set_object_member (child, "m.room.guest_access", "bad"); */
   /* json_object_set_object_member (child, "summary", "bad"); */
   /* json_object_set_object_member (child, "unread_notifications", "bad"); */
 }
@@ -448,7 +529,7 @@ cm_room_get_replacement_room (CmRoom *self)
   g_return_val_if_fail (CM_IS_ROOM (self), FALSE);
 
   if (self->tombstone_event)
-    return cm_room_event_get_replacement_room_id (self->tombstone_event);
+    return cm_room_event_get_replacement_room_id ((gpointer)self->tombstone_event);
 
   return NULL;
 }
@@ -779,14 +860,11 @@ cm_room_parse_events (CmRoom     *self,
             continue;
 
           g_set_object (&self->power_level_event, CM_EVENT (event));
-          if (!self->local_json)
-            {
-              room_generate_json (self);
-            }
-          else
+          if (self->local_json)
             {
               local = cm_utils_json_object_get_object (self->local_json, "local");
-              json_object_set_object_member (local, "m.room.power_levels",
+              json_object_set_object_member (local,
+                                             cm_utils_get_event_type_str (CM_M_ROOM_POWER_LEVELS),
                                              g_steal_pointer (&power));
             }
 
@@ -798,9 +876,117 @@ cm_room_parse_events (CmRoom     *self,
             self->encryption = g_strdup (cm_room_event_get_encryption (event));
           self->db_save_pending = TRUE;
         }
+      else if (type == CM_M_ROOM_NAME)
+        {
+          g_set_object (&self->room_name_event, CM_EVENT (event));
+
+          if (self->local_json)
+            {
+              JsonObject *local;
+
+              local = cm_utils_json_object_get_object (self->local_json, "local");
+              json_object_set_object_member (local,
+                                             cm_utils_get_event_type_str (CM_M_ROOM_NAME),
+                                             cm_event_get_json (CM_EVENT (event)));
+            }
+        }
+      else if (type == CM_M_ROOM_CANONICAL_ALIAS)
+        {
+          g_set_object (&self->canonical_alias_event, CM_EVENT (event));
+
+          if (self->local_json)
+            {
+              JsonObject *local;
+
+              local = cm_utils_json_object_get_object (self->local_json, "local");
+              json_object_set_object_member (local,
+                                             cm_utils_get_event_type_str (CM_M_ROOM_CANONICAL_ALIAS),
+                                             cm_event_get_json (CM_EVENT (event)));
+            }
+        }
+      else if (type == CM_M_ROOM_TOPIC)
+        {
+          g_set_object (&self->room_topic_event, CM_EVENT (event));
+
+          if (self->local_json)
+            {
+              JsonObject *local;
+
+              local = cm_utils_json_object_get_object (self->local_json, "local");
+              json_object_set_object_member (local,
+                                             cm_utils_get_event_type_str (CM_M_ROOM_TOPIC),
+                                             cm_event_get_json (CM_EVENT (event)));
+            }
+        }
+      else if (type == CM_M_ROOM_POWER_LEVELS)
+        {
+          g_set_object (&self->power_level_event, CM_EVENT (event));
+
+          if (self->local_json)
+            {
+              JsonObject *local;
+
+              local = cm_utils_json_object_get_object (self->local_json, "local");
+              json_object_set_object_member (local,
+                                             cm_utils_get_event_type_str (CM_M_ROOM_POWER_LEVELS),
+                                             cm_event_get_json (CM_EVENT (event)));
+            }
+        }
+      else if (type == CM_M_ROOM_GUEST_ACCESS)
+        {
+          g_set_object (&self->guest_access_event, CM_EVENT (event));
+
+          if (self->local_json)
+            {
+              JsonObject *local;
+
+              local = cm_utils_json_object_get_object (self->local_json, "local");
+              json_object_set_object_member (local,
+                                             cm_utils_get_event_type_str (CM_M_ROOM_GUEST_ACCESS),
+                                             cm_event_get_json (CM_EVENT (event)));
+            }
+        }
+      else if (type == CM_M_ROOM_JOIN_RULES)
+        {
+          g_set_object (&self->join_rules_event, CM_EVENT (event));
+
+          if (self->local_json)
+            {
+              JsonObject *local;
+
+              local = cm_utils_json_object_get_object (self->local_json, "local");
+              json_object_set_object_member (local,
+                                             cm_utils_get_event_type_str (CM_M_ROOM_JOIN_RULES),
+                                             cm_event_get_json (CM_EVENT (event)));
+            }
+        }
+      else if (type == CM_M_ROOM_HISTORY_VISIBILITY)
+        {
+          g_set_object (&self->history_visibility_event, CM_EVENT (event));
+
+          if (self->local_json)
+            {
+              JsonObject *local;
+
+              local = cm_utils_json_object_get_object (self->local_json, "local");
+              json_object_set_object_member (local,
+                                             cm_utils_get_event_type_str (CM_M_ROOM_HISTORY_VISIBILITY),
+                                             cm_event_get_json (CM_EVENT (event)));
+            }
+        }
       else if (type == CM_M_ROOM_TOMBSTONE)
         {
-          self->tombstone_event = g_object_ref (event);
+          g_set_object (&self->tombstone_event, CM_EVENT (event));
+
+          if (self->local_json)
+            {
+              JsonObject *local;
+
+              local = cm_utils_json_object_get_object (self->local_json, "local");
+              json_object_set_object_member (local,
+                                             cm_utils_get_event_type_str (CM_M_ROOM_TOMBSTONE),
+                                             cm_event_get_json (CM_EVENT (event)));
+            }
         }
     }
 
