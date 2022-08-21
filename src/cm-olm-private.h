@@ -34,5 +34,11 @@ void        cm_olm_set_key             (CmOlm          *self,
                                         const char     *key);
 gboolean    cm_olm_save                (CmOlm          *self);
 
+gpointer    cm_olm_match_olm_session     (const char  *body,
+                                          gsize        body_len,
+                                          size_t       message_type,
+                                          const char  *pickle,
+                                          const char  *pickle_key,
+                                          char       **out_decrypted);
 
 G_END_DECLS

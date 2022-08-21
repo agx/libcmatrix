@@ -30,7 +30,6 @@ struct _CmOlm
   char                    *device_id;
   OlmAccount              *account;
 
-  /* We should have only one at a time */
   char                    *curve_key;
   char                    *pickle_key;
   char                    *session_id;
@@ -252,4 +251,77 @@ cm_olm_save (CmOlm *self)
     g_warning ("Failed to save olm session with id: %s", self->session_id);
 
   return success;
+}
+
+gpointer
+cm_olm_match_olm_session (const char  *body,
+                          gsize        body_len,
+                          size_t       message_type,
+                          const char  *pickle,
+                          const char  *pickle_key,
+                          char       **out_decrypted)
+{
+  g_autofree char *body_copy = NULL;
+  g_autofree char *pickle_copy = NULL;
+  g_autofree OlmSession *session = NULL;
+  g_autofree char *plaintext = NULL;
+  size_t match = 0, length, err;
+
+  g_assert (out_decrypted);
+
+  session = g_malloc (olm_session_size ());
+  olm_session (session);
+  pickle_copy = g_strdup (pickle);
+  err = olm_unpickle_session (session, pickle_key, strlen (pickle_key),
+                              pickle_copy, strlen (pickle_copy));
+  if (err == olm_error ())
+    goto end;
+
+  body_copy = g_malloc (body_len + 1);
+  memcpy (body_copy, body, body_len + 1);
+  length = olm_decrypt_max_plaintext_length (session, message_type, body_copy, body_len);
+  g_clear_pointer (&body_copy, g_free);
+
+  plaintext = g_malloc (length + 1);
+  if (length != olm_error ())
+    {
+      body_copy = g_malloc (body_len + 1);
+      memcpy (body_copy, body, body_len + 1);
+      length = olm_decrypt (session, message_type, body_copy, body_len, plaintext, length);
+      g_clear_pointer (&body_copy, g_free);
+    }
+
+  if (length != olm_error ())
+    {
+      plaintext[length] = '\0';
+      *out_decrypted = g_steal_pointer (&plaintext);
+
+      return g_steal_pointer (&session);
+    }
+
+  if (message_type == OLM_MESSAGE_TYPE_PRE_KEY)
+    {
+      body_copy = g_malloc (body_len + 1);
+      memcpy (body_copy, body, body_len + 1);
+      match = olm_matches_inbound_session (session, body_copy, body_len);
+      if (match == 1)
+        {
+          length = olm_decrypt (session, message_type, body_copy, body_len, plaintext, length);
+
+          if (length != olm_error ())
+            {
+              plaintext[length] = '\0';
+              *out_decrypted = g_steal_pointer (&plaintext);
+
+              return g_steal_pointer (&session);
+            }
+        }
+
+      g_clear_pointer (&body_copy, g_free);
+    }
+
+ end:
+  olm_clear_session (session);
+
+  return NULL;
 }
