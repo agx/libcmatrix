@@ -246,6 +246,9 @@ cm_utils_get_event_type_str (CmEventType type)
     case CM_M_ROOM_AVATAR:
       return "m.room.avatar";
 
+    case CM_M_ROOM_BOT_OPTIONS:
+      return "m.room.bot.options";
+
     case CM_M_ROOM_CANONICAL_ALIAS:
       return "m.room.canonical_alias";
 
