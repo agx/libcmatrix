@@ -280,7 +280,7 @@ cm_utils_get_event_type_str (CmEventType type)
       return "m.room.message";
 
     case CM_M_ROOM_MESSAGE_FEEDBACK:
-      return "m.room.message_feedback";
+      return "m.room.message.feedback";
 
     case CM_M_ROOM_NAME:
       return "m.room.name";
