@@ -28,7 +28,8 @@ test_room_member_new (void)
 
   room = cm_room_new ("random room");
   client = cm_client_new ();
-  member = cm_room_member_new (room, client, "@alice:example.co");
+  cm_room_set_client (room, client);
+  member = cm_room_member_new (room, "@alice:example.co");
   user = CM_USER (member);
   g_object_unref (room);
   g_object_unref (client);

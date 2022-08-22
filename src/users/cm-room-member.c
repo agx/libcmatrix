@@ -19,6 +19,7 @@
 #include "cm-device.h"
 #include "cm-device-private.h"
 #include "cm-room.h"
+#include "cm-room-private.h"
 #include "cm-enc-private.h"
 #include "cm-user-private.h"
 #include "cm-room-member-private.h"
@@ -29,7 +30,6 @@ struct _CmRoomMember
   CmUser      parent_instance;
 
   CmRoom     *room;
-  CmClient   *client;
   GListStore *devices;
   GHashTable *devices_table;
 };
@@ -42,7 +42,6 @@ cm_room_member_finalize (GObject *object)
   CmRoomMember *self = (CmRoomMember *)object;
 
   g_clear_object (&self->room);
-  g_clear_object (&self->client);
 
   g_list_store_remove_all (self->devices);
   g_clear_object (&self->devices);
@@ -69,19 +68,16 @@ cm_room_member_init (CmRoomMember *self)
 
 CmRoomMember *
 cm_room_member_new (gpointer    room,
-                    gpointer    client,
                     const char *user_id)
 {
   CmRoomMember *self;
 
   g_return_val_if_fail (CM_IS_ROOM (room), NULL);
-  g_return_val_if_fail (CM_IS_CLIENT (client), NULL);
   g_return_val_if_fail (user_id && *user_id == '@', NULL);
 
   self = g_object_new (CM_TYPE_ROOM_MEMBER, NULL);
   cm_user_set_user_id (CM_USER (self), user_id);
   self->room = g_object_ref (room);
-  self->client = g_object_ref (client);
 
   return self;
 }
@@ -195,7 +191,7 @@ cm_room_member_set_devices (CmRoomMember *self,
           continue;
         }
 
-      device = cm_device_new (self->client, child);
+      device = cm_device_new (cm_room_get_client (self->room), child);
       g_hash_table_insert (devices_table, g_strdup (device_id), g_object_ref (device));
       g_list_store_append (self->devices, device);
     }
@@ -286,9 +282,12 @@ cm_room_member_add_one_time_keys (CmRoomMember *self,
 
       for (GList *node = members; node; node = node->next)
         {
+          CmClient *client;
+
           object = cm_utils_json_object_get_object (child, node->data);
 
-          if (cm_enc_verify (cm_client_get_enc (self->client), object,
+          client = cm_room_get_client (self->room);
+          if (cm_enc_verify (cm_client_get_enc (client), object,
                              cm_user_get_id (CM_USER (self)), device_id,
                              cm_device_get_ed_key (device)))
             {

@@ -138,7 +138,7 @@ room_find_member (CmRoom     *self,
       CmRoomMember *member;
 
       g_assert (self->joined_members == (gpointer)model);
-      member = cm_room_member_new (self, self->client, matrix_id);
+      member = cm_room_member_new (self, matrix_id);
       g_list_store_append (self->joined_members, member);
       g_hash_table_insert (self->joined_members_table,
                            g_strdup (matrix_id), member);
@@ -790,7 +790,7 @@ cm_room_parse_events (CmRoom     *self,
             continue;
 
           user_id = cm_room_event_get_room_member_id (event);
-          room_member = cm_room_member_new (self, self->client, user_id);
+          room_member = cm_room_member_new (self, user_id);
           cm_room_member_set_json_data (room_member, child);
 
           if (member_status == CM_STATUS_JOIN)
@@ -2305,7 +2305,7 @@ get_joined_members_cb (GObject      *obj,
 
           if (!cm_member)
             {
-              cm_member = cm_room_member_new (self, self->client, member->data);
+              cm_member = cm_room_member_new (self, member->data);
               g_hash_table_insert (self->joined_members_table, g_strdup (member->data), cm_member);
               g_list_store_append (self->joined_members, cm_member);
               g_object_unref (cm_member);

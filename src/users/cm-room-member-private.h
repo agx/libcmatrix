@@ -24,7 +24,6 @@
 G_BEGIN_DECLS
 
 CmRoomMember *cm_room_member_new                  (gpointer               room,
-                                                   gpointer               client,
                                                    const char            *user_id);
 void          cm_room_member_set_device_changed   (CmRoomMember          *self,
                                                    gboolean               changed);
