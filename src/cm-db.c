@@ -148,6 +148,69 @@ db_event_state_from_int (int state)
 }
 #endif
 
+static GPtrArray *
+db_get_past_room_events (CmDb   *self,
+                         CmRoom *cm_room,
+                         int     room_id,
+                         int     from_event_id,
+                         int     from_sorted_event_id,
+                         int     max_count)
+{
+  GPtrArray *events = NULL;
+  sqlite3_stmt *stmt;
+  gboolean skip = FALSE;
+
+  if (from_event_id)
+    skip = TRUE;
+
+  sqlite3_prepare_v2 (self->db,
+                      "SELECT id,room_events.json_data FROM room_events "
+                      "WHERE room_id=? AND sorted_id <= ? "
+                      /* Limit to messages until chatty has better events support */
+                      "AND event_type=? "
+                      "ORDER BY sorted_id DESC, id DESC LIMIT ?",
+                      -1, &stmt, NULL);
+
+  matrix_bind_int (stmt, 1, room_id, "binding when loading past events");
+  matrix_bind_int (stmt, 2, from_sorted_event_id, "binding when loading past events");
+  matrix_bind_int (stmt, 3, CM_M_ROOM_MESSAGE, "binding when loading past events");
+  matrix_bind_int (stmt, 4, max_count, "binding when loading past events");
+
+  while (sqlite3_step (stmt) == SQLITE_ROW)
+    {
+      JsonObject *encrypted, *root;
+      g_autoptr(JsonObject) json = NULL;
+      CmRoomEvent *cm_event;
+
+      if (skip)
+        {
+          skip = FALSE;
+          continue;
+        }
+
+      json = cm_utils_string_to_json_object ((char *)sqlite3_column_text (stmt, 1));
+
+      if (!json)
+        continue;
+
+      root = cm_utils_json_object_get_object (json, "json");
+      encrypted = cm_utils_json_object_get_object (json, "encrypted");
+      cm_event = cm_room_event_new_from_json (cm_room, root, encrypted);
+
+      if (!cm_event)
+        continue;
+
+      if (!events)
+        events = g_ptr_array_new_full (32, g_object_unref);
+
+      g_ptr_array_add (events, cm_event);
+    }
+
+  sqlite3_finalize (stmt);
+
+  return events;
+}
+
 /**
    user_devices.json_data
    - local
@@ -1299,10 +1362,11 @@ cm_db_get_rooms (CmDb *self,
 
   while (sqlite3_step (stmt) == SQLITE_ROW)
     {
+      g_autoptr(GPtrArray) events = NULL;
       char *room_name, *prev_batch, *json_str;
       JsonObject *json = NULL;
       CmRoom *room;
-      int room_id;
+      int room_id, event_id, sorted_event_id = 0;
 
       if (!rooms)
         rooms = g_ptr_array_new_full (32, g_object_unref);
@@ -1316,6 +1380,13 @@ cm_db_get_rooms (CmDb *self,
       room = cm_room_new_from_json (room_name, json, NULL);
       g_object_set_data (G_OBJECT (room), "-cm-room-id", GINT_TO_POINTER (room_id));
       cm_room_set_prev_batch (room, prev_batch);
+
+      event_id = db_get_last_room_event_id (self, room_id, &sorted_event_id);
+      if (event_id)
+        events = db_get_past_room_events (self, room, room_id, 0, sorted_event_id, 1);
+
+      if (events)
+        cm_room_add_events (room, events, TRUE);
 
       g_ptr_array_add (rooms, room);
     }
@@ -1960,10 +2031,8 @@ db_get_past_events (CmDb  *self,
 {
   const char *username, *device, *room, *event;
   GPtrArray *events = NULL;
-  sqlite3_stmt *stmt;
   CmRoom *cm_room;
   int room_id, account_id, event_id, sorted_event_id = 0;
-  gboolean skip = FALSE;
 
   g_assert (CM_IS_DB (self));
   g_assert (G_IS_TASK (task));
@@ -1984,11 +2053,6 @@ db_get_past_events (CmDb  *self,
   else
     event_id = db_get_last_room_event_id (self, room_id, &sorted_event_id);
 
-  /* If we have an event, we want to skip the first match as the match
-   * is the event we provided */
-  if (event)
-    skip = TRUE;
-
   if (!event_id)
     {
       g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
@@ -1996,50 +2060,9 @@ db_get_past_events (CmDb  *self,
       return;
     }
 
-  sqlite3_prepare_v2 (self->db,
-                      "SELECT id,room_events.json_data FROM room_events "
-                      "WHERE room_id=? AND sorted_id <= ? "
-                      /* Limit to messages until chatty has better events support */
-                      "AND event_type=? "
-                      "ORDER BY sorted_id DESC, id DESC LIMIT 30",
-                      -1, &stmt, NULL);
-
-  matrix_bind_int (stmt, 1, room_id, "binding when loading past events");
-  matrix_bind_int (stmt, 2, sorted_event_id, "binding when loading past events");
-  matrix_bind_int (stmt, 3, CM_M_ROOM_MESSAGE, "binding when loading past events");
-
-  while (sqlite3_step (stmt) == SQLITE_ROW)
-    {
-      JsonObject *encrypted, *root;
-      g_autoptr(JsonObject) json = NULL;
-      CmRoomEvent *cm_event;
-
-      if (skip)
-        {
-          skip = FALSE;
-          continue;
-        }
-
-      json = cm_utils_string_to_json_object ((char *)sqlite3_column_text (stmt, 1));
-
-      if (!json)
-        continue;
-
-      root = cm_utils_json_object_get_object (json, "json");
-      encrypted = cm_utils_json_object_get_object (json, "encrypted");
-      cm_event = cm_room_event_new_from_json (cm_room, root, encrypted);
-
-      if (!cm_event)
-        continue;
-
-      if (!events)
-        events = g_ptr_array_new_full (32, g_object_unref);
-
-      g_ptr_array_add (events, cm_event);
-    }
-
-  sqlite3_finalize (stmt);
-
+  events = db_get_past_room_events (self, cm_room, room_id,
+                                    event ? event_id : 0,
+                                    sorted_event_id, 30);
   g_task_return_pointer (task, events, (GDestroyNotify)g_ptr_array_unref);
 }
 
