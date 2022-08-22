@@ -257,6 +257,16 @@ cm_event_set_json (CmEvent    *self,
     priv->event_type = CM_M_ROOM_TOPIC;
   else if (g_strcmp0 (type, event_type_string (CM_M_ROOM_AVATAR)) == 0)
     priv->event_type = CM_M_ROOM_AVATAR;
+  else if (g_strcmp0 (type, event_type_string (CM_M_CALL_INVITE)) == 0)
+    priv->event_type = CM_M_CALL_INVITE;
+  else if (g_strcmp0 (type, event_type_string (CM_M_CALL_CANDIDATES)) == 0)
+    priv->event_type = CM_M_CALL_CANDIDATES;
+  else if (g_strcmp0 (type, event_type_string (CM_M_CALL_ANSWER)) == 0)
+    priv->event_type = CM_M_CALL_ANSWER;
+  else if (g_strcmp0 (type, event_type_string (CM_M_CALL_SELECT_ANSWER)) == 0)
+    priv->event_type = CM_M_CALL_SELECT_ANSWER;
+  else if (g_strcmp0 (type, event_type_string (CM_M_CALL_HANGUP)) == 0)
+    priv->event_type = CM_M_CALL_HANGUP;
   else if (g_strcmp0 (type, event_type_string (CM_M_ROOM_CANONICAL_ALIAS)) == 0)
     priv->event_type = CM_M_ROOM_CANONICAL_ALIAS;
   else if (g_strcmp0 (type, event_type_string (CM_M_ROOM_NAME)) == 0)
