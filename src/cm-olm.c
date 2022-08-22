@@ -339,6 +339,22 @@ cm_olm_save (CmOlm *self)
   return success;
 }
 
+const char *
+cm_olm_get_session_id (CmOlm *self)
+{
+  g_return_val_if_fail (CM_IS_OLM (self), NULL);
+
+  return self->session_id;
+}
+
+const char *
+cm_olm_get_session_key (CmOlm *self)
+{
+  g_return_val_if_fail (CM_IS_OLM (self), NULL);
+
+  return self->session_key;
+}
+
 gpointer
 cm_olm_match_olm_session (const char  *body,
                           gsize        body_len,
