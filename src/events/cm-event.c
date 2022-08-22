@@ -291,6 +291,12 @@ cm_event_set_json (CmEvent    *self,
     priv->event_type = CM_M_ROOM_RELATED_GROUPS;
   else if (g_strcmp0 (type, event_type_string (CM_M_ROOM_TOMBSTONE)) == 0)
     priv->event_type = CM_M_ROOM_TOMBSTONE;
+  else if (g_strcmp0 (type, event_type_string (CM_M_ROOM_PINNED_EVENTS)) == 0)
+    priv->event_type = CM_M_ROOM_PINNED_EVENTS;
+  else if (g_strcmp0 (type, event_type_string (CM_M_ROOM_PLUMBING)) == 0)
+    priv->event_type = CM_M_ROOM_PLUMBING;
+  else if (g_strcmp0 (type, event_type_string (CM_M_ROOM_BOT_OPTIONS)) == 0)
+    priv->event_type = CM_M_ROOM_BOT_OPTIONS;
   else
     g_warning ("unhandled event type: %s", type);
 }
