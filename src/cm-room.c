@@ -539,10 +539,25 @@ void
 cm_room_set_client (CmRoom   *self,
                     CmClient *client)
 {
+  guint n_items;
+
   g_return_if_fail (CM_IS_CLIENT (client));
   g_return_if_fail (!self->client);
 
   self->client = g_object_ref (client);
+
+  n_items = g_list_model_get_n_items (G_LIST_MODEL (self->events_list));
+
+  for (guint i = 0; i < n_items; i++)
+    {
+      g_autoptr(CmEvent) event = NULL;
+
+      event = g_list_model_get_item (G_LIST_MODEL (self->events_list), i);
+
+      if (g_strcmp0 (cm_event_get_sender_id (event),
+                     cm_client_get_user_id (self->client)) == 0)
+        cm_event_sender_is_self (event);
+    }
 }
 
 CmClient *
