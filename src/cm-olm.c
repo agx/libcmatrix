@@ -17,6 +17,7 @@
 #include <gcrypt.h>
 #include <olm/olm.h>
 
+#include "cm-utils-private.h"
 #include "cm-db-private.h"
 #include "cm-olm-private.h"
 
@@ -101,6 +102,9 @@ cm_olm_finalize (GObject *object)
   g_free (self->device_id);
   g_free (self->room_id);
 
+  cm_utils_free_buffer (self->session_key);
+  cm_utils_free_buffer (self->session_id);
+
   g_clear_object (&self->cm_db);
 
   G_OBJECT_CLASS (cm_olm_parent_class)->finalize (object);
@@ -182,6 +186,82 @@ cm_olm_outbound_new (gpointer    olm_account,
   self->olm_session = g_steal_pointer (&session);
   self->curve_key = g_strdup (curve_key);
   self->account = olm_account;
+
+  return self;
+}
+
+CmOlm *
+cm_olm_out_group_new (void)
+{
+  CmOlm *self;
+  g_autofree OlmOutboundGroupSession *session = NULL;
+  g_autofree uint8_t *session_key = NULL;
+  g_autofree uint8_t *session_id = NULL;
+  uint8_t *random = NULL;
+  size_t length, error;
+
+  /* Initialize session */
+  session = g_malloc (olm_outbound_group_session_size ());
+  olm_outbound_group_session (session);
+
+  /* Feed in random bits */
+  length = olm_init_outbound_group_session_random_length (session);
+  if (length)
+    random = gcry_random_bytes (length, GCRY_STRONG_RANDOM);
+  error = olm_init_outbound_group_session (session, random, length);
+  gcry_free (random);
+
+  if (error == olm_error ())
+    {
+      g_warning ("Error init out group session: %s", olm_outbound_group_session_last_error (session));
+
+      return NULL;
+    }
+
+  /* Get session id */
+  length = olm_outbound_group_session_id_length (session);
+  session_id = g_malloc (length + 1);
+  length = olm_outbound_group_session_id (session, session_id, length);
+  if (length == olm_error ())
+    {
+      g_warning ("Error getting session id: %s", olm_outbound_group_session_last_error (session));
+
+      return NULL;
+    }
+  session_id[length] = '\0';
+
+  /* Get session key */
+  length = olm_outbound_group_session_key_length (session);
+  session_key = g_malloc (length + 1);
+  length = olm_outbound_group_session_key (session, session_key, length);
+  if (length == olm_error ())
+    {
+      g_warning ("Error getting session key: %s", olm_outbound_group_session_last_error (session));
+
+      return NULL;
+    }
+  session_key[length] = '\0';
+
+  self = g_object_new (CM_TYPE_OLM, NULL);
+  self->out_gp_session = g_steal_pointer (&session);
+  self->session_id = (char *)g_steal_pointer (&session_id);
+  self->session_key = (char *)g_steal_pointer (&session_key);
+
+  /*
+   * We should also create an inbound session with the same key so
+   * that we we'll be able to decrypt the messages we sent (when
+   * we receive them via sync requests)
+   */
+  {
+    g_autofree char *session_key_copy = NULL;
+
+    session_key_copy = g_strdup (self->session_key);
+    self->in_gp_session = g_malloc (olm_inbound_group_session_size ());
+    olm_inbound_group_session (self->in_gp_session);
+    olm_init_inbound_group_session (self->in_gp_session,
+                                    (gpointer)session_key_copy,
+                                    strlen (session_key_copy));
+  }
 
   return self;
 }

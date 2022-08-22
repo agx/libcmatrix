@@ -25,6 +25,7 @@ CmOlm      *cm_olm_outbound_new        (gpointer        olm_account,
                                         const char     *curve_key,
                                         const char     *one_time_key,
                                         const char     *room_id);
+CmOlm      *cm_olm_out_group_new       (void);
 void        cm_olm_set_details         (CmOlm          *self,
                                         const char     *room_id,
                                         const char     *sender_id,
