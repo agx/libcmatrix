@@ -187,7 +187,7 @@ cm_utils_get_event_type_str (CmEventType type)
       return "m.call.replaces";
 
     case CM_M_CALL_SELECT_ANSWER:
-      return "m.call_select_answer";
+      return "m.call.select_answer";
 
     case CM_M_DIRECT:
       return "m.direct";
