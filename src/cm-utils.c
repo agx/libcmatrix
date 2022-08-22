@@ -166,7 +166,7 @@ cm_utils_get_event_type_str (CmEventType type)
       return "m.call.asserted_identity";
 
     case CM_M_CALL_ASSERTED_IDENTITY_PREFIX:
-      return "m.call.asserted_identity_prefix";
+      return "org.matrix.call.asserted_identity";
 
     case CM_M_CALL_CANDIDATES:
       return "m.call.candidates";
