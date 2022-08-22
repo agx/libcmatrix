@@ -34,6 +34,9 @@ GPtrArray    *cm_room_set_data                     (CmRoom              *self,
                                                     JsonObject          *object);
 JsonObject   *cm_room_decrypt                      (CmRoom              *self,
                                                     JsonObject          *root);
+void          cm_room_add_events                   (CmRoom              *self,
+                                                    GPtrArray           *events,
+                                                    gboolean             append);
 void          cm_room_user_changed                 (CmRoom              *self,
                                                     const char          *user_id);
 const char   *cm_room_get_prev_batch               (CmRoom              *self);

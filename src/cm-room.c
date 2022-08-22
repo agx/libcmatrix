@@ -734,6 +734,42 @@ cm_room_decrypt (CmRoom     *self,
   return cm_utils_string_to_json_object (plain_text);
 }
 
+void
+cm_room_add_events (CmRoom    *self,
+                    GPtrArray *events,
+                    gboolean   append)
+{
+  guint position = 0;
+
+  g_assert (CM_IS_ROOM (self));
+
+  if (!events || !events->len)
+    return;
+
+  for (guint i = 0; i < events->len; i++)
+    {
+      CmEvent *event = events->pdata[i];
+      CmRoomMember *member;
+
+      member = room_find_member (self, G_LIST_MODEL (self->joined_members),
+                                 cm_event_get_sender_id (event), TRUE);
+      cm_event_set_sender (event, CM_USER (member));
+      if (self->client &&
+          g_strcmp0 (cm_event_get_sender_id (event),
+                     cm_client_get_user_id (self->client)) == 0)
+        cm_event_sender_is_self (event);
+    }
+
+  if (append)
+    position = g_list_model_get_n_items (G_LIST_MODEL (self->events_list));
+
+  if (position)
+    --position;
+
+  g_list_store_splice (self->events_list,
+                       position, 0, events->pdata, events->len);
+}
+
 static void
 cm_room_parse_events (CmRoom     *self,
                       JsonObject *root,
