@@ -763,9 +763,6 @@ cm_room_add_events (CmRoom    *self,
   if (append)
     position = g_list_model_get_n_items (G_LIST_MODEL (self->events_list));
 
-  if (position)
-    --position;
-
   g_list_store_splice (self->events_list,
                        position, 0, events->pdata, events->len);
 }
@@ -1062,9 +1059,6 @@ cm_room_parse_events (CmRoom     *self,
           guint position;
 
           position = g_list_model_get_n_items (G_LIST_MODEL (self->events_list));
-
-          if (position)
-            --position;
 
           g_list_store_splice (self->events_list,
                                position, 0, events->pdata, events->len);
