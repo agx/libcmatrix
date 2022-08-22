@@ -31,6 +31,8 @@ typedef struct
 
 G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (CmEvent, cm_event, G_TYPE_OBJECT)
 
+#define event_type_string(_event_type) (cm_utils_get_event_type_str(_event_type))
+
 static char *
 create_txn_id (guint id)
 {
@@ -243,43 +245,41 @@ cm_event_set_json (CmEvent    *self,
 
   type = cm_utils_json_object_get_string (root, "type");
 
-  if (g_strcmp0 (type, "m.room.message") == 0)
+  if (g_strcmp0 (type, event_type_string (CM_M_ROOM_MESSAGE)) == 0)
     priv->event_type = CM_M_ROOM_MESSAGE;
-  else if (g_strcmp0 (type, "m.room.member") == 0)
+  else if (g_strcmp0 (type, event_type_string (CM_M_ROOM_MEMBER)) == 0)
     priv->event_type = CM_M_ROOM_MEMBER;
-  else if (g_strcmp0 (type, "m.reaction") == 0)
+  else if (g_strcmp0 (type, event_type_string (CM_M_REACTION)) == 0)
     priv->event_type = CM_M_REACTION;
-  else if (g_strcmp0 (type, "m.room.redaction") == 0)
+  else if (g_strcmp0 (type, event_type_string (CM_M_ROOM_REDACTION)) == 0)
     priv->event_type = CM_M_ROOM_REDACTION;
-  else if (g_strcmp0 (type, "m.room.topic") == 0)
+  else if (g_strcmp0 (type, event_type_string (CM_M_ROOM_TOPIC)) == 0)
     priv->event_type = CM_M_ROOM_TOPIC;
-  else if (g_strcmp0 (type, "m.room.avatar") == 0)
+  else if (g_strcmp0 (type, event_type_string (CM_M_ROOM_AVATAR)) == 0)
     priv->event_type = CM_M_ROOM_AVATAR;
-  else if (g_strcmp0 (type, "m.room.canonical_alias") == 0)
+  else if (g_strcmp0 (type, event_type_string (CM_M_ROOM_CANONICAL_ALIAS)) == 0)
     priv->event_type = CM_M_ROOM_CANONICAL_ALIAS;
-  else if (g_strcmp0 (type, "m.room.name") == 0)
+  else if (g_strcmp0 (type, event_type_string (CM_M_ROOM_NAME)) == 0)
     priv->event_type = CM_M_ROOM_NAME;
-  else if (g_strcmp0 (type, "m.room.create") == 0)
+  else if (g_strcmp0 (type, event_type_string (CM_M_ROOM_CREATE)) == 0)
     priv->event_type = CM_M_ROOM_CREATE;
-  else if (g_strcmp0 (type, "m.room.power_levels") == 0)
+  else if (g_strcmp0 (type, event_type_string (CM_M_ROOM_POWER_LEVELS)) == 0)
     priv->event_type = CM_M_ROOM_POWER_LEVELS;
-  else if (g_strcmp0 (type, "m.room.guest_access") == 0)
+  else if (g_strcmp0 (type, event_type_string (CM_M_ROOM_GUEST_ACCESS)) == 0)
     priv->event_type = CM_M_ROOM_GUEST_ACCESS;
-  else if (g_strcmp0 (type, "m.room.history_visibility") == 0)
+  else if (g_strcmp0 (type, event_type_string (CM_M_ROOM_HISTORY_VISIBILITY)) == 0)
     priv->event_type = CM_M_ROOM_HISTORY_VISIBILITY;
-  else if (g_strcmp0 (type, "m.room.history_visibility") == 0)
-    priv->event_type = CM_M_ROOM_HISTORY_VISIBILITY;
-  else if (g_strcmp0 (type, "m.room.join_rules") == 0)
+  else if (g_strcmp0 (type, event_type_string (CM_M_ROOM_JOIN_RULES)) == 0)
     priv->event_type = CM_M_ROOM_JOIN_RULES;
-  else if (g_strcmp0 (type, "m.room.server_acl") == 0)
+  else if (g_strcmp0 (type, event_type_string (CM_M_ROOM_SERVER_ACL)) == 0)
     priv->event_type = CM_M_ROOM_SERVER_ACL;
-  else if (g_strcmp0 (type, "m.room.encryption") == 0)
+  else if (g_strcmp0 (type, event_type_string (CM_M_ROOM_ENCRYPTION)) == 0)
     priv->event_type = CM_M_ROOM_ENCRYPTION;
-  else if (g_strcmp0 (type, "m.room.third_party_invite") == 0)
+  else if (g_strcmp0 (type, event_type_string (CM_M_ROOM_THIRD_PARTY_INVITE)) == 0)
     priv->event_type = CM_M_ROOM_THIRD_PARTY_INVITE;
-  else if (g_strcmp0 (type, "m.room.related_groups") == 0)
+  else if (g_strcmp0 (type, event_type_string (CM_M_ROOM_RELATED_GROUPS)) == 0)
     priv->event_type = CM_M_ROOM_RELATED_GROUPS;
-  else if (g_strcmp0 (type, "m.room.tombstone") == 0)
+  else if (g_strcmp0 (type, event_type_string (CM_M_ROOM_TOMBSTONE)) == 0)
     priv->event_type = CM_M_ROOM_TOMBSTONE;
   else
     g_warning ("unhandled event type: %s", type);
