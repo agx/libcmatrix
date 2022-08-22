@@ -1607,16 +1607,16 @@ client_verify_homeserver_cb (GObject      *obj,
       self->cancellable = g_cancellable_new ();
     }
 
-  /* self->has_tried_connecting = TRUE; */
+  g_clear_object (&self->gaddress);
+  self->gaddress = g_object_steal_data (G_OBJECT (result), "address");
+
+  self->has_tried_connecting = TRUE;
 
   /* if (handle_common_errors (self, error)) */
   /*   return; */
 
   if (self->homeserver_verified)
     {
-      g_clear_object (&self->gaddress);
-      self->gaddress = g_object_steal_data (G_OBJECT (result), "address");
-
       if (g_task_get_source_tag (task) == cm_client_get_homeserver_async)
         g_task_return_pointer (task, self->homeserver, NULL);
       else
@@ -2479,6 +2479,7 @@ cm_client_start_sync (CmClient *self)
   if (self->is_sync || self->is_logging_in)
     return;
 
+  g_clear_handle_id (&self->resync_id, g_source_remove);
   matrix_start_sync (self, NULL);
 }
 

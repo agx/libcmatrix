@@ -47,12 +47,17 @@ struct _CmMatrix
 
   GListStore *clients_list;
 
+  guint    network_change_id;
+
   gboolean secrets_loaded;
   gboolean db_loaded;
   gboolean is_opening;
   gboolean loading_accounts;
   gboolean disable_auto_login;
 };
+
+
+#define RECONNECT_TIMEOUT    500 /* milliseconds */
 
 char *cmatrix_data_dir, *cmatrix_app_id;
 
@@ -65,6 +70,49 @@ enum {
 };
 
 static GParamSpec *properties[N_PROPS];
+
+static gboolean
+matrix_reconnect (gpointer user_data)
+{
+  CmMatrix *self = user_data;
+  GListModel *model;
+  guint n_items;
+
+  self->network_change_id = 0;
+
+  model = G_LIST_MODEL (self->clients_list);
+  n_items = g_list_model_get_n_items (model);
+
+  for (guint i = 0; i < n_items; i++) {
+    g_autoptr(CmClient) client = NULL;
+
+    client = g_list_model_get_item (model, i);
+
+    if (cm_client_can_connect (client) &&
+        cm_client_get_enabled (client))
+      cm_client_start_sync (client);
+    else
+      cm_client_stop_sync (client);
+  }
+
+  return G_SOURCE_REMOVE;
+}
+
+static void
+matrix_network_changed_cb (CmMatrix        *self,
+                           gboolean         network_available,
+                           GNetworkMonitor *network_monitor)
+{
+  g_assert (CM_IS_MATRIX (self));
+  g_assert (G_IS_NETWORK_MONITOR (network_monitor));
+
+  if (!cm_matrix_is_ready (self))
+    return;
+
+  g_clear_handle_id (&self->network_change_id, g_source_remove);
+  self->network_change_id = g_timeout_add (RECONNECT_TIMEOUT,
+                                           matrix_reconnect, self);
+}
 
 static void
 matrix_stop (CmMatrix *self)
@@ -111,6 +159,8 @@ cm_matrix_finalize (GObject *object)
 {
   CmMatrix *self = (CmMatrix *)object;
 
+  g_clear_handle_id (&self->network_change_id, g_source_remove);
+
   matrix_stop (self);
   g_list_store_remove_all (self->clients_list);
   g_clear_object (&self->clients_list);
@@ -154,6 +204,11 @@ cm_matrix_init (CmMatrix *self)
     g_error ("libgcrypt has not been initialized, did you run cm_init()?");
 
   self->clients_list = g_list_store_new (CM_TYPE_CLIENT);
+
+  g_signal_connect_object (g_network_monitor_get_default (),
+                           "network-changed",
+                           G_CALLBACK (matrix_network_changed_cb), self,
+                           G_CONNECT_AFTER | G_CONNECT_SWAPPED);
 }
 
 /**
