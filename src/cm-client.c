@@ -1327,6 +1327,7 @@ cm_client_set_password (CmClient   *self,
   g_return_if_fail (CM_IS_CLIENT (self));
   g_return_if_fail (!self->is_logging_in);
   g_return_if_fail (!self->login_success);
+  g_return_if_fail (!self->is_sync);
 
   g_clear_pointer (&self->password, gcry_free);
 
@@ -1337,6 +1338,13 @@ cm_client_set_password (CmClient   *self,
     }
 
   client_mark_for_save (self, -1, TRUE);
+
+  if (self->has_tried_connecting &&
+      cm_client_get_enabled (self))
+    {
+      cm_client_stop_sync (self);
+      cm_client_start_sync (self);
+    }
 }
 
 /**
@@ -2371,9 +2379,16 @@ matrix_start_sync (CmClient *self,
     }
   else if (!self->password && !cm_net_get_access_token (self->cm_net))
     {
+      GError *error;
+
       g_debug ("No password provided, nor access token");
-      g_task_return_new_error (task, CM_ERROR, M_BAD_PASSWORD,
-                               "No Password provided");
+
+      error = g_error_new (CM_ERROR, M_BAD_PASSWORD, "No Password provided");
+
+      if (self->callback)
+        self->callback (self->cb_data, self, NULL, NULL, error);
+
+      g_task_return_error (task, error);
     }
   else if (!cm_net_get_access_token (self->cm_net) || !self->cm_enc)
     {
