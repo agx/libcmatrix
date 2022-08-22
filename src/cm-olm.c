@@ -33,6 +33,7 @@ struct _CmOlm
   char                    *curve_key;
   char                    *pickle_key;
   char                    *session_id;
+  char                    *session_key;
   OlmInboundGroupSession  *in_gp_session;
   OlmOutboundGroupSession *out_gp_session;
   OlmSession              *olm_session;
@@ -119,17 +120,22 @@ cm_olm_init (CmOlm *self)
 }
 
 gpointer
-cm_olm_steal_session (CmOlm *self)
+cm_olm_steal_session (CmOlm         *self,
+                      CmSessionType  type)
 {
   g_return_val_if_fail (CM_IS_OLM (self), NULL);
 
-  if (self->olm_session)
+  if ((type == SESSION_OLM_V1_IN ||
+       type == SESSION_OLM_V1_OUT) &&
+      self->olm_session)
     return g_steal_pointer (&self->olm_session);
 
-  if (self->in_gp_session)
+  if (type == SESSION_MEGOLM_V1_IN &&
+      self->in_gp_session)
     return g_steal_pointer (&self->in_gp_session);
 
-  if (self->out_gp_session)
+  if (type == SESSION_MEGOLM_V1_OUT &&
+      self->out_gp_session)
     return g_steal_pointer (&self->out_gp_session);
 
   return NULL;

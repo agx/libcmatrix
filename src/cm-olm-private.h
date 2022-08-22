@@ -19,7 +19,8 @@ G_BEGIN_DECLS
 
 G_DECLARE_FINAL_TYPE (CmOlm, cm_olm, CM, OLM, GObject)
 
-gpointer    cm_olm_steal_session       (CmOlm          *self);
+gpointer    cm_olm_steal_session       (CmOlm          *self,
+                                        CmSessionType   type);
 CmOlm      *cm_olm_outbound_new        (gpointer        olm_account,
                                         const char     *curve_key,
                                         const char     *one_time_key,

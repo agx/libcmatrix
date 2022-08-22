@@ -162,7 +162,7 @@ ma_create_olm_out_session (CmEnc      *self,
   cm_olm_set_details (session, room_id, self->user_id, self->device_id);
   cm_olm_save (session);
 
-  return cm_olm_steal_session (session);
+  return cm_olm_steal_session (session, SESSION_OLM_V1_OUT);
 }
 
 /*
