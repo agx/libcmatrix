@@ -1297,14 +1297,12 @@ cm_enc_create_out_group_keys (CmEnc      *self,
                               const char *room_id,
                               GListModel *members_list)
 {
-  g_autofree OlmOutboundGroupSession *session = NULL;
-  g_autofree uint8_t *session_key = NULL;
-  g_autofree uint8_t *session_id = NULL;
-  uint8_t *random = NULL;
+  CmOlm *olm;
+  g_autofree OlmOutboundGroupSession *out_session = NULL;
+  OlmInboundGroupSession *in_session;
+  const char *session_key, *session_id;
   char *old_session_id;
   JsonObject *root, *child;
-  size_t length;
-  size_t error;
 
   g_return_val_if_fail (CM_IS_ENC (self), FALSE);
 
@@ -1314,47 +1312,19 @@ cm_enc_create_out_group_keys (CmEnc      *self,
       g_hash_table_contains (self->out_group_sessions, old_session_id))
     return NULL;
 
-  /* Initialize session */
-  session = g_malloc (olm_outbound_group_session_size ());
-  olm_outbound_group_session (session);
+  olm = cm_olm_out_group_new ();
 
-  /* Feed in random bits */
-  length = olm_init_outbound_group_session_random_length (session);
-  if (length)
-    random = gcry_random_bytes (length, GCRY_STRONG_RANDOM);
-  error = olm_init_outbound_group_session (session, random, length);
-  gcry_free (random);
+  if (!olm)
+    return NULL;
 
-  if (error == olm_error ())
-    {
-      g_warning ("Error init out group session: %s", olm_outbound_group_session_last_error (session));
+  out_session = cm_olm_steal_session (olm, SESSION_MEGOLM_V1_OUT);
+  in_session = cm_olm_steal_session (olm, SESSION_MEGOLM_V1_IN);
 
-      return NULL;
-    }
+  if (!out_session || !in_session)
+    g_return_val_if_reached (NULL);
 
-  /* Get session id */
-  length = olm_outbound_group_session_id_length (session);
-  session_id = g_malloc (length + 1);
-  length = olm_outbound_group_session_id (session, session_id, length);
-  if (length == olm_error ())
-    {
-      g_warning ("Error decrypt session: %s", olm_outbound_group_session_last_error (session));
-
-      return NULL;
-    }
-  session_id[length] = '\0';
-
-  /* Get session key */
-  length = olm_outbound_group_session_key_length (session);
-  session_key = g_malloc (length + 1);
-  length = olm_outbound_group_session_key (session, session_key, length);
-  if (length == olm_error ())
-    {
-      g_warning ("Error getting session key: %s", olm_outbound_group_session_last_error (session));
-
-      return NULL;
-    }
-  session_key[length] = '\0';
+  session_id = cm_olm_get_session_id (olm);
+  session_key = cm_olm_get_session_key (olm);
 
   root = json_object_new ();
 
@@ -1425,9 +1395,9 @@ cm_enc_create_out_group_keys (CmEnc      *self,
             child = json_object_new ();
             json_object_set_string_member (child, "algorithm", "m.megolm.v1.aes-sha2");
             json_object_set_string_member (child, "room_id", room_id);
-            json_object_set_string_member (child, "session_id", (char *)session_id);
-            json_object_set_string_member (child, "session_key", (char *)session_key);
-            json_object_set_int_member (child, "chain_index", olm_outbound_group_session_message_index (session));
+            json_object_set_string_member (child, "session_id", session_id);
+            json_object_set_string_member (child, "session_key", session_key);
+            json_object_set_int_member (child, "chain_index", olm_outbound_group_session_message_index (out_session));
             json_object_set_object_member (object, "content", child);
 
             /* User specific data */
@@ -1449,30 +1419,13 @@ cm_enc_create_out_group_keys (CmEnc      *self,
         }
     }
 
-  /*
-   * We should also create an inbound session with the same key so
-   * that we we'll be able to decrypt the messages we sent (when
-   * we receive them via sync requests)
-   */
-  {
-    OlmInboundGroupSession *in_session;
-
-    in_session = g_malloc (olm_inbound_group_session_size ());
-    olm_inbound_group_session (in_session);
-    olm_init_inbound_group_session (in_session, (gpointer)session_key,
-                                    strlen ((char *)session_key));
-    g_hash_table_insert (self->in_group_sessions,
-                         g_strdup ((char *)session_id), in_session);
-  }
-
+  g_hash_table_insert (self->in_group_sessions,
+                       g_strdup (session_id), in_session);
   g_hash_table_insert (self->out_group_room_session,
-                       g_strdup (room_id), g_strdup ((char *)session_id));
+                       g_strdup (room_id), g_strdup (session_id));
   /* todo */
   g_hash_table_insert (self->out_group_sessions,
-                       g_strdup ((char *)session_id), g_steal_pointer (&session));
-
-  cm_utils_clear ((char *)session_key, strlen ((char *)session_key));
-  cm_utils_clear ((char *)session_id, strlen ((char *)session_id));
+                       g_strdup (session_id), g_steal_pointer (&out_session));
 
   return root;
 }
