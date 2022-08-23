@@ -28,7 +28,7 @@ typedef struct
   gboolean info_loaded;
 } CmUserPrivate;
 
-G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (CmUser, cm_user, G_TYPE_OBJECT)
+G_DEFINE_TYPE_WITH_PRIVATE (CmUser, cm_user, G_TYPE_OBJECT)
 
 static void
 cm_user_finalize (GObject *object)
