@@ -208,25 +208,25 @@ cm_utils_get_event_type_str (CmEventType type)
       return "m.key.verification_accept";
 
     case CM_M_KEY_VERIFICATION_CANCEL:
-      return "m.key.verification_cancel";
+      return "m.key.verification.cancel";
 
     case CM_M_KEY_VERIFICATION_DONE:
-      return "m.key.verification_done";
+      return "m.key.verification.done";
 
     case CM_M_KEY_VERIFICATION_KEY:
-      return "m.key.verification_key";
+      return "m.key.verification.key";
 
     case CM_M_KEY_VERIFICATION_MAC:
-      return "m.key.verification_mac";
+      return "m.key.verification.mac";
 
     case CM_M_KEY_VERIFICATION_READY:
-      return "m.key.verification_ready";
+      return "m.key.verification.ready";
 
     case CM_M_KEY_VERIFICATION_REQUEST:
-      return "m.key.verification_request";
+      return "m.key.verification.request";
 
     case CM_M_KEY_VERIFICATION_START:
-      return "m.key.verification_start";
+      return "m.key.verification.start";
 
     case CM_M_PRESENCE:
       return "m.presence";
