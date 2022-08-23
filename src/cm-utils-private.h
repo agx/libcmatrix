@@ -35,6 +35,8 @@ gboolean      cm_utils_json_object_get_bool     (JsonObject          *object,
                                                  const char          *member);
 const char   *cm_utils_json_object_get_string   (JsonObject          *object,
                                                  const char          *member);
+char         *cm_utils_json_object_dup_string   (JsonObject          *object,
+                                                 const char          *member);
 JsonObject   *cm_utils_json_object_get_object   (JsonObject          *object,
                                                  const char          *member);
 JsonArray    *cm_utils_json_object_get_array    (JsonObject          *object,

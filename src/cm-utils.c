@@ -672,6 +672,17 @@ cm_utils_json_object_get_string (JsonObject *object,
   return NULL;
 }
 
+char *
+cm_utils_json_object_dup_string (JsonObject *object,
+                                 const char *member)
+{
+  const char *str;
+
+  str = cm_utils_json_object_get_string (object, member);
+
+  return g_strdup (str);
+}
+
 JsonObject *
 cm_utils_json_object_get_object (JsonObject *object,
                                  const char *member)
