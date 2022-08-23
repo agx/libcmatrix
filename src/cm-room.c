@@ -857,14 +857,24 @@ cm_room_parse_events (CmRoom     *self,
               CmRoomMember *invite;
 
               invite = g_hash_table_lookup (self->invited_members_table, user_id);
-              if (invite)
+              if (!past && invite)
                 {
                   g_hash_table_remove (self->invited_members_table, user_id);
                   cm_utils_remove_list_item (self->invited_members, invite);
                 }
 
-              if (g_hash_table_contains (self->joined_members_table, user_id))
-                continue;
+              if (!past &&
+                  g_hash_table_contains (self->joined_members_table, user_id))
+                {
+                  CmRoomMember *cm_member;
+
+                  cm_member = g_hash_table_lookup (self->joined_members_table, user_id);
+                  cm_room_member_set_json_data (cm_member, child);
+
+                  g_clear_pointer (&self->generated_name, g_free);
+                  g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
+                  continue;
+                }
 
               g_list_store_append (self->joined_members, room_member);
               g_hash_table_insert (self->joined_members_table,
@@ -875,13 +885,28 @@ cm_room_parse_events (CmRoom     *self,
             }
           else if (member_status == CM_STATUS_INVITE)
             {
-              if (g_hash_table_contains (self->invited_members_table, user_id))
-                continue;
+              if (!past &&
+                  g_hash_table_contains (self->invited_members_table, user_id))
+                {
+                  CmRoomMember *cm_member;
+
+                  cm_member = g_hash_table_lookup (self->joined_members_table, user_id);
+                  cm_room_member_set_json_data (cm_member, child);
+
+                  /* Clear the name so that it will be regenerated when name is requested */
+                  g_clear_pointer (&self->generated_name, g_free);
+                  g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
+                  continue;
+                }
 
               g_list_store_append (self->invited_members, room_member);
               g_hash_table_insert (self->invited_members_table,
                                    g_strdup (user_id), g_steal_pointer (&room_member));
               self->db_save_pending = TRUE;
+
+              /* Clear the name so that it will be regenerated when name is requested */
+              g_clear_pointer (&self->generated_name, g_free);
+              g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
             }
           else if (member_status == CM_STATUS_LEAVE)
             {
