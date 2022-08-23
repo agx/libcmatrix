@@ -1594,6 +1594,105 @@ cm_client_get_homeserver_finish (CmClient      *self,
 }
 
 static void
+client_key_verification_cancel_cb (GObject      *obj,
+                                   GAsyncResult *result,
+                                   gpointer      user_data)
+{
+  CmClient *self;
+  g_autoptr(GTask) task = user_data;
+  g_autoptr(JsonObject) object = NULL;
+  GError *error = NULL;
+
+  g_assert (G_IS_TASK (task));
+
+  self = g_task_get_source_object (task);
+  g_assert (CM_IS_CLIENT (self));
+
+  object = g_task_propagate_pointer (G_TASK (result), &error);
+
+  if (error)
+    {
+      g_debug ("Error cancelling key verification: %s", error->message);
+      g_task_return_error (task, error);
+    }
+  else
+    {
+      g_clear_object (&self->key_verification_event);
+      g_task_return_boolean (task, TRUE);
+    }
+}
+
+void
+cm_client_key_verification_cancel_async (CmClient            *self,
+                                         CmEvent             *verification_event,
+                                         GCancellable        *cancellable,
+                                         GAsyncReadyCallback  callback,
+                                         gpointer             user_data)
+{
+  g_autoptr(CmEvent) event = NULL;
+  g_autoptr(GTask) task = NULL;
+  g_autofree char *uri = NULL;
+  JsonObject *root, *child;
+
+  g_return_if_fail (CM_IS_CLIENT (self));
+  g_return_if_fail (!cancellable || G_IS_CANCELLABLE (cancellable));
+  g_return_if_fail (CM_IS_EVENT (verification_event));
+
+  if (!cancellable)
+    cancellable = self->cancellable;
+
+  task = g_task_new (self, cancellable, callback, user_data);
+
+  if (verification_event != self->key_verification_event ||
+      cm_event_get_m_type (verification_event) != CM_M_KEY_VERIFICATION_REQUEST)
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_NOT_INITIALIZED,
+                               "Provided key verification request is not in progress");
+      return;
+    }
+
+  root = json_object_new ();
+  json_object_set_object_member (root, "messages", json_object_new ());
+
+  child = cm_utils_json_object_get_object (root, "messages");
+  json_object_set_object_member (child,
+                                 cm_event_get_sender_id (verification_event),
+                                 json_object_new ());
+  child = cm_utils_json_object_get_object (child, cm_event_get_sender_id (verification_event));
+  json_object_set_object_member (child,
+                                 cm_event_get_sender_device_id (verification_event),
+                                 json_object_new ());
+
+  child = cm_utils_json_object_get_object (child, cm_event_get_sender_device_id (verification_event));
+  json_object_set_string_member (child, "code", "m.user");
+  json_object_set_string_member (child, "reason", "User declined");
+  json_object_set_string_member (child, "transaction_id",
+                                 cm_event_get_transaction_id (verification_event));
+
+  task = g_task_new (self, self->cancellable, callback, user_data);
+  event = cm_event_new (CM_M_KEY_VERIFICATION_CANCEL);
+  cm_event_create_txn_id (event, cm_client_pop_event_id (self));
+
+  uri = g_strdup_printf ("/_matrix/client/r0/sendToDevice/m.key.verification.cancel/%s",
+                         cm_event_get_txn_id (event));
+  cm_net_send_json_async (self->cm_net, 0, root, uri, SOUP_METHOD_PUT,
+                          NULL, cancellable,
+                          client_key_verification_cancel_cb,
+                          g_steal_pointer (&task));
+}
+
+gboolean
+cm_client_key_verification_cancel_finish (CmClient      *self,
+                                          GAsyncResult  *result,
+                                          GError       **error)
+{
+  g_return_val_if_fail (CM_IS_CLIENT (self), FALSE);
+  g_return_val_if_fail (G_IS_TASK (result), FALSE);
+
+  return g_task_propagate_boolean (G_TASK (result), error);
+}
+
+static void
 client_verify_homeserver_cb (GObject      *obj,
                              GAsyncResult *result,
                              gpointer      user_data)
