@@ -77,6 +77,9 @@ struct _CmClient
    * which will then be moved to joined_rooms later */
   GHashTable     *direct_rooms;
   GListStore     *joined_rooms;
+
+  CmEvent        *key_verification_event;
+
   /* for sending events, incremented for each event */
   int             event_id;
 
@@ -478,6 +481,8 @@ cm_client_finalize (GObject *object)
   g_clear_object (&self->joined_rooms);
 
   g_hash_table_unref (self->direct_rooms);
+
+  g_clear_object (&self->key_verification_event);
 
   g_free (self->user_id);
   g_free (self->login_user_id);
@@ -1956,17 +1961,41 @@ handle_to_device (CmClient   *self,
 
   for (guint i = 0; i < length; i++)
     {
+      g_autoptr(GPtrArray) events = NULL;
       g_autoptr(CmEvent) event = NULL;
+      const char *user_id;
       CmEventType type;
 
       object = json_array_get_object_element (array, i);
 
       event = cm_event_new_from_json (object, NULL);
+      user_id = cm_event_get_sender_id (event);
+      if (user_id)
+        {
+          CmUser *user;
+
+          user = g_object_new (CM_TYPE_USER, NULL);
+          cm_user_set_user_id (user, user_id);
+          cm_user_set_client (user, self);
+          cm_event_set_sender (event, user);
+        }
+
       type = cm_event_get_m_type (event);
+      events = g_ptr_array_new ();
 
       if (type == CM_M_ROOM_ENCRYPTED)
         {
           cm_enc_handle_room_encrypted (self->cm_enc, object);
+        }
+      else if (type >= CM_M_KEY_VERIFICATION_ACCEPT &&
+               type <= CM_M_KEY_VERIFICATION_START)
+        {
+          g_clear_object (&self->key_verification_event);
+          self->key_verification_event = g_steal_pointer (&event);
+
+          g_ptr_array_add (events, self->key_verification_event);
+
+          self->callback (self->cb_data, self, NULL, events, NULL);
         }
     }
 }
