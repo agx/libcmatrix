@@ -16,10 +16,14 @@ typedef struct
 {
   CmUser        *sender;
   char          *sender_id;
+  char          *sender_device_id;
   char          *event_id;
   char          *replaces_event_id;
   char          *reply_to_event_id;
+  /* Transaction id generated/recived for every event */
   char          *txn_id;
+  /* Transaction id received in events (like key verification) */
+  char          *transaction_id;
   char          *state_key;
   JsonObject    *json;
   /* The JSON source if the event was encrypted */
@@ -82,10 +86,12 @@ cm_event_finalize (GObject *object)
 
   g_clear_object (&priv->sender);
   g_free (priv->sender_id);
+  g_free (priv->sender_device_id);
   g_free (priv->event_id);
   g_free (priv->replaces_event_id);
   g_free (priv->reply_to_event_id);
   g_free (priv->txn_id);
+  g_free (priv->transaction_id);
   g_free (priv->state_key);
   g_clear_pointer (&priv->encrypted_json, json_object_unref);
   g_clear_pointer (&priv->json, json_object_unref);
@@ -107,15 +113,51 @@ cm_event_init (CmEvent *self)
 }
 
 CmEvent *
+cm_event_new (CmEventType type)
+{
+  CmEventPrivate *priv;
+  CmEvent *self;
+
+  g_return_val_if_fail (type >= CM_M_KEY_VERIFICATION_ACCEPT &&
+                        type <= CM_M_KEY_VERIFICATION_START, NULL);
+
+  self = g_object_new (CM_TYPE_EVENT, NULL);
+  priv = cm_event_get_instance_private (self);
+
+  priv->event_type = type;
+
+  return self;
+}
+
+CmEvent *
 cm_event_new_from_json (JsonObject *root,
                         JsonObject *encrypted)
 {
+  CmEventPrivate *priv;
+  JsonObject *child;
   CmEvent *self;
+  CmEventType type;
 
   g_return_val_if_fail (root || encrypted, NULL);
 
   self = g_object_new (CM_TYPE_EVENT, NULL);
+  priv = cm_event_get_instance_private (self);
   cm_event_set_json (self, root, encrypted);
+
+  type = cm_event_get_m_type (self);
+
+  if (type >= CM_M_KEY_VERIFICATION_ACCEPT &&
+      type <= CM_M_KEY_VERIFICATION_START)
+    {
+      child = cm_utils_json_object_get_object (root, "content");
+      priv->transaction_id = cm_utils_json_object_dup_string (child, "transaction_id");
+
+      if (type == CM_M_KEY_VERIFICATION_REQUEST)
+        {
+          priv->time_stamp = cm_utils_json_object_get_int (child, "timestamp");
+          priv->sender_device_id = cm_utils_json_object_dup_string (child, "from_device");
+        }
+    }
 
   return self;
 }
@@ -160,6 +202,16 @@ cm_event_get_reply_to_id (CmEvent *self)
   g_return_val_if_fail (CM_IS_EVENT (self), NULL);
 
   return priv->reply_to_event_id;
+}
+
+const char *
+cm_event_get_transaction_id (CmEvent *self)
+{
+  CmEventPrivate *priv = cm_event_get_instance_private (self);
+
+  g_return_val_if_fail (CM_IS_EVENT (self), NULL);
+
+  return priv->transaction_id;
 }
 
 const char *
@@ -381,6 +433,16 @@ cm_event_sender_is_self (CmEvent *self)
   g_return_if_fail (priv->event_state == CM_EVENT_STATE_UNKNOWN);
 
   priv->event_state = CM_EVENT_STATE_SENT;
+}
+
+const char *
+cm_event_get_sender_device_id (CmEvent *self)
+{
+  CmEventPrivate *priv = cm_event_get_instance_private (self);
+
+  g_return_val_if_fail (CM_IS_EVENT (self), NULL);
+
+  return priv->sender_device_id;
 }
 
 gboolean

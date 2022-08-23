@@ -30,8 +30,10 @@ typedef enum {
   CM_RELATION_THREAD
 } CmRelationType;
 
+CmEvent      *cm_event_new                (CmEventType   type);
 CmEvent      *cm_event_new_from_json      (JsonObject   *root,
                                            JsonObject   *encrypted);
+const char   *cm_event_get_transaction_id (CmEvent      *self);
 const char   *cm_event_get_txn_id         (CmEvent      *self);
 void          cm_event_create_txn_id      (CmEvent      *self,
                                            guint         id);
@@ -49,6 +51,7 @@ const char   *cm_event_get_sender_id      (CmEvent      *self);
 void          cm_event_set_sender         (CmEvent      *self,
                                            CmUser       *sender);
 void          cm_event_sender_is_self     (CmEvent      *self);
+const char   *cm_event_get_sender_device_id (CmEvent    *self);
 char         *cm_event_get_json_str       (CmEvent      *self,
                                            gboolean      prettify);
 JsonObject   *cm_event_get_json           (CmEvent      *self);
