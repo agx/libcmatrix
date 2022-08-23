@@ -311,6 +311,22 @@ cm_event_set_json (CmEvent    *self,
     priv->event_type = CM_M_ROOM_PLUMBING;
   else if (g_strcmp0 (type, event_type_string (CM_M_ROOM_BOT_OPTIONS)) == 0)
     priv->event_type = CM_M_ROOM_BOT_OPTIONS;
+  else if (g_strcmp0 (type, event_type_string (CM_M_KEY_VERIFICATION_ACCEPT)) == 0)
+    priv->event_type = CM_M_KEY_VERIFICATION_ACCEPT;
+  else if (g_strcmp0 (type, event_type_string (CM_M_KEY_VERIFICATION_CANCEL)) == 0)
+    priv->event_type = CM_M_KEY_VERIFICATION_CANCEL;
+  else if (g_strcmp0 (type, event_type_string (CM_M_KEY_VERIFICATION_DONE)) == 0)
+    priv->event_type = CM_M_KEY_VERIFICATION_DONE;
+  else if (g_strcmp0 (type, event_type_string (CM_M_KEY_VERIFICATION_KEY)) == 0)
+    priv->event_type = CM_M_KEY_VERIFICATION_KEY;
+  else if (g_strcmp0 (type, event_type_string (CM_M_KEY_VERIFICATION_MAC)) == 0)
+    priv->event_type = CM_M_KEY_VERIFICATION_MAC;
+  else if (g_strcmp0 (type, event_type_string (CM_M_KEY_VERIFICATION_READY)) == 0)
+    priv->event_type = CM_M_KEY_VERIFICATION_READY;
+  else if (g_strcmp0 (type, event_type_string (CM_M_KEY_VERIFICATION_REQUEST)) == 0)
+    priv->event_type = CM_M_KEY_VERIFICATION_REQUEST;
+  else if (g_strcmp0 (type, event_type_string (CM_M_KEY_VERIFICATION_START)) == 0)
+    priv->event_type = CM_M_KEY_VERIFICATION_START;
   else
     g_warning ("unhandled event type: %s", type);
 }
