@@ -111,16 +111,22 @@ void
 cm_room_member_set_json_data (CmRoomMember *self,
                               JsonObject   *object)
 {
+  JsonObject *child;
   const char *name, *avatar_url;
 
   g_return_if_fail (CM_IS_ROOM_MEMBER (self));
   g_return_if_fail (object);
 
-  name = cm_utils_json_object_get_string (object, "display_name");
-  if (!name)
-      name = cm_utils_json_object_get_string (object, "displayname");
+  child = cm_utils_json_object_get_object (object, "content");
 
-  avatar_url = cm_utils_json_object_get_string (object, "avatar_url");
+  if (!child)
+    child = object;
+
+  name = cm_utils_json_object_get_string (child, "display_name");
+  if (!name)
+      name = cm_utils_json_object_get_string (child, "displayname");
+
+  avatar_url = cm_utils_json_object_get_string (child, "avatar_url");
   cm_user_set_details (CM_USER (self), name, avatar_url);
 }
 
