@@ -24,6 +24,7 @@
 #include "cm-db-private.h"
 #include "cm-enc-private.h"
 #include "cm-enums.h"
+#include "events/cm-event-private.h"
 #include "users/cm-room-member-private.h"
 #include "users/cm-user-private.h"
 #include "users/cm-account.h"
@@ -1955,13 +1956,18 @@ handle_to_device (CmClient   *self,
 
   for (guint i = 0; i < length; i++)
     {
-      const char *type;
+      g_autoptr(CmEvent) event = NULL;
+      CmEventType type;
 
       object = json_array_get_object_element (array, i);
-      type = cm_utils_json_object_get_string (object, "type");
 
-      if (g_strcmp0 (type, "m.room.encrypted") == 0)
-        cm_enc_handle_room_encrypted (self->cm_enc, object);
+      event = cm_event_new_from_json (object, NULL);
+      type = cm_event_get_m_type (event);
+
+      if (type == CM_M_ROOM_ENCRYPTED)
+        {
+          cm_enc_handle_room_encrypted (self->cm_enc, object);
+        }
     }
 }
 
