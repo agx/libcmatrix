@@ -29,7 +29,7 @@ typedef struct
   CmEventState   event_state;
 } CmEventPrivate;
 
-G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (CmEvent, cm_event, G_TYPE_OBJECT)
+G_DEFINE_TYPE_WITH_PRIVATE (CmEvent, cm_event, G_TYPE_OBJECT)
 
 #define event_type_string(_event_type) (cm_utils_get_event_type_str(_event_type))
 
@@ -104,6 +104,20 @@ cm_event_class_init (CmEventClass *klass)
 static void
 cm_event_init (CmEvent *self)
 {
+}
+
+CmEvent *
+cm_event_new_from_json (JsonObject *root,
+                        JsonObject *encrypted)
+{
+  CmEvent *self;
+
+  g_return_val_if_fail (root || encrypted, NULL);
+
+  self = g_object_new (CM_TYPE_EVENT, NULL);
+  cm_event_set_json (self, root, encrypted);
+
+  return self;
 }
 
 const char *
