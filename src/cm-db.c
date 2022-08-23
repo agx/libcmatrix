@@ -396,6 +396,7 @@ cm_db_create_schema (CmDb  *self,
 
     /* v2 */
     "CREATE UNIQUE INDEX IF NOT EXISTS room_event_idx ON room_events (room_id, event_uid);"
+    "CREATE UNIQUE INDEX IF NOT EXISTS user_device_idx ON user_devices (user_id, device);"
     "CREATE INDEX IF NOT EXISTS room_event_state_idx ON room_events (state_key);"
     "CREATE UNIQUE INDEX IF NOT EXISTS room_event_cache_idx ON room_events_cache (room_id, event_uid);"
     "CREATE UNIQUE INDEX IF NOT EXISTS encryption_key_idx ON encryption_keys (account_id, file_url);"
@@ -693,6 +694,7 @@ cm_db_migrate_to_v2 (CmDb  *self,
                          "ALTER TABLE session ADD COLUMN chain_index INTEGER;"
 
                          "CREATE UNIQUE INDEX IF NOT EXISTS room_event_idx ON room_events (room_id, event_uid);"
+                         "CREATE UNIQUE INDEX IF NOT EXISTS user_device_idx ON user_devices (user_id, device);"
                          "CREATE INDEX IF NOT EXISTS room_event_state_idx ON room_events (state_key);"
                          "CREATE UNIQUE INDEX IF NOT EXISTS room_event_cache_idx ON room_events_cache (room_id, event_uid);"
                          "CREATE UNIQUE INDEX IF NOT EXISTS encryption_key_idx ON encryption_keys (account_id, file_url);"
