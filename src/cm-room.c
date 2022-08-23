@@ -161,6 +161,17 @@ cm_room_generate_name (CmRoom *self)
   model = G_LIST_MODEL (self->joined_members);
   count = n_items = g_list_model_get_n_items (model);
 
+  if (n_items == 1)
+    {
+      g_autoptr(CmUser) user = NULL;
+
+      user = g_list_model_get_item (model, 0);
+
+      /* Don't add self to create room name */
+      if (g_strcmp0 (cm_user_get_id (user), cm_client_get_user_id (self->client)) == 0)
+        count = n_items = 0;
+    }
+
   if (!n_items)
     {
       model = G_LIST_MODEL (self->invited_members);
