@@ -134,7 +134,7 @@ cm_user_get_avatar_url (CmUser *self)
 
   g_return_val_if_fail (CM_IS_USER (self), NULL);
 
-  return priv->display_name;
+  return priv->avatar_url;
 }
 
 static void
