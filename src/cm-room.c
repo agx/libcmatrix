@@ -39,6 +39,7 @@ struct _CmRoom
   CmClient   *client;
   char       *name;
   char       *generated_name;
+  char       *past_name;
   char       *room_id;
   char       *replacement_room;
   char       *encryption;
@@ -387,6 +388,8 @@ cm_room_new_from_json (const char *room_id,
       self->initial_sync_done = TRUE;
       local = cm_utils_json_object_get_object (root, "local");
       self->name = g_strdup (cm_utils_json_object_get_string (local, "alias"));
+      self->generated_name = cm_utils_json_object_dup_string (local, "generated_alias");
+      self->past_name = cm_utils_json_object_dup_string (local, "past_alias");
       cm_room_set_is_direct (self, cm_utils_json_object_get_bool (local, "direct"));
       if (cm_utils_json_object_get_int (local, "encryption") > 0)
         self->encryption = g_strdup ("encrypted");
@@ -448,6 +451,8 @@ room_generate_json (CmRoom *self)
   json_object_set_object_member (json, "local", child);
 
   json_object_set_string_member (child, "generated_alias", self->generated_name);
+  if (self->past_name)
+    json_object_set_string_member (child, "past_alias", self->past_name);
   json_object_set_string_member (child, "alias", cm_room_get_name (self));
   /* Alias set before the current one, may be used if current one is NULL (eg: was x) */
   json_object_set_string_member (child, "last_alias", cm_room_get_name (self));
@@ -518,7 +523,18 @@ cm_room_get_json (CmRoom *self)
   g_return_val_if_fail (CM_IS_ROOM (self), NULL);
 
   if (!self->local_json)
-    room_generate_json (self);
+    {
+      room_generate_json (self);
+    }
+  else
+    {
+      JsonObject *child;
+
+      child = cm_utils_json_object_get_object (self->local_json, "local");
+      json_object_set_string_member (child, "generated_alias", self->generated_name);
+      if (self->past_name)
+        json_object_set_string_member (child, "past_alias", self->past_name);
+    }
 
   return cm_utils_json_object_to_string (self->local_json, FALSE);
 }
@@ -645,6 +661,30 @@ cm_room_get_name (CmRoom *self)
     return self->name;
 
   return self->generated_name;
+}
+
+/**
+ * cm_room_get_past_name:
+ * @self: A #CmRoom
+ *
+ * Get the matrix room name set before the current one.
+ * The past name is set only if the room is a direct
+ * room and current room name is empty (in the case
+ * where cm_room_get_name() shall return "Empty room")
+ *
+ * Returns: (nullable): The past room name
+ */
+const char *
+cm_room_get_past_name (CmRoom *self)
+{
+  g_return_val_if_fail (CM_IS_ROOM (self), NULL);
+  /* g_warning ("%s %s", self->past_name, self->name); */
+
+  if (!self->name &&
+      g_strcmp0 (self->generated_name, "Empty room") == 0)
+    return self->past_name;
+
+  return NULL;
 }
 
 /**
@@ -871,7 +911,8 @@ cm_room_parse_events (CmRoom     *self,
                   cm_member = g_hash_table_lookup (self->joined_members_table, user_id);
                   cm_room_member_set_json_data (cm_member, child);
 
-                  g_clear_pointer (&self->generated_name, g_free);
+                  g_free (self->past_name);
+                  self->past_name = g_steal_pointer (&self->generated_name);
                   g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
                   continue;
                 }
@@ -879,8 +920,10 @@ cm_room_parse_events (CmRoom     *self,
               g_list_store_append (self->joined_members, room_member);
               g_hash_table_insert (self->joined_members_table,
                                    g_strdup (user_id), g_steal_pointer (&room_member));
+
               /* Clear the name so that it will be regenerated when name is requested */
-              g_clear_pointer (&self->generated_name, g_free);
+              g_free (self->past_name);
+              self->past_name = g_steal_pointer (&self->generated_name);
               g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
             }
           else if (member_status == CM_STATUS_INVITE)
@@ -894,7 +937,8 @@ cm_room_parse_events (CmRoom     *self,
                   cm_room_member_set_json_data (cm_member, child);
 
                   /* Clear the name so that it will be regenerated when name is requested */
-                  g_clear_pointer (&self->generated_name, g_free);
+                  g_free (self->past_name);
+                  self->past_name = g_steal_pointer (&self->generated_name);
                   g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
                   continue;
                 }
@@ -905,12 +949,19 @@ cm_room_parse_events (CmRoom     *self,
               self->db_save_pending = TRUE;
 
               /* Clear the name so that it will be regenerated when name is requested */
-              g_clear_pointer (&self->generated_name, g_free);
+              g_free (self->past_name);
+              self->past_name = g_steal_pointer (&self->generated_name);
               g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
             }
           else if (member_status == CM_STATUS_LEAVE)
             {
               CmRoomMember *join;
+
+              /* Generate a name if it doesn't exist so that we can
+               * use it as the past name if the new name is empty
+               */
+              if (!self->name && !self->generated_name)
+                self->generated_name = cm_room_generate_name (self);
 
               join = g_hash_table_lookup (self->joined_members_table, user_id);
 
@@ -921,7 +972,8 @@ cm_room_parse_events (CmRoom     *self,
                 }
 
               /* Clear the name so that it will be regenerated when name is requested */
-              g_clear_pointer (&self->generated_name, g_free);
+              g_free (self->past_name);
+              self->past_name = g_steal_pointer (&self->generated_name);
               g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
               self->db_save_pending = TRUE;
             }

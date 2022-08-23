@@ -28,6 +28,7 @@ const char   *cm_room_get_id                      (CmRoom                *self);
 gboolean      cm_room_self_has_power_for_event    (CmRoom                *self,
                                                    CmEventType            event);
 const char   *cm_room_get_name                    (CmRoom                *self);
+const char   *cm_room_get_past_name               (CmRoom                *self);
 gboolean      cm_room_is_encrypted                (CmRoom                *self);
 GListModel   *cm_room_get_joined_members          (CmRoom                *self);
 GListModel   *cm_room_get_events_list             (CmRoom                *self);
