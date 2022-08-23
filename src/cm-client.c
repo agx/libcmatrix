@@ -2346,15 +2346,13 @@ client_get_homeserver_cb (GObject      *obj,
   homeserver = cm_utils_get_homeserver_finish (result, &error);
   g_object_set_data (G_OBJECT (task), "action", "get-homeserver");
 
-  g_debug ("Get home server, has error: %d, home server: %s",
-           error && !g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED), homeserver);
-
   client_set_login_state (self, FALSE, FALSE);
 
   if (error)
     {
       self->sync_failed = TRUE;
 
+      g_debug ("Get home server error: %s", error->message);
       if (g_task_get_source_tag (task) != cm_client_get_homeserver_async)
         handle_matrix_glitches (self, error);
       g_task_return_error (task, error);
@@ -2362,6 +2360,7 @@ client_get_homeserver_cb (GObject      *obj,
       return;
     }
 
+  g_debug ("Get home server: %s", homeserver);
   if (!homeserver)
     {
       self->sync_failed = TRUE;
