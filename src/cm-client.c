@@ -269,7 +269,7 @@ handle_matrix_glitches (CmClient *self,
   if (!error)
     return FALSE;
 
-  if (g_error_matches (error, CM_ERROR, M_UNKNOWN_TOKEN) &&
+  if (g_error_matches (error, CM_ERROR, CM_ERROR_UNKNOWN_TOKEN) &&
       self->password)
     {
       client_reset_state (self);
@@ -1673,8 +1673,8 @@ client_password_login_cb (GObject      *obj,
       self->sync_failed = TRUE;
 
       g_debug ("Login failed, username: %s", self->login_user_id);
-      if (error->code == M_FORBIDDEN)
-        error->code = M_BAD_PASSWORD;
+      if (error->code == CM_ERROR_FORBIDDEN)
+        error->code = CM_ERROR_BAD_PASSWORD;
 
       client_set_login_state (self, FALSE, FALSE);
 
@@ -2227,7 +2227,7 @@ client_get_homeserver_cb (GObject      *obj,
   if (!homeserver)
     {
       self->sync_failed = TRUE;
-      g_task_return_new_error (task, CM_ERROR, M_NO_HOME_SERVER,
+      g_task_return_new_error (task, CM_ERROR, CM_ERROR_NO_HOME_SERVER,
                                "Couldn't fetch homeserver");
       if (self->callback)
         self->callback (self->cb_data, self, NULL, NULL, error);
@@ -2240,7 +2240,7 @@ client_get_homeserver_cb (GObject      *obj,
   if (!self->homeserver)
     {
       self->sync_failed = TRUE;
-      g_task_return_new_error (task, CM_ERROR, M_BAD_HOME_SERVER,
+      g_task_return_new_error (task, CM_ERROR, CM_ERROR_BAD_HOME_SERVER,
                                "'%s' is not a valid URI", homeserver);
       return;
     }
@@ -2393,7 +2393,7 @@ matrix_start_sync (CmClient *self,
         {
           g_debug ("Error: No Homeserver provided");
 
-          g_task_return_new_error (task, CM_ERROR, M_NO_HOME_SERVER,
+          g_task_return_new_error (task, CM_ERROR, CM_ERROR_NO_HOME_SERVER,
                                    "No Homeserver provided");
           return;
         }
@@ -2419,7 +2419,7 @@ matrix_start_sync (CmClient *self,
 
       g_debug ("No password provided, nor access token");
 
-      error = g_error_new (CM_ERROR, M_BAD_PASSWORD, "No Password provided");
+      error = g_error_new (CM_ERROR, CM_ERROR_BAD_PASSWORD, "No Password provided");
 
       if (self->callback)
         self->callback (self->cb_data, self, NULL, NULL, error);

@@ -105,7 +105,7 @@ net_load_from_stream_cb (GObject      *object,
   }
 
   if (error) {
-    if (g_error_matches (error, CM_ERROR, M_LIMIT_EXCEEDED) &&
+    if (g_error_matches (error, CM_ERROR, CM_ERROR_LIMIT_EXCEEDED) &&
         root &&
         JSON_NODE_HOLDS_OBJECT (root)) {
       JsonObject *obj;

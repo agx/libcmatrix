@@ -63,7 +63,7 @@ cm_utils_json_node_get_error (JsonNode *node)
   const char *error, *err_code;
 
   if (!node || (!JSON_NODE_HOLDS_OBJECT (node) && !JSON_NODE_HOLDS_ARRAY (node)))
-    return g_error_new (CM_ERROR, M_NOT_JSON,
+    return g_error_new (CM_ERROR, CM_ERROR_NOT_JSON,
                         "Not JSON Object");
 
   /* Returned by /_matrix/client/r0/rooms/{roomId}/state */
@@ -82,14 +82,14 @@ cm_utils_json_node_get_error (JsonNode *node)
     error = "Unknown Error";
 
   if (!g_str_has_prefix (err_code, "M_"))
-    return g_error_new (CM_ERROR, M_UNKNOWN,
+    return g_error_new (CM_ERROR, CM_ERROR_UNKNOWN,
                         "Invalid Error code");
 
   for (guint i = 0; i < G_N_ELEMENTS (error_codes); i++)
     if (g_str_equal (error_codes[i], err_code))
       return g_error_new (CM_ERROR, i, "%s", error);
 
-  return g_error_new (CM_ERROR, M_UNKNOWN, "Unknown Error");
+  return g_error_new (CM_ERROR, CM_ERROR_UNKNOWN, "Unknown Error");
 }
 
 gboolean
