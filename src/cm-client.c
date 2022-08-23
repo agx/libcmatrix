@@ -289,12 +289,13 @@ handle_matrix_glitches (CmClient *self,
       error->domain == G_RESOLVER_ERROR ||
       error->domain == JSON_PARSER_ERROR)
     {
+      self->sync_failed = TRUE;
+      g_signal_emit (self, signals[STATUS_CHANGED], 0);
+
       if (cm_client_can_connect (self))
         {
           g_clear_handle_id (&self->resync_id, g_source_remove);
 
-          self->sync_failed = TRUE;
-          g_signal_emit (self, signals[STATUS_CHANGED], 0);
           self->resync_id = g_timeout_add_seconds (URI_REQUEST_TIMEOUT,
                                                    schedule_resync, self);
           return TRUE;
