@@ -19,6 +19,9 @@
  * See https://matrix.org/docs/spec/client_server/r0.6.1#api-standards
  * for details.
  */
+/* The order and value of members here and the error strings
+ * in the array error_codes in cm-utils.c should match.
+ */
 typedef enum {
   CM_ERROR_FORBIDDEN = 1,
   CM_ERROR_UNKNOWN_TOKEN,
