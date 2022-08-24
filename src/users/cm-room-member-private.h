@@ -25,16 +25,7 @@ G_BEGIN_DECLS
 
 CmRoomMember *cm_room_member_new                  (gpointer               room,
                                                    const char            *user_id);
-void          cm_room_member_set_device_changed   (CmRoomMember          *self,
-                                                   gboolean               changed);
-gboolean      cm_room_member_get_device_changed   (CmRoomMember          *self);
 void          cm_room_member_set_json_data        (CmRoomMember          *self,
                                                    JsonObject            *object);
-void          cm_room_member_set_devices          (CmRoomMember          *self,
-                                                   JsonObject            *root);
-GListModel   *cm_room_member_get_devices          (CmRoomMember          *self);
-JsonObject   *cm_room_member_get_device_key_json  (CmRoomMember          *self);
-void          cm_room_member_add_one_time_keys    (CmRoomMember          *self,
-                                                   JsonObject            *root);
 
 G_END_DECLS
