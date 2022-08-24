@@ -167,14 +167,15 @@ db_get_past_room_events (CmDb   *self,
                       "SELECT id,room_events.json_data FROM room_events "
                       "WHERE room_id=? AND sorted_id <= ? "
                       /* Limit to messages until chatty has better events support */
-                      "AND event_type=? "
+                      "AND (event_type=? OR event_type=?)"
                       "ORDER BY sorted_id DESC, id DESC LIMIT ?",
                       -1, &stmt, NULL);
 
   matrix_bind_int (stmt, 1, room_id, "binding when loading past events");
   matrix_bind_int (stmt, 2, from_sorted_event_id, "binding when loading past events");
   matrix_bind_int (stmt, 3, CM_M_ROOM_MESSAGE, "binding when loading past events");
-  matrix_bind_int (stmt, 4, max_count, "binding when loading past events");
+  matrix_bind_int (stmt, 4, CM_M_ROOM_ENCRYPTED, "binding when loading past events");
+  matrix_bind_int (stmt, 5, max_count, "binding when loading past events");
 
   while (sqlite3_step (stmt) == SQLITE_ROW)
     {
