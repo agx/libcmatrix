@@ -20,6 +20,7 @@
 #include "users/cm-room-member-private.h"
 #include "users/cm-room-member.h"
 #include "users/cm-user.h"
+#include "users/cm-user-private.h"
 #include "cm-room-private.h"
 #include "cm-room.h"
 
@@ -578,8 +579,13 @@ cm_room_set_client (CmRoom   *self,
   for (guint i = 0; i < n_items; i++)
     {
       g_autoptr(CmEvent) event = NULL;
+      CmUser *user;
 
       event = g_list_model_get_item (G_LIST_MODEL (self->events_list), i);
+      user = cm_event_get_sender (event);
+
+      if (user)
+        cm_user_set_client (user, client);
 
       if (g_strcmp0 (cm_event_get_sender_id (event),
                      cm_client_get_user_id (self->client)) == 0)
@@ -1252,7 +1258,7 @@ cm_room_user_changed (CmRoom     *self,
   member = g_hash_table_lookup (self->joined_members_table, user_id);
 
   if (member)
-    cm_room_member_set_device_changed (member, TRUE);
+    cm_user_set_device_changed (CM_USER (member));
 }
 
 const char *
@@ -1481,7 +1487,7 @@ claim_key_cb (GObject      *obj,
             }
 
           keys = cm_utils_json_object_get_object (object, member->data);
-          cm_room_member_add_one_time_keys (user, keys);
+          cm_user_add_one_time_keys (CM_USER (user), keys);
         }
     }
 
@@ -2544,7 +2550,7 @@ keys_query_cb (GObject      *obj,
             }
 
           key = cm_utils_json_object_get_object (keys, member->data);
-          cm_room_member_set_devices (cm_member, key);
+          cm_user_set_devices (CM_USER (cm_member), key);
           self->keys_queried = TRUE;
         }
 

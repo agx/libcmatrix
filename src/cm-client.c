@@ -2753,7 +2753,7 @@ cm_client_claim_keys_async (CmClient            *self,
       JsonObject *key_json;
 
       user = g_list_model_get_item (member_list, i);
-      key_json = cm_room_member_get_device_key_json (CM_ROOM_MEMBER (user));
+      key_json = cm_user_get_device_key_json (user, TRUE);
 
       if (key_json)
         json_object_set_object_member (child,

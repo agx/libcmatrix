@@ -18,6 +18,7 @@
 #include <sys/random.h>
 
 #include "cm-utils-private.h"
+#include "users/cm-user-private.h"
 #include "users/cm-room-member-private.h"
 #include "cm-device.h"
 #include "cm-device-private.h"
@@ -1338,7 +1339,7 @@ cm_enc_create_out_group_keys (CmEnc      *self,
       guint n_items;
 
       member = g_list_model_get_item (members_list, i);
-      devices = cm_room_member_get_devices (member);
+      devices = cm_user_get_devices (CM_USER (member));
       n_items = g_list_model_get_n_items (devices);
 
       user = json_object_new ();
