@@ -295,6 +295,20 @@ cm_event_set_json (CmEvent    *self,
   if (!root && !encrypted)
     return;
 
+  type = cm_utils_json_object_get_string (root, "type");
+
+  if (!type)
+    type = cm_utils_json_object_get_string (encrypted, "type");
+
+  /* todo: Handle content less encrypted events (eg: redactions) */
+  if (g_strcmp0 (type, event_type_string (CM_M_ROOM_ENCRYPTED)) == 0)
+    {
+      /* We got something encrypted */
+      if (!encrypted)
+        encrypted = g_steal_pointer (&root);
+      priv->event_type = CM_M_ROOM_ENCRYPTED;
+    }
+
   if (encrypted)
     priv->encrypted_json = json_object_ref (encrypted);
 
