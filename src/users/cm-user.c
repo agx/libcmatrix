@@ -15,6 +15,8 @@
 
 #include "cm-utils-private.h"
 #include "cm-client-private.h"
+#include "cm-device.h"
+#include "cm-device-private.h"
 #include "cm-user-private.h"
 #include "cm-user.h"
 
@@ -25,6 +27,18 @@ typedef struct
   char *user_id;
   char *display_name;
   char *avatar_url;
+
+  GListStore   *devices;
+  GHashTable   *devices_table;
+
+  /* Set on device changes */
+  /* Reset when new one time keys are set */
+  /* Only valid for E2EE rooms */
+  gboolean      device_added;
+  gboolean      device_removed;
+  /* Set when we know about some change, but not sure what it is */
+  gboolean      device_changed;
+
   gboolean info_loaded;
 } CmUserPrivate;
 
@@ -40,6 +54,10 @@ cm_user_finalize (GObject *object)
   g_free (priv->display_name);
   g_free (priv->avatar_url);
 
+  g_list_store_remove_all (priv->devices);
+  g_clear_object (&priv->devices);
+  g_clear_pointer (&priv->devices_table, g_hash_table_unref);
+
   G_OBJECT_CLASS (cm_user_parent_class)->finalize (object);
 }
 
@@ -54,6 +72,11 @@ cm_user_class_init (CmUserClass *klass)
 static void
 cm_user_init (CmUser *self)
 {
+  CmUserPrivate *priv = cm_user_get_instance_private (self);
+
+  priv->devices = g_list_store_new (CM_TYPE_DEVICE);
+  priv->devices_table = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                               g_free, g_object_unref);
 }
 
 void
@@ -64,9 +87,9 @@ cm_user_set_client (CmUser   *self,
 
   g_return_if_fail (CM_IS_USER (self));
   g_return_if_fail (CM_IS_CLIENT (client));
-  g_return_if_fail (!priv->cm_client);
 
-  priv->cm_client = g_object_ref (client);
+  if (!priv->cm_client)
+    priv->cm_client = g_object_ref (client);
 }
 
 CmClient *
@@ -282,4 +305,229 @@ cm_user_load_info_finish (CmUser        *self,
   g_return_val_if_fail (!error || !*error, FALSE);
 
   return g_task_propagate_boolean (G_TASK (result), error);
+}
+
+GListModel *
+cm_user_get_devices (CmUser *self)
+{
+  CmUserPrivate *priv = cm_user_get_instance_private (self);
+
+  g_return_val_if_fail (CM_IS_USER (self), NULL);
+
+  return G_LIST_MODEL (priv->devices);
+}
+
+gboolean
+cm_user_get_device_changed (CmUser *self)
+{
+  CmUserPrivate *priv = cm_user_get_instance_private (self);
+
+  g_return_val_if_fail (CM_IS_USER (self), FALSE);
+
+  return priv->device_changed;
+}
+
+void
+cm_user_set_device_changed (CmUser *self)
+{
+  CmUserPrivate *priv = cm_user_get_instance_private (self);
+
+  g_return_if_fail (CM_IS_USER (self));
+
+  priv->device_changed = TRUE;
+}
+
+gboolean
+cm_user_get_device_removed (CmUser *self)
+{
+  CmUserPrivate *priv = cm_user_get_instance_private (self);
+
+  g_return_val_if_fail (CM_IS_USER (self), FALSE);
+
+  return priv->device_removed;
+}
+
+/*
+ * cm_user_get_device_key_json:
+ * @self: A #CmUser
+ * @all_device: Whether to include all device
+ *
+ * if @all_device is %TRUE, keys for all devices
+ * are included in the JSON. Otherwise, only
+ * devices that has no keys are included in the
+ * JSON.
+ */
+JsonObject *
+cm_user_get_device_key_json (CmUser   *self,
+                             gboolean  all_device)
+{
+  CmUserPrivate *priv = cm_user_get_instance_private (self);
+  JsonObject *object;
+  guint n_items;
+
+  g_return_val_if_fail (CM_IS_USER (self), NULL);
+
+  n_items = g_list_model_get_n_items (G_LIST_MODEL (priv->devices));
+  if (!n_items)
+    return NULL;
+
+  object = json_object_new ();
+
+  for (guint i = 0; i < n_items; i++)
+    {
+      g_autoptr(CmDevice) device = NULL;
+      const char *device_id;
+
+      device = g_list_model_get_item (G_LIST_MODEL (priv->devices), i);
+      device_id = cm_device_get_id (device);
+
+      if (!cm_device_has_one_time_key (device))
+        json_object_set_string_member (object, device_id, "signed_curve25519");
+    }
+
+  return object;
+}
+
+/*
+ * cm_user_set_devices:
+ *
+ * Set devices for @self removing all
+ * non existing devices in @root
+ */
+void
+cm_user_set_devices (CmUser     *self,
+                     JsonObject *root)
+{
+  CmUserPrivate *priv = cm_user_get_instance_private (self);
+  g_autoptr(GHashTable) devices_table = NULL;
+  g_autoptr(GList) members = NULL;
+  GHashTable *old_devices;
+  JsonObject *child;
+
+  g_return_if_fail (CM_IS_USER (self));
+  g_return_if_fail (root);
+
+  /* Reset generice device_changed, we shall set precise
+   * removed/added value later */
+  priv->device_changed = FALSE;
+
+  /* Create a table of devices and add the items here */
+  devices_table = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                         g_free, g_object_unref);
+  members = json_object_get_members (root);
+
+  for (GList *member = members; member; member = member->next)
+    {
+      g_autoptr(CmDevice) device = NULL;
+      g_autofree char *device_name = NULL;
+      const char *device_id, *user;
+
+      child = cm_utils_json_object_get_object (root, member->data);
+      device_id = cm_utils_json_object_get_string (child, "device_id");
+      user = cm_utils_json_object_get_string (child, "user_id");
+
+      if (!device_id || !*device_id)
+        continue;
+
+      if (priv->devices_table &&
+          (device = g_hash_table_lookup (priv->devices_table, device_id)))
+        {
+          /* If the device is already in the old table, remove it there
+           * so that it's present only in the new devices_table.
+           */
+          /* device variable is autofree, so the ref is unref later automatically */
+          g_object_ref (device);
+          g_hash_table_remove (priv->devices_table, device_id);
+          g_hash_table_insert (devices_table, g_strdup (device_id), g_object_ref (device));
+          continue;
+        }
+
+      if (g_strcmp0 (user, cm_user_get_id (self)) != 0)
+        {
+          g_warning ("‘%s’ and ‘%s’ are not the same users",
+                     user, cm_user_get_id (self));
+          continue;
+        }
+
+      if (g_strcmp0 (member->data, device_id) != 0)
+        {
+          g_warning ("‘%s’ and ‘%s’ are not the same device", (char *)member->data, device_id);
+          continue;
+        }
+
+      priv->device_added = TRUE;
+      device = cm_device_new (priv->cm_client, child);
+      g_hash_table_insert (devices_table, g_strdup (device_id), g_object_ref (device));
+      g_list_store_append (priv->devices, device);
+    }
+
+  old_devices = priv->devices_table;
+  priv->devices_table = g_steal_pointer (&devices_table);
+  /* Assign so as to autofree */
+  devices_table = old_devices;
+
+  if (old_devices)
+    {
+      g_autoptr(GList) devices = NULL;
+
+      /* The old table now contains the devices that are not used by the user anymore */
+      devices = g_hash_table_get_values (old_devices);
+
+      if (g_hash_table_size (old_devices) > 0)
+        priv->device_removed = TRUE;
+
+      for (GList *device = devices; device && device->data; device = device->next)
+        cm_utils_remove_list_item (priv->devices, device->data);
+    }
+}
+
+void
+cm_user_add_one_time_keys (CmUser     *self,
+                           JsonObject *root)
+{
+  CmUserPrivate *priv = cm_user_get_instance_private (self);
+  JsonObject *object, *child;
+  guint n_items;
+
+  g_return_if_fail (CM_IS_USER (self));
+  g_return_if_fail (root);
+
+  n_items = g_list_model_get_n_items (G_LIST_MODEL (priv->devices));
+
+  for (guint i = 0; i < n_items; i++)
+    {
+      g_autoptr(CmDevice) device = NULL;
+      g_autoptr(GList) members = NULL;
+      const char *device_id;
+
+      device = g_list_model_get_item (G_LIST_MODEL (priv->devices), i);
+      device_id = cm_device_get_id (device);
+      child = cm_utils_json_object_get_object (root, device_id);
+
+      if (!child)
+        {
+          g_warning ("device '%s' not found", device_id);
+          continue;
+        }
+
+      members = json_object_get_members (child);
+
+      for (GList *node = members; node; node = node->next)
+        {
+          object = cm_utils_json_object_get_object (child, node->data);
+
+          if (cm_enc_verify (cm_client_get_enc (priv->cm_client), object,
+                             cm_user_get_id (self), device_id,
+                             cm_device_get_ed_key (device)))
+            {
+              const char *key;
+
+              key = cm_utils_json_object_get_string (object, "key");
+              cm_device_set_one_time_key (device, key);
+              priv->device_changed = FALSE;
+              priv->device_removed = FALSE;
+              priv->device_added = FALSE;
+            }
+        }
+    }
 }
