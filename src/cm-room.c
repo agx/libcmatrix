@@ -1509,81 +1509,6 @@ claim_key_cb (GObject      *obj,
 }
 
 static void
-room_prepare_message (CmRoom             *self,
-                      CmRoomMessageEvent *message)
-{
-  g_autofree char *uri = NULL;
-  const char *body;
-  JsonObject *root;
-  GFile *file;
-
-  g_assert (CM_IS_ROOM (self));
-  g_assert (CM_IS_ROOM_MESSAGE_EVENT (message));
-
-  body = cm_room_message_event_get_body (message);
-  file = cm_room_message_event_get_file (message);
-
-  root = json_object_new ();
-  if (file)
-    {
-      g_autofree char *name = NULL;
-
-      name = g_file_get_basename (file);
-      json_object_set_string_member (root, "msgtype", "m.file");
-      json_object_set_string_member (root, "body", name);
-      json_object_set_string_member (root, "filename", name);
-      if (!self->encryption)
-        {
-          const char *mxc_uri;
-
-          mxc_uri = g_object_get_data (G_OBJECT (file), "uri");
-          if (mxc_uri)
-            json_object_set_string_member (root, "url", mxc_uri);
-          else
-            g_warn_if_reached ();
-        }
-    }
-  else
-    {
-      json_object_set_string_member (root, "msgtype", "m.text");
-      json_object_set_string_member (root, "body", body);
-    }
-
-  if (self->encryption)
-    {
-      g_autofree char *text = NULL;
-      JsonObject *object;
-
-      object = json_object_new ();
-      json_object_set_string_member (object, "type", "m.room.message");
-      json_object_set_string_member (object, "room_id", self->room_id);
-      json_object_set_object_member (object, "content", root);
-
-      if (file)
-        {
-          JsonObject *file_json;
-          CmInputStream *stream;
-
-          stream = g_object_get_data (G_OBJECT (file), "stream");
-          file_json = cm_input_stream_get_file_json (stream);
-          json_object_set_object_member (root, "file", file_json);
-        }
-
-      text = cm_utils_json_object_to_string (object, FALSE);
-      json_object_unref (object);
-      object = cm_enc_encrypt_for_chat (cm_client_get_enc (self->client),
-                                                 self->room_id, text);
-      g_object_set_data_full (G_OBJECT (message), "json", object,
-                              (GDestroyNotify)json_object_unref);
-    }
-  else
-    {
-      g_object_set_data_full (G_OBJECT (message), "json", root,
-                              (GDestroyNotify)json_object_unref);
-    }
-}
-
-static void
 room_send_file_cb (GObject      *object,
                    GAsyncResult *result,
                    gpointer      user_data)
@@ -1632,18 +1557,11 @@ room_send_file_cb (GObject      *object,
   g_object_set_data_full (G_OBJECT (message_file), "uri", mxc_uri, g_free);
   g_object_set_data_full (G_OBJECT (message_file), "stream", stream, g_object_unref);
   g_object_set_data_full (G_OBJECT (stream), "uri", g_strdup (mxc_uri), g_free);
-  room_prepare_message (self, message);
 
-  /* https://matrix.org/docs/spec/client_server/r0.6.1#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid */
-  if (self->encryption)
-    uri = g_strdup_printf ("/_matrix/client/r0/rooms/%s/send/m.room.encrypted/%s",
-                           self->room_id, cm_event_get_txn_id (CM_EVENT (message)));
-  else
-    uri = g_strdup_printf ("/_matrix/client/r0/rooms/%s/send/m.room.message/%s",
-                           self->room_id, cm_event_get_txn_id (CM_EVENT (message)));
+  uri = cm_event_get_api_url (CM_EVENT (message), self);
 
   cm_net_send_json_async (cm_client_get_net (self->client), 0,
-                          g_object_steal_data (G_OBJECT (message), "json"),
+                          cm_event_generate_json (CM_EVENT (message), self),
                           uri, SOUP_METHOD_PUT, NULL, g_task_get_cancellable (message_task),
                           send_cb, message_task);
 }
@@ -1742,18 +1660,10 @@ room_send_message_from_queue (CmRoom *self)
       return;
     }
 
-  room_prepare_message (self, message);
-
-  /* https://matrix.org/docs/spec/client_server/r0.6.1#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid */
-  if (self->encryption)
-    uri = g_strdup_printf ("/_matrix/client/r0/rooms/%s/send/m.room.encrypted/%s",
-                           self->room_id, cm_event_get_txn_id (CM_EVENT (message)));
-  else
-    uri = g_strdup_printf ("/_matrix/client/r0/rooms/%s/send/m.room.message/%s",
-                           self->room_id, cm_event_get_txn_id (CM_EVENT (message)));
+  uri = cm_event_get_api_url (CM_EVENT (message), self);
 
   cm_net_send_json_async (cm_client_get_net (self->client), 0,
-                          g_object_steal_data (G_OBJECT (message), "json"),
+                          cm_event_generate_json (CM_EVENT (message), self),
                           uri, SOUP_METHOD_PUT, NULL, g_task_get_cancellable (message_task),
                           send_cb, message_task);
 }
