@@ -76,11 +76,11 @@ gboolean      cm_room_load_finish                  (CmRoom              *self,
                                                     GAsyncResult        *result,
                                                     GError             **error);
 void          cm_room_save                         (CmRoom              *self);
-void          cm_room_get_joined_members_async     (CmRoom              *self,
+void          cm_room_load_joined_members_async    (CmRoom              *self,
                                                     GCancellable        *cancellable,
                                                     GAsyncReadyCallback  callback,
                                                     gpointer             user_data);
-GListModel   *cm_room_get_joined_members_finish    (CmRoom              *self,
+gboolean      cm_room_load_joined_members_finish   (CmRoom              *self,
                                                     GAsyncResult        *result,
                                                     GError             **error);
 void          cm_room_is_encrypted_async           (CmRoom              *self,

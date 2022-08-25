@@ -1749,7 +1749,7 @@ room_send_message_from_queue (CmRoom *self)
       if (!self->joined_members_loaded)
         {
           g_debug ("getting joined members");
-          cm_room_get_joined_members_async (self, g_task_get_cancellable (message_task), NULL, NULL);
+          cm_room_load_joined_members_async (self, g_task_get_cancellable (message_task), NULL, NULL);
           self->is_sending_message = FALSE;
           return;
         }
@@ -2518,10 +2518,10 @@ get_joined_members_cb (GObject      *obj,
 }
 
 void
-cm_room_get_joined_members_async (CmRoom              *self,
-                                  GCancellable        *cancellable,
-                                  GAsyncReadyCallback  callback,
-                                  gpointer             user_data)
+cm_room_load_joined_members_async (CmRoom              *self,
+                                   GCancellable        *cancellable,
+                                   GAsyncReadyCallback  callback,
+                                   gpointer             user_data)
 {
   g_autofree char *uri = NULL;
   GTask *task;
@@ -2532,7 +2532,7 @@ cm_room_get_joined_members_async (CmRoom              *self,
 
   if (self->joined_members_loaded)
     {
-      g_task_return_pointer (task, self->joined_members, NULL);
+      g_task_return_boolean (task, TRUE);
       return;
     }
 
@@ -2550,16 +2550,16 @@ cm_room_get_joined_members_async (CmRoom              *self,
                           NULL, cancellable, get_joined_members_cb, task);
 }
 
-GListModel *
-cm_room_get_joined_members_finish (CmRoom        *self,
-                                   GAsyncResult  *result,
-                                   GError       **error)
+gboolean
+cm_room_load_joined_members_finish (CmRoom        *self,
+                                    GAsyncResult  *result,
+                                    GError       **error)
 {
-  g_return_val_if_fail (CM_IS_ROOM (self), NULL);
-  g_return_val_if_fail (G_IS_TASK (result), NULL);
-  g_return_val_if_fail (!error || !*error, NULL);
+  g_return_val_if_fail (CM_IS_ROOM (self), FALSE);
+  g_return_val_if_fail (G_IS_TASK (result), FALSE);
+  g_return_val_if_fail (!error || !*error, FALSE);
 
-  return g_task_propagate_pointer (G_TASK (result), error);
+  return g_task_propagate_boolean (G_TASK (result), error);
 }
 
 static void
