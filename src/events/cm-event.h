@@ -28,7 +28,14 @@ G_DECLARE_DERIVABLE_TYPE (CmEvent, cm_event, CM, EVENT, GObject)
 
 struct _CmEventClass
 {
-  GObjectClass parent_class;
+  GObjectClass   parent_class;
+
+  /*< private >*/
+  gpointer     (*generate_json) (CmEvent     *self,
+                                 gpointer     room);
+  char        *(*get_api_url)   (CmEvent     *self,
+                                 gpointer     room);
+  gpointer       reserved[8];
 };
 
 const char   *cm_event_get_id            (CmEvent      *self);

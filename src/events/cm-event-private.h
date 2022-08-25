@@ -56,6 +56,10 @@ char         *cm_event_get_json_str       (CmEvent      *self,
                                            gboolean      prettify);
 JsonObject   *cm_event_get_json           (CmEvent      *self);
 JsonObject   *cm_event_get_encrypted_json (CmEvent      *self);
+JsonObject   *cm_event_generate_json      (CmEvent      *self,
+                                           gpointer      room);
+char         *cm_event_get_api_url         (CmEvent      *self,
+                                           gpointer      room);
 const char *cm_event_get_original_json (CmEvent    *self);
 gboolean    cm_event_is_verified       (CmEvent    *self);
 

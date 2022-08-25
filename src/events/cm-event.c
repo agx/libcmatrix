@@ -9,6 +9,7 @@
 # include "config.h"
 #endif
 
+#include "cm-room-private.h"
 #include "cm-utils-private.h"
 #include "cm-event-private.h"
 
@@ -78,6 +79,26 @@ event_parse_relations (CmEvent    *self,
     }
 }
 
+static gpointer
+cm_event_real_generate_json (CmEvent  *self,
+                             gpointer  room)
+{
+  /* todo */
+  g_assert_not_reached ();
+
+  return NULL;
+}
+
+static char *
+cm_event_real_get_api_url (CmEvent  *self,
+                           gpointer  room)
+{
+  /* todo */
+  g_assert_not_reached ();
+
+  return NULL;
+}
+
 static void
 cm_event_finalize (GObject *object)
 {
@@ -103,8 +124,12 @@ static void
 cm_event_class_init (CmEventClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
+  CmEventClass *event_class = CM_EVENT_CLASS (klass);
 
   object_class->finalize = cm_event_finalize;
+
+  event_class->generate_json = cm_event_real_generate_json;
+  event_class->get_api_url = cm_event_real_get_api_url;
 }
 
 static void
@@ -533,4 +558,24 @@ cm_event_get_encrypted_json (CmEvent *self)
     return json_object_ref (priv->encrypted_json);
 
   return NULL;
+}
+
+JsonObject *
+cm_event_generate_json (CmEvent  *self,
+                        gpointer  room)
+{
+  g_return_val_if_fail (CM_IS_EVENT (self), NULL);
+  g_return_val_if_fail (!room || CM_IS_ROOM (room), NULL);
+
+  return CM_EVENT_GET_CLASS (self)->generate_json (self, room);
+}
+
+char *
+cm_event_get_api_url (CmEvent  *self,
+                      gpointer  room)
+{
+  g_return_val_if_fail (CM_IS_EVENT (self), NULL);
+  g_return_val_if_fail (!room || CM_IS_ROOM (room), NULL);
+
+  return CM_EVENT_GET_CLASS (self)->get_api_url (self, room);
 }
