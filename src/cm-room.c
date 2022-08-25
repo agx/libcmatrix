@@ -217,6 +217,156 @@ cm_room_generate_name (CmRoom *self)
 }
 
 static void
+keys_claim_cb (GObject      *obj,
+               GAsyncResult *result,
+               gpointer      user_data)
+{
+  g_autoptr(GTask) task = user_data;
+  JsonObject *object = NULL;
+  GError *error = NULL;
+
+  object = g_task_propagate_pointer (G_TASK (result), &error);
+
+  if (error)
+    {
+      g_debug ("Error key query: %s", error->message);
+      g_task_return_error (task, error);
+    }
+  else
+    {
+      g_task_return_pointer (task, object, (GDestroyNotify)json_object_unref);
+    }
+}
+
+/*
+ * cm_room_claim_keys_async:
+ * @self: A #CmRoom
+ * @callback: A #GAsyncReadyCallback
+ * @user_data: user data passed to @callback
+ *
+ * Claim an one time key for all devices in room
+ */
+static void
+cm_room_claim_keys_async (CmRoom              *self,
+                          GAsyncReadyCallback  callback,
+                          gpointer             user_data)
+{
+  JsonObject *object, *child;
+  GListModel *members;
+  GTask *task;
+
+  g_return_if_fail (CM_IS_ROOM (self));
+
+  /* https://matrix.org/docs/spec/client_server/r0.6.1#post-matrix-client-r0-keys-claim */
+  object = json_object_new ();
+  json_object_set_int_member (object, "timeout", KEY_TIMEOUT);
+  members = G_LIST_MODEL (self->joined_members);
+
+  child = json_object_new ();
+
+  for (guint i = 0; i < g_list_model_get_n_items (members); i++)
+    {
+      g_autoptr(CmUser) user = NULL;
+      JsonObject *key_json;
+
+      user = g_list_model_get_item (members, i);
+      key_json = cm_user_get_device_key_json (user, TRUE);
+
+      if (key_json)
+        json_object_set_object_member (child,
+                                       cm_user_get_id (user),
+                                       key_json);
+    }
+
+  json_object_set_object_member (object, "one_time_keys", child);
+
+  task = g_task_new (self, NULL, callback, user_data);
+
+  cm_net_send_json_async (cm_client_get_net (self->client), 0, object,
+                          "/_matrix/client/r0/keys/claim", SOUP_METHOD_POST,
+                          NULL, NULL, keys_claim_cb, task);
+}
+
+static JsonObject *
+cm_room_claim_keys_finish (CmRoom          *self,
+                           GAsyncResult  *result,
+                           GError       **error)
+{
+  g_return_val_if_fail (CM_IS_ROOM (self), NULL);
+  g_return_val_if_fail (G_IS_TASK (result), NULL);
+  g_return_val_if_fail (!error || !*error, NULL);
+
+  return g_task_propagate_pointer (G_TASK (result), error);
+}
+
+
+static void
+room_upload_group_keys_cb (GObject      *obj,
+                           GAsyncResult *result,
+                           gpointer      user_data)
+{
+  g_autoptr(GTask) task = user_data;
+  g_autoptr(JsonObject) object = NULL;
+  GError *error = NULL;
+
+  object = g_task_propagate_pointer (G_TASK (result), &error);
+
+  if (error)
+    {
+      g_debug ("Error uploading group keys: %s", error->message);
+      g_task_return_error (task, error);
+    }
+  else
+    {
+      g_task_return_boolean (task, TRUE);
+    }
+}
+
+static void
+cm_room_upload_group_keys_async (CmRoom              *self,
+                                 GAsyncReadyCallback  callback,
+                                 gpointer             user_data)
+{
+  g_autoptr(CmEvent) event = NULL;
+  g_autofree char *uri = NULL;
+  JsonObject *root, *object;
+  GListModel *members;
+  GTask *task;
+
+  g_return_if_fail (CM_IS_ROOM (self));
+
+  members = G_LIST_MODEL (self->joined_members);
+  root = json_object_new ();
+  object = cm_enc_create_out_group_keys (cm_client_get_enc (self->client),
+                                         cm_room_get_id (self),
+                                         members);
+  json_object_set_object_member (root, "messages", object);
+
+  task = g_task_new (self, NULL, callback, user_data);
+  /* Create an event only to create event id */
+  event = cm_event_new (CM_M_UNKNOWN);
+  cm_event_create_txn_id (event, cm_client_pop_event_id (self->client));
+
+  uri = g_strdup_printf ("/_matrix/client/r0/sendToDevice/m.room.encrypted/%s",
+                         cm_event_get_txn_id (event));
+  cm_net_send_json_async (cm_client_get_net (self->client),
+                          0, root, uri, SOUP_METHOD_PUT,
+                          NULL, NULL, room_upload_group_keys_cb, task);
+}
+
+static gboolean
+cm_room_upload_group_keys_finish (CmRoom        *self,
+                                  GAsyncResult  *result,
+                                  GError       **error)
+{
+  g_return_val_if_fail (CM_IS_ROOM (self), FALSE);
+  g_return_val_if_fail (G_IS_TASK (result), FALSE);
+  g_return_val_if_fail (!error || !*error, FALSE);
+
+  return g_task_propagate_boolean (G_TASK (result), error);
+}
+
+static void
 cm_room_get_property (GObject    *object,
                       guint       prop_id,
                       GValue     *value,
@@ -1433,7 +1583,7 @@ upload_out_group_key_cb (GObject      *obj,
 
   g_assert (CM_IS_ROOM (self));
 
-  if (cm_client_upload_group_keys_finish (self->client, result, &error))
+  if (cm_room_upload_group_keys_finish (self, result, &error))
     self->keys_uploaded = TRUE;
 
   self->uploading_keys = FALSE;
@@ -1463,7 +1613,7 @@ claim_key_cb (GObject      *obj,
 
   g_assert (CM_IS_ROOM (self));
 
-  root = cm_client_claim_keys_finish (self->client, result, &error);
+  root = cm_room_claim_keys_finish (self, result, &error);
 
   if (root)
     {
@@ -1616,9 +1766,7 @@ room_send_message_from_queue (CmRoom *self)
       if (!self->keys_claimed)
         {
           self->claiming_keys = TRUE;
-          cm_client_claim_keys_async (self->client,
-                                      G_LIST_MODEL (self->joined_members),
-                                      claim_key_cb, self);
+          cm_room_claim_keys_async (self, claim_key_cb, self);
           self->is_sending_message = FALSE;
           return;
         }
@@ -1626,11 +1774,7 @@ room_send_message_from_queue (CmRoom *self)
       if (!self->keys_uploaded)
         {
           self->uploading_keys = TRUE;
-          cm_client_upload_group_keys_async (self->client,
-                                             self->room_id,
-                                             G_LIST_MODEL (self->joined_members),
-                                             upload_out_group_key_cb,
-                                             self);
+          cm_room_upload_group_keys_async (self, upload_out_group_key_cb, self);
           self->is_sending_message = FALSE;
           return;
         }
