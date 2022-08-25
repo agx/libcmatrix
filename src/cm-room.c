@@ -36,6 +36,7 @@ struct _CmRoom
   GHashTable *joined_members_table;
   GListStore *invited_members;
   GHashTable *invited_members_table;
+  GCancellable *enc_cancellable;
   JsonObject *local_json;
   CmClient   *client;
   char       *name;
@@ -257,6 +258,18 @@ cm_room_claim_keys_async (CmRoom              *self,
 
   g_return_if_fail (CM_IS_ROOM (self));
 
+  task = g_task_new (self, self->enc_cancellable, callback, user_data);
+
+  if (self->joined_members_loading || self->querying_keys ||
+      self->claiming_keys || self->uploading_keys)
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED,
+                               "Claiming keys already in progress");
+      return;
+    }
+
+  self->claiming_keys = TRUE;
+
   /* https://matrix.org/docs/spec/client_server/r0.6.1#post-matrix-client-r0-keys-claim */
   object = json_object_new ();
   json_object_set_int_member (object, "timeout", KEY_TIMEOUT);
@@ -280,11 +293,9 @@ cm_room_claim_keys_async (CmRoom              *self,
 
   json_object_set_object_member (object, "one_time_keys", child);
 
-  task = g_task_new (self, NULL, callback, user_data);
-
   cm_net_send_json_async (cm_client_get_net (self->client), 0, object,
                           "/_matrix/client/r0/keys/claim", SOUP_METHOD_POST,
-                          NULL, NULL, keys_claim_cb, task);
+                          NULL, self->enc_cancellable, keys_claim_cb, task);
 }
 
 static JsonObject *
@@ -305,11 +316,16 @@ room_upload_group_keys_cb (GObject      *obj,
                            GAsyncResult *result,
                            gpointer      user_data)
 {
+  CmRoom *self;
   g_autoptr(GTask) task = user_data;
   g_autoptr(JsonObject) object = NULL;
   GError *error = NULL;
 
+  self = g_task_get_source_object (task);
+  g_assert (CM_IS_ROOM (self));
+
   object = g_task_propagate_pointer (G_TASK (result), &error);
+  self->uploading_keys = FALSE;
 
   if (error)
     {
@@ -318,6 +334,8 @@ room_upload_group_keys_cb (GObject      *obj,
     }
   else
     {
+      self->keys_uploaded = TRUE;
+      room_send_message_from_queue (self);
       g_task_return_boolean (task, TRUE);
     }
 }
@@ -335,6 +353,17 @@ cm_room_upload_group_keys_async (CmRoom              *self,
 
   g_return_if_fail (CM_IS_ROOM (self));
 
+  task = g_task_new (self, self->enc_cancellable, callback, user_data);
+
+  if (self->joined_members_loading || self->querying_keys ||
+      self->claiming_keys || self->uploading_keys)
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED,
+                               "Uploading keys already in progres");
+      return;
+    }
+
+  self->uploading_keys = TRUE;
   members = G_LIST_MODEL (self->joined_members);
   root = json_object_new ();
   object = cm_enc_create_out_group_keys (cm_client_get_enc (self->client),
@@ -342,7 +371,6 @@ cm_room_upload_group_keys_async (CmRoom              *self,
                                          members);
   json_object_set_object_member (root, "messages", object);
 
-  task = g_task_new (self, NULL, callback, user_data);
   /* Create an event only to create event id */
   event = cm_event_new (CM_M_UNKNOWN);
   cm_event_create_txn_id (event, cm_client_pop_event_id (self->client));
@@ -351,19 +379,93 @@ cm_room_upload_group_keys_async (CmRoom              *self,
                          cm_event_get_txn_id (event));
   cm_net_send_json_async (cm_client_get_net (self->client),
                           0, root, uri, SOUP_METHOD_PUT,
-                          NULL, NULL, room_upload_group_keys_cb, task);
+                          NULL, self->enc_cancellable,
+                          room_upload_group_keys_cb, task);
 }
 
-static gboolean
-cm_room_upload_group_keys_finish (CmRoom        *self,
-                                  GAsyncResult  *result,
-                                  GError       **error)
+static void
+claim_key_cb (GObject      *obj,
+              GAsyncResult *result,
+              gpointer      user_data)
 {
-  g_return_val_if_fail (CM_IS_ROOM (self), FALSE);
-  g_return_val_if_fail (G_IS_TASK (result), FALSE);
-  g_return_val_if_fail (!error || !*error, FALSE);
+  CmRoom *self = user_data;
+  g_autoptr(GError) error = NULL;
+  g_autoptr(JsonObject) root = NULL;
+  JsonObject *object;
 
-  return g_task_propagate_boolean (G_TASK (result), error);
+  g_assert (CM_IS_ROOM (self));
+
+  root = cm_room_claim_keys_finish (self, result, &error);
+
+  if (root)
+    {
+      g_autoptr(GList) members = NULL;
+
+      object = cm_utils_json_object_get_object (root, "one_time_keys");
+      if (object)
+        members = json_object_get_members (object);
+
+      for (GList *member = members; member; member = member->next)
+        {
+          CmRoomMember *user;
+          JsonObject *keys;
+
+          user = room_find_member (self, G_LIST_MODEL (self->joined_members), member->data, FALSE);
+
+          if (!user)
+            {
+              g_warning ("‘%s’ not found in buddy list", (char *)member->data);
+              continue;
+            }
+
+          keys = cm_utils_json_object_get_object (object, member->data);
+          cm_user_add_one_time_keys (CM_USER (user), keys);
+        }
+    }
+
+  if (root)
+    self->keys_claimed = TRUE;
+  self->claiming_keys = FALSE;
+
+  if (error)
+    {
+      if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+        g_warning ("error claiming keys: %s", error->message);
+      return;
+    }
+  else
+    {
+      /* TODO: Handle error */
+      room_send_message_from_queue (self);
+    }
+}
+
+static void
+ensure_encryption_keys (CmRoom *self)
+{
+  g_return_if_fail (self->encryption);
+
+  if (self->enc_cancellable &&
+      g_cancellable_is_cancelled (self->enc_cancellable))
+    g_clear_object (&self->enc_cancellable);
+
+  if (!self->enc_cancellable)
+    self->enc_cancellable = g_cancellable_new ();
+
+  if (self->joined_members_loading || self->querying_keys ||
+      self->claiming_keys || self->uploading_keys)
+    return;
+
+  if (!self->joined_members_loaded)
+    cm_room_load_joined_members_async (self, self->enc_cancellable, NULL, NULL);
+  else if (!self->keys_queried)
+    cm_room_query_keys_async (self, self->enc_cancellable, NULL, NULL);
+  else if (!self->keys_claimed)
+    cm_room_claim_keys_async (self, claim_key_cb, self);
+  else if (!self->keys_uploaded)
+    cm_room_upload_group_keys_async (self, NULL, self);
+  else
+    g_return_if_reached ();
 }
 
 static void
@@ -417,6 +519,10 @@ static void
 cm_room_finalize (GObject *object)
 {
   CmRoom *self = (CmRoom *)object;
+
+  if (self->enc_cancellable)
+    g_cancellable_cancel (self->enc_cancellable);
+  g_clear_object (&self->enc_cancellable);
 
   g_hash_table_unref (self->joined_members_table);
   g_clear_object (&self->joined_members);
@@ -1574,91 +1680,6 @@ send_cb (GObject      *obj,
 }
 
 static void
-upload_out_group_key_cb (GObject      *obj,
-                         GAsyncResult *result,
-                         gpointer      user_data)
-{
-  CmRoom *self = user_data;
-  g_autoptr(GError) error = NULL;
-
-  g_assert (CM_IS_ROOM (self));
-
-  if (cm_room_upload_group_keys_finish (self, result, &error))
-    self->keys_uploaded = TRUE;
-
-  self->uploading_keys = FALSE;
-
-  if (error)
-    {
-      if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
-        g_warning ("error uploading group keys: %s", error->message);
-      return;
-    }
-  else
-    {
-      /* TODO: Handle error */
-      room_send_message_from_queue (self);
-    }
-}
-
-static void
-claim_key_cb (GObject      *obj,
-              GAsyncResult *result,
-              gpointer      user_data)
-{
-  CmRoom *self = user_data;
-  g_autoptr(GError) error = NULL;
-  g_autoptr(JsonObject) root = NULL;
-  JsonObject *object;
-
-  g_assert (CM_IS_ROOM (self));
-
-  root = cm_room_claim_keys_finish (self, result, &error);
-
-  if (root)
-    {
-      g_autoptr(GList) members = NULL;
-
-      object = cm_utils_json_object_get_object (root, "one_time_keys");
-      if (object)
-        members = json_object_get_members (object);
-
-      for (GList *member = members; member; member = member->next)
-        {
-          CmRoomMember *user;
-          JsonObject *keys;
-
-          user = room_find_member (self, G_LIST_MODEL (self->joined_members), member->data, FALSE);
-
-          if (!user)
-            {
-              g_warning ("‘%s’ not found in buddy list", (char *)member->data);
-              continue;
-            }
-
-          keys = cm_utils_json_object_get_object (object, member->data);
-          cm_user_add_one_time_keys (CM_USER (user), keys);
-        }
-    }
-
-  if (root)
-    self->keys_claimed = TRUE;
-  self->claiming_keys = FALSE;
-
-  if (error)
-    {
-      if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
-        g_warning ("error claiming keys: %s", error->message);
-      return;
-    }
-  else
-    {
-      /* TODO: Handle error */
-      room_send_message_from_queue (self);
-    }
-}
-
-static void
 room_send_file_cb (GObject      *object,
                    GAsyncResult *result,
                    gpointer      user_data)
@@ -1733,53 +1754,13 @@ room_send_message_from_queue (CmRoom *self)
   if (self->is_sending_message || self->retry_timeout_id)
     return;
 
-  self->is_sending_message = TRUE;
-
-  /* If encrypted ... */
-  if (self->encryption)
+  if (self->encryption && !self->keys_uploaded)
     {
-      if (self->joined_members_loading || self->querying_keys ||
-          self->claiming_keys || self->uploading_keys)
-        {
-          self->is_sending_message = FALSE;
-          return;
-        }
-
-      /* load the list of joined members  */
-      if (!self->joined_members_loaded)
-        {
-          g_debug ("getting joined members");
-          cm_room_load_joined_members_async (self, g_task_get_cancellable (message_task), NULL, NULL);
-          self->is_sending_message = FALSE;
-          return;
-        }
-
-      /* and then query their keys */
-      if (!self->keys_queried)
-        {
-          cm_room_query_keys_async (self, g_task_get_cancellable (message_task), NULL, NULL);
-          self->is_sending_message = FALSE;
-          return;
-        }
-
-      /* and then claim them */
-      if (!self->keys_claimed)
-        {
-          self->claiming_keys = TRUE;
-          cm_room_claim_keys_async (self, claim_key_cb, self);
-          self->is_sending_message = FALSE;
-          return;
-        }
-
-      if (!self->keys_uploaded)
-        {
-          self->uploading_keys = TRUE;
-          cm_room_upload_group_keys_async (self, upload_out_group_key_cb, self);
-          self->is_sending_message = FALSE;
-          return;
-        }
+      ensure_encryption_keys (self);
+      return;
     }
 
+  self->is_sending_message = TRUE;
   message_task = g_queue_pop_head (self->message_queue);
   message = g_task_get_task_data (message_task);
   g_assert (CM_IS_ROOM_MESSAGE_EVENT (message));
@@ -2642,7 +2623,8 @@ cm_room_query_keys_async (CmRoom              *self,
 
   task = g_task_new (self, cancellable, callback, user_data);
 
-  if (self->querying_keys)
+  if (self->joined_members_loading || self->querying_keys ||
+      self->claiming_keys || self->uploading_keys)
     {
       g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED,
                                "Querying keys in progres");
