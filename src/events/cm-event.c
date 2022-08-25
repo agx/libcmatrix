@@ -36,6 +36,13 @@ typedef struct
 
 G_DEFINE_TYPE_WITH_PRIVATE (CmEvent, cm_event, G_TYPE_OBJECT)
 
+enum {
+  UPDATED,
+  N_SIGNALS
+};
+
+static guint signals[N_SIGNALS];
+
 #define event_type_string(_event_type) (cm_utils_get_event_type_str(_event_type))
 
 static char *
@@ -130,6 +137,13 @@ cm_event_class_init (CmEventClass *klass)
 
   event_class->generate_json = cm_event_real_generate_json;
   event_class->get_api_url = cm_event_real_get_api_url;
+
+  signals [UPDATED] =
+    g_signal_new ("updated",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_LAST,
+                  0, NULL, NULL, NULL,
+                  G_TYPE_NONE, 0);
 }
 
 static void
@@ -316,7 +330,11 @@ cm_event_set_state (CmEvent      *self,
 
   g_return_if_fail (state <= CM_EVENT_STATE_SENDING_FAILED);
 
+  if (priv->event_state == state)
+    return;
+
   priv->event_state = state;
+  g_signal_emit (self, signals[UPDATED], 0);
 }
 
 void
