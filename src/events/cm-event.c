@@ -143,8 +143,9 @@ cm_event_new (CmEventType type)
   CmEventPrivate *priv;
   CmEvent *self;
 
-  g_return_val_if_fail (type >= CM_M_KEY_VERIFICATION_ACCEPT &&
-                        type <= CM_M_KEY_VERIFICATION_START, NULL);
+  g_return_val_if_fail (type == CM_M_UNKNOWN ||
+                        (type >= CM_M_KEY_VERIFICATION_ACCEPT &&
+                         type <= CM_M_KEY_VERIFICATION_START), NULL);
 
   self = g_object_new (CM_TYPE_EVENT, NULL);
   priv = cm_event_get_instance_private (self);
