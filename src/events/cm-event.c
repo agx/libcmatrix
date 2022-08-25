@@ -309,6 +309,17 @@ cm_event_get_state (CmEvent *self)
 }
 
 void
+cm_event_set_state (CmEvent      *self,
+                    CmEventState  state)
+{
+  CmEventPrivate *priv = cm_event_get_instance_private (self);
+
+  g_return_if_fail (state <= CM_EVENT_STATE_SENDING_FAILED);
+
+  priv->event_state = state;
+}
+
+void
 cm_event_set_json (CmEvent    *self,
                    JsonObject *root,
                    JsonObject *encrypted)
