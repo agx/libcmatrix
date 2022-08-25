@@ -97,13 +97,7 @@ enum {
   N_PROPS
 };
 
-enum {
-  EVENT_RECEIVED,
-  N_SIGNALS
-};
-
 static GParamSpec *properties[N_PROPS];
-static guint signals[N_SIGNALS];
 
 /* static gboolean room_resend_message          (gpointer user_data); */
 static void     room_send_message_from_queue (CmRoom *self);
@@ -583,14 +577,6 @@ cm_room_class_init (CmRoomClass *klass)
                          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
   g_object_class_install_properties (object_class, N_PROPS, properties);
-
-  signals [EVENT_RECEIVED] =
-    g_signal_new ("event-received",
-                  G_TYPE_FROM_CLASS (klass),
-                  G_SIGNAL_RUN_LAST,
-                  0, NULL, NULL, NULL,
-                  G_TYPE_NONE, 1,
-                  G_TYPE_STRING);
 }
 
 static void
