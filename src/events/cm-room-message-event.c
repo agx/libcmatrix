@@ -18,6 +18,8 @@
 #include "cm-enums.h"
 #include "cm-client-private.h"
 #include "cm-room-private.h"
+#include "cm-input-stream-private.h"
+#include "cm-event-private.h"
 #include "cm-room-message-event-private.h"
 
 struct _CmRoomMessageEvent
@@ -37,6 +39,117 @@ struct _CmRoomMessageEvent
 
 G_DEFINE_TYPE (CmRoomMessageEvent, cm_room_message_event, CM_TYPE_ROOM_EVENT)
 
+static JsonObject *
+room_message_generate_json (CmRoomMessageEvent *self,
+                            CmRoom             *room)
+{
+  g_autofree char *uri = NULL;
+  const char *body, *room_id;
+  CmClient *client;
+  JsonObject *root;
+  GFile *file;
+
+  g_assert (CM_IS_ROOM_MESSAGE_EVENT (self));
+  g_assert (CM_IS_ROOM (room));
+
+  body = cm_room_message_event_get_body (self);
+  file = cm_room_message_event_get_file (self);
+  client = cm_room_get_client (room);
+  room_id = cm_room_get_id (room);
+
+  root = json_object_new ();
+  if (file)
+    {
+      g_autofree char *name = NULL;
+
+      name = g_file_get_basename (file);
+      json_object_set_string_member (root, "msgtype", "m.file");
+      json_object_set_string_member (root, "body", name);
+      json_object_set_string_member (root, "filename", name);
+      if (!cm_room_is_encrypted (room))
+        {
+          const char *mxc_uri;
+
+          mxc_uri = g_object_get_data (G_OBJECT (file), "uri");
+          if (mxc_uri)
+            json_object_set_string_member (root, "url", mxc_uri);
+          else
+            g_warn_if_reached ();
+        }
+    }
+  else
+    {
+      json_object_set_string_member (root, "msgtype", "m.text");
+      json_object_set_string_member (root, "body", body);
+    }
+
+  if (cm_room_is_encrypted (room))
+    {
+      g_autofree char *text = NULL;
+      JsonObject *object;
+
+      object = json_object_new ();
+      json_object_set_string_member (object, "type", "m.room.message");
+      json_object_set_string_member (object, "room_id", room_id);
+      json_object_set_object_member (object, "content", root);
+
+      if (file)
+        {
+          JsonObject *file_json;
+          CmInputStream *stream;
+
+          stream = g_object_get_data (G_OBJECT (file), "stream");
+          file_json = cm_input_stream_get_file_json (stream);
+          json_object_set_object_member (root, "file", file_json);
+        }
+
+      text = cm_utils_json_object_to_string (object, FALSE);
+      json_object_unref (object);
+      object = cm_enc_encrypt_for_chat (cm_client_get_enc (client),
+                                        room_id, text);
+      return object;
+    }
+  else
+    {
+      return root;
+    }
+}
+
+static gpointer
+cm_room_message_event_generate_json (CmEvent  *event,
+                                     gpointer  room)
+{
+  CmRoomMessageEvent *self = (CmRoomMessageEvent *)event;
+
+  g_assert (CM_IS_ROOM_MESSAGE_EVENT (self));
+  g_return_val_if_fail (CM_IS_ROOM (room), NULL);
+
+  return room_message_generate_json (self, room);
+}
+
+static char *
+cm_room_message_event_get_api_url (CmEvent  *event,
+                                   gpointer  room)
+{
+  CmRoomMessageEvent *self = (CmRoomMessageEvent *)event;
+  char *uri;
+
+  g_assert (CM_IS_ROOM_MESSAGE_EVENT (self));
+  g_return_val_if_fail (CM_IS_ROOM (room), NULL);
+  g_return_val_if_fail (cm_event_get_txn_id (event), NULL);
+
+  if (cm_room_is_encrypted (room))
+    uri = g_strdup_printf ("/_matrix/client/r0/rooms/%s/send/m.room.encrypted/%s",
+                           cm_room_get_id (room),
+                           cm_event_get_txn_id (event));
+  else
+    uri = g_strdup_printf ("/_matrix/client/r0/rooms/%s/send/m.room.message/%s",
+                           cm_room_get_id (room),
+                           cm_event_get_txn_id (event));
+
+  return uri;
+}
+
 static void
 cm_room_message_event_finalize (GObject *object)
 {
@@ -53,8 +166,12 @@ static void
 cm_room_message_event_class_init (CmRoomMessageEventClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
+  CmEventClass *event_class = CM_EVENT_CLASS (klass);
 
   object_class->finalize = cm_room_message_event_finalize;
+
+  event_class->generate_json = cm_room_message_event_generate_json;
+  event_class->get_api_url = cm_room_message_event_get_api_url;
 }
 
 static void
