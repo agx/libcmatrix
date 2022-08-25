@@ -172,6 +172,8 @@ typedef enum
   CM_EVENT_STATE_UNKNOWN,
   CM_EVENT_STATE_DRAFT,
   CM_EVENT_STATE_RECEIVED,
+  /* Messages that are queued to be sent */
+  CM_EVENT_STATE_WAITING,
   /* When saving to db consider this as failed until sent? */
   CM_EVENT_STATE_SENDING,
   CM_EVENT_STATE_SENT,
