@@ -45,21 +45,6 @@ void        cm_client_set_db                      (CmClient            *self,
 const char *cm_client_get_filter_id               (CmClient            *self);
 void        cm_client_save                        (CmClient            *self);
 const char *cm_client_get_next_batch              (CmClient            *self);
-void        cm_client_claim_keys_async            (CmClient            *self,
-                                                   GListModel          *member_list,
-                                                   GAsyncReadyCallback  callback,
-                                                   gpointer             user_data);
-JsonObject *cm_client_claim_keys_finish           (CmClient            *self,
-                                                   GAsyncResult        *result,
-                                                   GError             **error);
-void        cm_client_upload_group_keys_async     (CmClient            *self,
-                                                   const char          *room_id,
-                                                   GListModel          *member_list,
-                                                   GAsyncReadyCallback  callback,
-                                                   gpointer             user_data);
-gboolean    cm_client_upload_group_keys_finish    (CmClient            *self,
-                                                   GAsyncResult        *result,
-                                                   GError             **error);
 void          cm_client_get_file_async                (CmClient              *self,
                                                        const char            *uri,
                                                        GCancellable          *cancellable,
