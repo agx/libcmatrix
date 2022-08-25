@@ -1656,13 +1656,17 @@ send_cb (GObject      *obj,
   g_autoptr(JsonObject) object = NULL;
   GError *error = NULL;
   const char *event_id = NULL;
+  CmEvent *event;
 
   g_assert (G_IS_TASK (message_task));
 
   self = g_task_get_source_object (message_task);
+  event = g_task_get_task_data (message_task);
   object = g_task_propagate_pointer (G_TASK (result), &error);
 
   event_id = cm_utils_json_object_get_string (object, "event_id");
+  cm_event_set_id (event, event_id);
+
   g_debug ("Sending message, has-error: %d. event-id: %s",
            !!error, event_id);
 
@@ -1670,11 +1674,13 @@ send_cb (GObject      *obj,
 
   if (error)
     {
+      cm_event_set_state (event, CM_EVENT_STATE_SENDING_FAILED);
       g_debug ("Error sending message: %s", error->message);
       g_task_return_error (message_task, error);
     }
   else
     {
+      cm_event_set_state (event, CM_EVENT_STATE_SENT);
       g_task_return_pointer (message_task, g_strdup (event_id), g_free);
     }
 }
@@ -1787,6 +1793,7 @@ room_send_message_from_queue (CmRoom *self)
 
   uri = cm_event_get_api_url (CM_EVENT (message), self);
 
+  cm_event_set_state (CM_EVENT (message), CM_EVENT_STATE_SENDING);
   cm_net_send_json_async (cm_client_get_net (self->client), 0,
                           cm_event_generate_json (CM_EVENT (message), self),
                           uri, SOUP_METHOD_PUT, NULL, g_task_get_cancellable (message_task),
@@ -1839,6 +1846,7 @@ cm_room_send_text_async (CmRoom              *self,
 
   task = g_task_new (self, cancellable, callback, user_data);
   message = cm_room_message_event_new (CM_CONTENT_TYPE_TEXT);
+  cm_event_set_state (CM_EVENT (message), CM_EVENT_STATE_WAITING);
   cm_room_message_event_set_body (message, text);
   cm_event_create_txn_id (CM_EVENT (message),
                           cm_client_pop_event_id (self->client));
