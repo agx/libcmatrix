@@ -132,7 +132,6 @@ db_event_state_to_int (CmEventState state)
   return 0;
 }
 
-#if 0
 static CmEventState
 db_event_state_from_int (int state)
 {
@@ -142,15 +141,17 @@ db_event_state_from_int (int state)
   if (state == 1)
     return CM_EVENT_STATE_DRAFT;
 
-  if (state == 2)
-    return CM_EVENT_STATE_RECEIVED;
-
-  if (state == 3)
+  if (state == 2 || state == 3 || state == 4)
     return CM_EVENT_STATE_SENDING_FAILED;
 
-  return CM_EVENT_STATE_SENT;
+  if (state == 5)
+    return CM_EVENT_STATE_SENT;
+
+  if (state == 6)
+    return CM_EVENT_STATE_RECEIVED;
+
+  g_return_val_if_reached (CM_EVENT_STATE_UNKNOWN);
 }
-#endif
 
 static GPtrArray *
 db_get_past_room_events (CmDb   *self,
@@ -168,7 +169,7 @@ db_get_past_room_events (CmDb   *self,
     skip = TRUE;
 
   sqlite3_prepare_v2 (self->db,
-                      "SELECT id,room_events.json_data FROM room_events "
+                      "SELECT id,event_state,room_events.json_data FROM room_events "
                       "WHERE room_id=? AND sorted_id <= ? "
                       /* Limit to messages until chatty has better events support */
                       "AND (event_type=? OR event_type=?)"
@@ -186,6 +187,7 @@ db_get_past_room_events (CmDb   *self,
       JsonObject *encrypted, *root;
       g_autoptr(JsonObject) json = NULL;
       CmRoomEvent *cm_event;
+      CmEventState state;
 
       if (skip)
         {
@@ -193,7 +195,7 @@ db_get_past_room_events (CmDb   *self,
           continue;
         }
 
-      json = cm_utils_string_to_json_object ((char *)sqlite3_column_text (stmt, 1));
+      json = cm_utils_string_to_json_object ((char *)sqlite3_column_text (stmt, 2));
 
       if (!json)
         continue;
@@ -201,6 +203,8 @@ db_get_past_room_events (CmDb   *self,
       root = cm_utils_json_object_get_object (json, "json");
       encrypted = cm_utils_json_object_get_object (json, "encrypted");
       cm_event = cm_room_event_new_from_json (cm_room, root, encrypted);
+      state = db_event_state_from_int (sqlite3_column_int (stmt, 1));
+      cm_event_set_state (CM_EVENT (cm_event), state);
 
       if (!cm_event)
         continue;
