@@ -328,8 +328,6 @@ cm_event_set_state (CmEvent      *self,
 {
   CmEventPrivate *priv = cm_event_get_instance_private (self);
 
-  g_return_if_fail (state <= CM_EVENT_STATE_SENT);
-
   if (priv->event_state == state)
     return;
 
@@ -515,7 +513,6 @@ cm_event_sender_is_self (CmEvent *self)
   CmEventPrivate *priv = cm_event_get_instance_private (self);
 
   g_return_if_fail (CM_IS_EVENT (self));
-  g_return_if_fail (priv->event_state == CM_EVENT_STATE_UNKNOWN);
 
   priv->event_state = CM_EVENT_STATE_SENT;
 }
