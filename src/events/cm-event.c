@@ -459,6 +459,9 @@ cm_event_get_sender_id (CmEvent *self)
 
   g_return_val_if_fail (CM_IS_EVENT (self), NULL);
 
+  if (priv->sender)
+    return cm_user_get_id (priv->sender);
+
   return priv->sender_id;
 }
 
@@ -480,6 +483,11 @@ cm_event_set_sender (CmEvent *self,
 
   g_return_if_fail (CM_IS_EVENT (self));
   g_return_if_fail (!priv->sender);
+
+  if (priv->sender_id &&
+      g_strcmp0 (priv->sender_id, cm_user_get_id (sender)) != 0)
+    g_critical ("user name '%s' and '%s' doesn't match",
+                priv->sender_id, cm_user_get_id (sender));
 
   priv->sender = g_object_ref (sender);
 }
