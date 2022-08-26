@@ -348,7 +348,7 @@ cm_db_create_schema (CmDb  *self,
     "room_id INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE, "
     "sender_id INTEGER NOT NULL REFERENCES room_members(id), "
     "event_type INTEGER NOT NULL, "
-    "event_uid TEXT NOT NULL, "
+    "event_uid TEXT, "
     "txnid TEXT, "
     /* If set to 0, this event is a reply to some other, which is not yet in db */
     "replaces_event_id INTEGER REFERENCES room_events(id), "
@@ -642,7 +642,7 @@ cm_db_migrate_to_v2 (CmDb  *self,
                          "room_id INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE, "
                          "sender_id INTEGER NOT NULL REFERENCES room_members(id), "
                          "event_type INTEGER NOT NULL, "
-                         "event_uid TEXT NOT NULL, "
+                         "event_uid TEXT, "
                          "txnid TEXT, "
                          /* If set to 0, this event is a reply to some other, which is not yet in db */
                          "replaces_event_id INTEGER REFERENCES room_events(id), "

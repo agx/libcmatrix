@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS room_events (
   room_id INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
   sender_id INTEGER NOT NULL REFERENCES room_members(id),
   event_type INTEGER NOT NULL,
-  event_uid TEXT NOT NULL,
+  event_uid TEXT,
   txnid TEXT,
   replaces_event_id INTEGER REFERENCES room_events(id),
   reply_to_id INTEGER REFERENCES room_events(id),
