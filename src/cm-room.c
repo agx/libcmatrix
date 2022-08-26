@@ -146,6 +146,42 @@ room_find_member (CmRoom     *self,
   return NULL;
 }
 
+static void
+room_remove_event_with_txn_id (CmRoom  *self,
+                               CmEvent *event)
+{
+  GListModel *events;
+  guint n_items;
+
+
+  g_assert (CM_IS_ROOM (self));
+  g_assert (CM_IS_EVENT (event));
+
+  if (!cm_event_get_txn_id (event))
+    return;
+
+  events = G_LIST_MODEL (self->events_list);
+  n_items = g_list_model_get_n_items (events);
+
+  /* i and n_items are unsigned */
+  for (guint i = n_items - 1; i + 1 > 0; i--)
+    {
+      g_autoptr(CmEvent) item = NULL;
+
+      item = g_list_model_get_item (events, i);
+
+      if (!cm_event_get_txn_id (item))
+        continue;
+
+      if (g_strcmp0 (cm_event_get_txn_id (event),
+                     cm_event_get_txn_id (item)) == 0)
+        {
+          cm_utils_remove_list_item (self->events_list, item);
+          break;
+        }
+    }
+}
+
 static char *
 cm_room_generate_name (CmRoom *self)
 {
@@ -231,6 +267,21 @@ keys_claim_cb (GObject      *obj,
     {
       g_task_return_pointer (task, object, (GDestroyNotify)json_object_unref);
     }
+}
+
+static void
+room_add_event_to_db (CmRoom  *self,
+                      CmEvent *event)
+{
+  g_autoptr(GPtrArray) events = NULL;
+
+  g_assert (CM_IS_ROOM (self));
+  g_assert (CM_IS_EVENT (event));
+
+  events = g_ptr_array_new_with_free_func (g_object_unref);
+  g_ptr_array_add (events, g_object_ref (event));
+  cm_db_add_room_events (cm_client_get_db (self->client),
+                         self, events, FALSE);
 }
 
 /*
@@ -1134,7 +1185,13 @@ cm_room_parse_events (CmRoom     *self,
         cm_event_sender_is_self (CM_EVENT (event));
 
       if (!state_events)
-        g_ptr_array_add (events, g_object_ref (event));
+        {
+          if (CM_IS_ROOM_MESSAGE_EVENT (event) &&
+              cm_event_get_txn_id (CM_EVENT (event)))
+            room_remove_event_with_txn_id (self, CM_EVENT (event));
+
+          g_ptr_array_add (events, g_object_ref (event));
+        }
 
       type = cm_event_get_m_type (CM_EVENT (event));
 
@@ -1645,8 +1702,6 @@ send_cb (GObject      *obj,
   object = g_task_propagate_pointer (G_TASK (result), &error);
 
   event_id = cm_utils_json_object_get_string (object, "event_id");
-  cm_event_set_id (event, event_id);
-
   g_debug ("Sending message, has-error: %d. event-id: %s",
            !!error, event_id);
 
@@ -1661,6 +1716,14 @@ send_cb (GObject      *obj,
   else
     {
       cm_event_set_state (event, CM_EVENT_STATE_SENT);
+      room_add_event_to_db (self, event);
+
+      /* Set event after saving to db so that event id is not stored in db
+       * and we replace id less events when we sync, so that the event is
+       * placed in the right order.
+       */
+      cm_event_set_id (event, event_id);
+
       g_task_return_pointer (message_task, g_strdup (event_id), g_free);
     }
 }
@@ -1820,6 +1883,7 @@ cm_room_send_text_async (CmRoom              *self,
                          gpointer             user_data)
 {
   CmRoomMessageEvent *message;
+  CmRoomMember *member;
   GTask *task;
 
   g_return_val_if_fail (CM_IS_ROOM (self), NULL);
@@ -1831,6 +1895,13 @@ cm_room_send_text_async (CmRoom              *self,
   cm_event_create_txn_id (CM_EVENT (message),
                           cm_client_pop_event_id (self->client));
   g_task_set_task_data (task, message, g_object_unref);
+
+  member = room_find_member (self, G_LIST_MODEL (self->joined_members),
+                             cm_client_get_user_id (self->client), TRUE);
+  cm_event_set_sender (CM_EVENT (message), CM_USER (member));
+
+  g_list_store_append (self->events_list, message);
+  room_add_event_to_db (self, CM_EVENT (message));
 
   g_queue_push_tail (self->message_queue, task);
 
@@ -1875,6 +1946,7 @@ cm_room_send_file_async (CmRoom                *self,
                          gpointer               user_data)
 {
   CmRoomMessageEvent *message;
+  CmRoomMember *member;
   GTask *task;
 
   g_return_val_if_fail (CM_IS_ROOM (self), NULL);
@@ -1885,10 +1957,17 @@ cm_room_send_file_async (CmRoom                *self,
   g_object_set_data (G_OBJECT (task), "progress-cb-data", progress_user_data);
 
   message = cm_room_message_event_new (CM_CONTENT_TYPE_FILE);
+  cm_event_set_state (CM_EVENT (message), CM_EVENT_STATE_WAITING);
   cm_room_message_event_set_file (message, body, file);
   cm_event_create_txn_id (CM_EVENT (message),
                           cm_client_pop_event_id (self->client));
   g_task_set_task_data (task, message, g_object_unref);
+
+  member = room_find_member (self, G_LIST_MODEL (self->joined_members),
+                             cm_client_get_user_id (self->client), TRUE);
+  cm_event_set_sender (CM_EVENT (message), CM_USER (member));
+  g_list_store_append (self->events_list, message);
+
   g_queue_push_tail (self->message_queue, task);
 
   room_send_message_from_queue (self);
