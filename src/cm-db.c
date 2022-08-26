@@ -112,13 +112,17 @@ db_event_state_to_int (CmEventState state)
     case CM_EVENT_STATE_RECEIVED:
       return 2;
 
-      /* When saving to db consider sending as failed */
-    case CM_EVENT_STATE_SENDING:
-    case CM_EVENT_STATE_SENDING_FAILED:
+    case CM_EVENT_STATE_WAITING:
       return 3;
 
-    case CM_EVENT_STATE_SENT:
+    case CM_EVENT_STATE_SENDING:
       return 4;
+
+    case CM_EVENT_STATE_SENDING_FAILED:
+      return 5;
+
+    case CM_EVENT_STATE_SENT:
+      return 6;
 
     case CM_EVENT_STATE_UNKNOWN:
     default:
