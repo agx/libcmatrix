@@ -328,7 +328,7 @@ cm_event_set_state (CmEvent      *self,
 {
   CmEventPrivate *priv = cm_event_get_instance_private (self);
 
-  g_return_if_fail (state <= CM_EVENT_STATE_SENDING_FAILED);
+  g_return_if_fail (state <= CM_EVENT_STATE_SENT);
 
   if (priv->event_state == state)
     return;
