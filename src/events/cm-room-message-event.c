@@ -415,6 +415,9 @@ cm_room_message_event_get_file_async (CmRoomMessageEvent    *self,
       return;
     }
 
+  if (self->file && !self->mxc_uri && !self->file_istream)
+    self->file_istream = (gpointer)g_file_read (self->file, NULL, NULL);
+
   if (self->file_istream)
     {
       g_task_return_pointer (task, g_object_ref (self->file_istream), g_object_unref);
