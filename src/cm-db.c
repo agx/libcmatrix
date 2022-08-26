@@ -1115,6 +1115,7 @@ db_get_room_member_id (CmDb       *self,
                        int         account_id,
                        int         room_id,
                        const char *member,
+                       int        *out_user_id,
                        gboolean    insert_if_missing)
 {
   sqlite3_stmt *stmt;
@@ -1145,6 +1146,9 @@ db_get_room_member_id (CmDb       *self,
   user_id = matrix_db_get_user_id (self, account_id, member, insert_if_missing);
   if (!user_id)
     return 0;
+
+  if (out_user_id)
+    *out_user_id = user_id;
 
   sqlite3_prepare_v2 (self->db,
                       "INSERT INTO room_members(room_id,user_id) "
@@ -1969,7 +1973,7 @@ db_add_room_events (CmDb  *self,
       encrypted = cm_event_get_encrypted_json (event);
       sender = cm_event_get_sender_id (event);
 
-      member_id = db_get_room_member_id (self, account_id, room_id, sender, TRUE);
+      member_id = db_get_room_member_id (self, account_id, room_id, sender, NULL, TRUE);
 
       /* Delete existing ones as we add them below so that the sort order is right */
       if (cm_event_get_txn_id (event))
