@@ -2607,6 +2607,7 @@ keys_query_cb (GObject      *obj,
     }
   else
     {
+      g_autoptr(GPtrArray) room_members = NULL;
       g_autoptr(GList) members = NULL;
       JsonObject *keys;
 
@@ -2630,8 +2631,13 @@ keys_query_cb (GObject      *obj,
           key = cm_utils_json_object_get_object (keys, member->data);
           cm_user_set_devices (CM_USER (cm_member), key);
           self->keys_queried = TRUE;
+
+          if (!room_members)
+            room_members = g_ptr_array_new_full (100, g_object_unref);
+          g_ptr_array_add (room_members, g_object_ref (cm_member));
         }
 
+      cm_db_add_room_members (cm_client_get_db (self->client), self, room_members);
       g_task_return_boolean (task, TRUE);
 
       /* TODO: Handle errors */
