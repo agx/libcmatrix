@@ -109,19 +109,19 @@ db_event_state_to_int (CmEventState state)
     case CM_EVENT_STATE_DRAFT:
       return 1;
 
-    case CM_EVENT_STATE_RECEIVED:
+    case CM_EVENT_STATE_WAITING:
       return 2;
 
-    case CM_EVENT_STATE_WAITING:
+    case CM_EVENT_STATE_SENDING:
       return 3;
 
-    case CM_EVENT_STATE_SENDING:
+    case CM_EVENT_STATE_SENDING_FAILED:
       return 4;
 
-    case CM_EVENT_STATE_SENDING_FAILED:
+    case CM_EVENT_STATE_SENT:
       return 5;
 
-    case CM_EVENT_STATE_SENT:
+    case CM_EVENT_STATE_RECEIVED:
       return 6;
 
     case CM_EVENT_STATE_UNKNOWN:
