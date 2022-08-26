@@ -17,6 +17,7 @@
 #include "cm-client-private.h"
 #include "cm-device.h"
 #include "cm-device-private.h"
+#include "cm-matrix-private.h"
 #include "cm-user-private.h"
 #include "cm-user.h"
 
@@ -27,6 +28,10 @@ typedef struct
   char *user_id;
   char *display_name;
   char *avatar_url;
+  char *avatar_file_path;
+
+  GFile        *avatar_file;
+  JsonObject   *generated_json;
 
   GListStore   *devices;
   GHashTable   *devices_table;
@@ -53,10 +58,14 @@ cm_user_finalize (GObject *object)
   g_free (priv->user_id);
   g_free (priv->display_name);
   g_free (priv->avatar_url);
+  g_free (priv->avatar_file_path);
 
   g_list_store_remove_all (priv->devices);
   g_clear_object (&priv->devices);
   g_clear_pointer (&priv->devices_table, g_hash_table_unref);
+
+  g_clear_object (&priv->avatar_file);
+  g_clear_pointer (&priv->generated_json, json_object_unref);
 
   G_OBJECT_CLASS (cm_user_parent_class)->finalize (object);
 }
@@ -77,6 +86,40 @@ cm_user_init (CmUser *self)
   priv->devices = g_list_store_new (CM_TYPE_DEVICE);
   priv->devices_table = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                g_free, g_object_unref);
+}
+
+JsonObject *
+cm_user_generate_json (CmUser *self)
+{
+  CmUserPrivate *priv = cm_user_get_instance_private (self);
+
+  g_return_val_if_fail (CM_IS_USER (self), NULL);
+
+  if (!priv->generated_json &&
+      (priv->display_name || priv->avatar_url || priv->avatar_file))
+    {
+      g_autofree char *avatar_path = NULL;
+      JsonObject *local, *child;
+      GFile *parent;
+
+      parent = g_file_new_for_path (cm_matrix_get_data_dir ());
+      local = json_object_new ();
+      json_object_set_object_member (local, "local", json_object_new ());
+      priv->generated_json = local;
+
+      if (priv->avatar_file)
+        avatar_path = g_file_get_relative_path (parent, priv->avatar_file);
+
+      child = json_object_get_object_member (local, "local");
+      if (priv->display_name)
+        json_object_set_string_member (child, "display_name", priv->display_name);
+      if (priv->avatar_url)
+        json_object_set_string_member (child, "avatar_url", priv->avatar_url);
+      if (avatar_path)
+        json_object_set_string_member (child, "avatar_path", avatar_path);
+    }
+
+  return priv->generated_json;
 }
 
 void
