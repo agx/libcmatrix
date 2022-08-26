@@ -108,6 +108,7 @@ CREATE TABLE session(
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS room_event_idx ON room_events (room_id, event_uid);
+CREATE UNIQUE INDEX IF NOT EXISTS room_event_txn_idx ON room_events (room_id, txnid);
 CREATE UNIQUE INDEX IF NOT EXISTS user_device_idx ON user_devices (user_id, device);
 CREATE INDEX IF NOT EXISTS room_event_state_idx ON room_events (state_key);
 CREATE UNIQUE INDEX IF NOT EXISTS room_event_cache_idx ON room_events_cache (room_id, event_uid);
