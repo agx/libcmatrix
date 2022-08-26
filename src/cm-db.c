@@ -2015,9 +2015,6 @@ db_add_room_events (CmDb  *self,
       matrix_bind_text (stmt, 5, cm_event_get_id (event), "binding when adding event");
       if (cm_event_get_txn_id (event))
         matrix_bind_text (stmt, 6, cm_event_get_txn_id (event), "binding when adding event");
-      /* We check if we have a replaces event id instead of replaces_id, as
-       * replaces_id can be 0 if the event is not yet in db, which also means
-       * that if the id is not NULL and 0, the event replaces some other event */
       if (replaces_id)
         matrix_bind_int (stmt, 7, replaces_id, "binding when adding event");
       if (replaces_cache_id)
