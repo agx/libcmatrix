@@ -129,6 +129,9 @@ char          *cm_db_lookup_session                (CmDb                *self,
                                                     const char          *session_id,
                                                     const char          *sender_key,
                                                     CmSessionType        type);
+void           cm_db_add_room_members              (CmDb                *self,
+                                                    CmRoom              *cm_room,
+                                                    GPtrArray           *members);
 void           cm_db_add_room_events               (CmDb                *self,
                                                     CmRoom              *room,
                                                     GPtrArray           *events,

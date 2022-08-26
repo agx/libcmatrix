@@ -20,6 +20,8 @@
 #include "events/cm-event-private.h"
 #include "events/cm-room-event-private.h"
 #include "events/cm-room-message-event-private.h"
+#include "users/cm-user-private.h"
+#include "cm-device-private.h"
 #include "cm-enc-private.h"
 #include "cm-client-private.h"
 #include "cm-room-private.h"
@@ -1125,16 +1127,20 @@ db_get_room_member_id (CmDb       *self,
     return 0;
 
   sqlite3_prepare_v2 (self->db,
-                      "SELECT room_members.id FROM room_members "
-                      "INNER JOIN users ON users.username=? "
+                      "SELECT user_id,room_members.id FROM room_members "
+                      "INNER JOIN users ON users.username=? AND users.account_id=? "
                       "WHERE room_id=?",
                       -1, &stmt, NULL);
   matrix_bind_text (stmt, 1, member, "binding when getting room member id");
-  matrix_bind_int (stmt, 2, room_id, "binding when getting room member id");
+  matrix_bind_int (stmt, 2, account_id, "binding when getting room member id");
+  matrix_bind_int (stmt, 3, room_id, "binding when getting room member id");
 
   if (sqlite3_step (stmt) == SQLITE_ROW)
     {
-      member_id = sqlite3_column_int (stmt, 0);
+      if (out_user_id)
+        *out_user_id = sqlite3_column_int (stmt, 0);
+
+      member_id = sqlite3_column_int (stmt, 1);
       sqlite3_finalize (stmt);
 
       return member_id;
@@ -1163,6 +1169,82 @@ db_get_room_member_id (CmDb       *self,
   sqlite3_finalize (stmt);
 
   return member_id;
+}
+
+static void
+cm_db_update_user (CmDb   *self,
+                   int     user_id,
+                   CmUser *user)
+{
+  g_autofree char *json_str = NULL;
+  sqlite3_stmt *stmt;
+  JsonObject *json;
+
+  g_assert (CM_IS_DB (self));
+  g_assert (CM_IS_USER (user));
+
+  if (!user_id)
+    return;
+
+  json = cm_user_generate_json (user);
+  if (!json)
+    return;
+
+  json_str = cm_utils_json_object_to_string (json, FALSE);
+
+  sqlite3_prepare_v2 (self->db,
+                      "UPDATE users SET json_data=?1 "
+                      "WHERE id=?2",
+                      -1, &stmt, NULL);
+
+  matrix_bind_text (stmt, 1, json_str, "binding when updating user");
+  matrix_bind_int (stmt, 2, user_id, "binding when updating user");
+  g_warning ("%s", sqlite3_errmsg (self->db));
+
+  sqlite3_step (stmt);
+  sqlite3_finalize (stmt);
+}
+
+static void
+cm_db_update_user_device (CmDb     *self,
+                          int       user_id,
+                          CmDevice *device)
+{
+  const char *curve25519_key, *ed25519_key;
+  g_autofree char *json_str = NULL;
+  sqlite3_stmt *stmt;
+  JsonObject *json;
+
+  g_assert (CM_IS_DB (self));
+  g_assert (CM_IS_DEVICE (device));
+
+  if (!user_id)
+    return;
+
+  curve25519_key = cm_device_get_curve_key (device);
+  ed25519_key = cm_device_get_ed_key (device);
+  json = cm_device_get_json (device);
+  if (json)
+    json_str = cm_utils_json_object_to_string (json, FALSE);
+
+  sqlite3_prepare_v2 (self->db,
+                      "INSERT INTO user_devices(user_id,device,"
+                      "curve25519_key,ed25519_key,json_data)"
+                      "VALUES(?1,?2,?3,?4,?5) "
+                      "ON CONFLICT(user_id,device) DO UPDATE SET "
+                      "curve25519_key=?3, ed25519_key=?4, json_data=?5",
+                      -1, &stmt, NULL);
+
+  matrix_bind_int (stmt, 1, user_id, "binding when updating user device");
+  matrix_bind_text (stmt, 2, cm_device_get_id (device), "binding when updating user device");
+  if (curve25519_key && *curve25519_key)
+    matrix_bind_text (stmt, 3, curve25519_key, "binding when updating user device");
+  if (ed25519_key && *ed25519_key)
+    matrix_bind_text (stmt, 4, ed25519_key, "binding when updating user device");
+  matrix_bind_text (stmt, 5, json_str, "binding when updating user device");
+
+  sqlite3_step (stmt);
+  sqlite3_finalize (stmt);
 }
 
 static void
@@ -1914,6 +1996,66 @@ cm_db_delete_event_with_txn_id (CmDb       *self,
   matrix_bind_text (stmt, 2, txnid, "binding when deleting room event txnid");
   sqlite3_step (stmt);
   sqlite3_finalize (stmt);
+}
+
+static void
+db_add_room_members (CmDb  *self,
+                     GTask *task)
+{
+  const char *username, *device, *room;
+  GPtrArray *members;
+  int room_id, account_id;
+
+  g_assert (CM_IS_DB (self));
+  g_assert (G_IS_TASK (task));
+  g_assert (g_thread_self () == self->worker_thread);
+  g_assert (self->db);
+
+  username = g_object_get_data (G_OBJECT (task), "username");
+  members = g_object_get_data (G_OBJECT (task), "members");
+  device = g_object_get_data (G_OBJECT (task), "device");
+  room = g_object_get_data (G_OBJECT (task), "room");
+  g_assert (members && members->len);
+
+  account_id = matrix_db_get_account_id (self, username, device, NULL, FALSE);
+  room_id = matrix_db_get_room_id (self, account_id, room, FALSE);
+
+  if (!room_id)
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
+                               "Account or Room not found in db");
+      return;
+    }
+
+  /* todo: Look into sqlite transactions */
+  for (guint i = 0; i < members->len; i++)
+    {
+      CmUser *cm_user = members->pdata[i];
+      GListModel *devices;
+      guint n_items;
+      int member_id, user_id = 0;
+
+      username = cm_user_get_id (cm_user);
+      member_id = db_get_room_member_id (self, account_id, room_id, username, &user_id, TRUE);
+
+      if (!member_id)
+        continue;
+
+      cm_db_update_user (self, user_id, cm_user);
+      devices = cm_user_get_devices (cm_user);
+      n_items = g_list_model_get_n_items (devices);
+      g_warning ("devices: %u", n_items);
+
+      for (guint j = 0; j < n_items; j++)
+        {
+          g_autoptr(CmDevice) cm_device = NULL;
+
+          cm_device = g_list_model_get_item (devices, j);
+          cm_db_update_user_device (self, user_id, cm_device);
+        }
+    }
+
+  g_task_return_boolean (task, TRUE);
 }
 
 static void
@@ -2820,6 +2962,56 @@ cm_db_lookup_olm_session (CmDb           *self,
     g_debug ("Error getting session: %s", error->message);
 
   return pickle;
+}
+
+void
+cm_db_add_room_members (CmDb      *self,
+                        CmRoom    *cm_room,
+                        GPtrArray *members)
+{
+  const char *username, *device, *room;
+  g_autoptr(GTask) task = NULL;
+  g_autoptr(GError) error = NULL;
+  CmClient *client;
+
+  g_return_if_fail (CM_IS_DB (self));
+  g_return_if_fail (CM_IS_ROOM (cm_room));
+
+  if (!members || !members->len)
+    return;
+
+  if (g_application_get_default ())
+    g_application_hold (g_application_get_default ());
+
+  client = cm_room_get_client (cm_room);
+  username = cm_client_get_user_id (client);
+  device = cm_client_get_device_id (client);
+  room = cm_room_get_id (cm_room);
+
+  task = g_task_new (self, NULL, NULL, NULL);
+  g_object_ref (task);
+  g_object_ref (cm_room);
+  g_ptr_array_ref (members);
+  g_task_set_task_data (task, db_add_room_members, NULL);
+  g_object_set_data_full (G_OBJECT (task), "members", members, (GDestroyNotify)g_ptr_array_unref);
+  g_object_set_data_full (G_OBJECT (task), "cm-room", cm_room, g_object_unref);
+  g_object_set_data_full (G_OBJECT (task), "room", g_strdup (room), g_free);
+  g_object_set_data_full (G_OBJECT (task), "username", g_strdup (username), g_free);
+  g_object_set_data_full (G_OBJECT (task), "device", g_strdup (device), g_free);
+
+  g_async_queue_push (self->queue, task);
+
+  /* Wait until the task is completed */
+  while (!g_task_get_completed (task))
+    g_main_context_iteration (NULL, TRUE);
+
+  if (g_application_get_default ())
+    g_application_release (g_application_get_default ());
+
+  g_task_propagate_boolean (task, &error);
+
+  if (error)
+    g_warning ("Error saving room members: %s", error->message);
 }
 
 /*
