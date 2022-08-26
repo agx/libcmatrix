@@ -343,6 +343,7 @@ cm_event_set_json (CmEvent    *self,
                    JsonObject *encrypted)
 {
   CmEventPrivate *priv = cm_event_get_instance_private (self);
+  JsonObject *child;
   const char *type;
 
   g_return_if_fail (CM_IS_EVENT (self));
@@ -370,6 +371,13 @@ cm_event_set_json (CmEvent    *self,
   priv->event_id = g_strdup (cm_utils_json_object_get_string (encrypted ?: root, "event_id"));
   priv->time_stamp = cm_utils_json_object_get_int (encrypted ?: root, "origin_server_ts");
   priv->sender_id = g_strdup (cm_utils_json_object_get_string (encrypted ?: root, "sender"));
+
+  child = cm_utils_json_object_get_object (encrypted ?: root, "unsigned");
+  if (cm_utils_json_object_has_member (child, "transaction_id"))
+    {
+      g_free (priv->txn_id);
+      priv->txn_id = cm_utils_json_object_dup_string (child, "transaction_id");
+    }
 
   if (!root)
     return;
