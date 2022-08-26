@@ -539,6 +539,9 @@ cm_event_get_time_stamp (CmEvent *self)
 
   g_return_val_if_fail (CM_IS_EVENT (self), FALSE);
 
+  if (!priv->time_stamp)
+    return time (NULL) * 1000;
+
   return priv->time_stamp;
 }
 
