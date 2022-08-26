@@ -21,6 +21,7 @@ struct _CmDevice
   GObject   parent_instance;
 
   CmClient *client;
+  JsonObject *json;
   char     *user_id;
   char     *device_id;
   char     *device_name;
@@ -46,6 +47,7 @@ cm_device_finalize (GObject *object)
   g_free (self->device_name);
   g_free (self->ed_key);
   g_free (self->curve_key);
+  g_clear_pointer (&self->json, json_object_unref);
 
   G_OBJECT_CLASS (cm_device_parent_class)->finalize (object);
 }
@@ -77,6 +79,7 @@ cm_device_new (gpointer    client,
   g_return_val_if_fail (root, NULL);
 
   self = g_object_new (CM_TYPE_DEVICE, NULL);
+  self->json = json_object_ref (root);
   self->client = g_object_ref (client);
 
   text = cm_utils_json_object_get_string (root, "device_id");
@@ -123,6 +126,14 @@ cm_device_new (gpointer    client,
   }
 
   return self;
+}
+
+JsonObject *
+cm_device_get_json (CmDevice *self)
+{
+  g_return_val_if_fail (CM_IS_DEVICE (self), NULL);
+
+  return self->json;
 }
 
 void
