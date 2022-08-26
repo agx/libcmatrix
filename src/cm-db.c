@@ -1887,6 +1887,28 @@ db_lookup_olm_session (CmDb  *self,
 }
 
 static void
+cm_db_delete_event_with_txn_id (CmDb       *self,
+                                int         room_id,
+                                const char *txnid)
+{
+  sqlite3_stmt *stmt;
+
+  g_assert (CM_IS_DB (self));
+
+  if (!room_id || !txnid || !*txnid)
+    return;
+
+  sqlite3_prepare_v2 (self->db,
+                      "DELETE FROM room_events "
+                      "WHERE room_id=? AND txnid=? AND event_uid IS NULL",
+                      -1, &stmt, NULL);
+  matrix_bind_int (stmt, 1, room_id, "binding when deleting room event txnid");
+  matrix_bind_text (stmt, 2, txnid, "binding when deleting room event txnid");
+  sqlite3_step (stmt);
+  sqlite3_finalize (stmt);
+}
+
+static void
 db_add_room_events (CmDb  *self,
                     GTask *task)
 {
@@ -1945,6 +1967,10 @@ db_add_room_events (CmDb  *self,
 
       member_id = db_get_room_member_id (self, account_id, room_id, sender, TRUE);
 
+      /* Delete existing ones as we add them below so that the sort order is right */
+      if (cm_event_get_txn_id (event))
+        cm_db_delete_event_with_txn_id (self, room_id, cm_event_get_txn_id (event));
+
       if (!member_id)
         continue;
 
@@ -1976,28 +2002,30 @@ db_add_room_events (CmDb  *self,
       sqlite3_prepare_v2 (self->db,
                           /*                          1       2         3 */
                           "INSERT INTO room_events(sorted_id,room_id,sender_id,"
-                          /*   4           5            6                   7 */
-                          "event_type,event_uid,replaces_event_id,replaces_event_cache_id,"
-                          /*   8           9             10          11 */
+                          /*   4           5      6          7                    8 */
+                          "event_type,event_uid,txnid,replaces_event_id,replaces_event_cache_id,"
+                          /*   9           10             11          12 */
                           "event_state,state_key,origin_server_ts,json_data) "
-                          "VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
+                          "VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)",
                           -1, &stmt, NULL);
       matrix_bind_int (stmt, 1, sorted_event_id, "binding when adding event");
       matrix_bind_int (stmt, 2, room_id, "binding when adding event");
       matrix_bind_int (stmt, 3, member_id, "binding when adding event");
       matrix_bind_int (stmt, 4, cm_event_get_m_type (event), "binding when adding event");
       matrix_bind_text (stmt, 5, cm_event_get_id (event), "binding when adding event");
+      if (cm_event_get_txn_id (event))
+        matrix_bind_text (stmt, 6, cm_event_get_txn_id (event), "binding when adding event");
       /* We check if we have a replaces event id instead of replaces_id, as
        * replaces_id can be 0 if the event is not yet in db, which also means
        * that if the id is not NULL and 0, the event replaces some other event */
       if (replaces_id)
-        matrix_bind_int (stmt, 6, replaces_id, "binding when adding event");
+        matrix_bind_int (stmt, 7, replaces_id, "binding when adding event");
       if (replaces_cache_id)
-        matrix_bind_int (stmt, 7, replaces_cache_id, "binding when adding event");
-      matrix_bind_int (stmt, 8, event_state, "binding when adding event");
-      matrix_bind_text (stmt, 9, cm_event_get_state_key (event), "binding when adding event");
-      matrix_bind_int (stmt, 10, cm_event_get_time_stamp (event), "binding when adding event");
-      matrix_bind_text (stmt, 11, json_str, "binding when adding event");
+        matrix_bind_int (stmt, 8, replaces_cache_id, "binding when adding event");
+      matrix_bind_int (stmt, 9, event_state, "binding when adding event");
+      matrix_bind_text (stmt, 10, cm_event_get_state_key (event), "binding when adding event");
+      matrix_bind_int (stmt, 11, cm_event_get_time_stamp (event), "binding when adding event");
+      matrix_bind_text (stmt, 12, json_str, "binding when adding event");
       status = sqlite3_step (stmt);
       sqlite3_finalize (stmt);
 
