@@ -269,7 +269,11 @@ cm_room_message_event_set_file (CmRoomMessageEvent *self,
 
   g_set_object (&self->file, file);
   g_free (self->body);
-  self->body = g_strdup (body);
+
+  if (body && *body)
+    self->body = g_strdup (body);
+  else if (file)
+    self->body = g_file_get_basename (file);
 }
 
 GFile *
