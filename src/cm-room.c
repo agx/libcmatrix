@@ -1050,6 +1050,9 @@ cm_room_add_events (CmRoom    *self,
       CmEvent *event = events->pdata[i];
       CmRoomMember *member;
 
+      if (cm_event_get_sender (event))
+        continue;
+
       member = room_find_member (self, G_LIST_MODEL (self->joined_members),
                                  cm_event_get_sender_id (event), TRUE);
       cm_event_set_sender (event, CM_USER (member));
@@ -1060,10 +1063,22 @@ cm_room_add_events (CmRoom    *self,
     }
 
   if (append)
-    position = g_list_model_get_n_items (G_LIST_MODEL (self->events_list));
+    {
+      position = g_list_model_get_n_items (G_LIST_MODEL (self->events_list));
+      g_list_store_splice (self->events_list,
+                           position, 0, events->pdata, events->len);
+    }
+  else
+    {
+      g_autoptr(GPtrArray) reversed = NULL;
 
-  g_list_store_splice (self->events_list,
-                       position, 0, events->pdata, events->len);
+      reversed = g_ptr_array_sized_new (events->len);
+
+      for (guint i = 0; i < events->len; i++)
+        g_ptr_array_insert (reversed, 0, events->pdata[i]);
+      g_list_store_splice (self->events_list,
+                           0, 0, reversed->pdata, reversed->len);
+    }
 }
 
 static void
@@ -1378,28 +1393,7 @@ cm_room_parse_events (CmRoom     *self,
     }
 
   if (add && !state_events && events && events->len)
-    {
-      if (past)
-        {
-          g_autoptr(GPtrArray) reversed = NULL;
-
-          reversed = g_ptr_array_sized_new (events->len);
-
-          for (guint i = 0; i < events->len; i++)
-            g_ptr_array_insert (reversed, 0, events->pdata[i]);
-          g_list_store_splice (self->events_list,
-                               0, 0, reversed->pdata, reversed->len);
-        }
-      else
-        {
-          guint position;
-
-          position = g_list_model_get_n_items (G_LIST_MODEL (self->events_list));
-
-          g_list_store_splice (self->events_list,
-                               position, 0, events->pdata, events->len);
-        }
-    }
+    cm_room_add_events (self, events, !past);
 }
 
 GPtrArray *
@@ -2354,31 +2348,7 @@ room_get_past_db_events_cb (GObject      *object,
 
   if (events && events->len)
     {
-      for (guint i = 0; i < events->len; i++)
-        {
-          CmEvent *event = events->pdata[i];
-          CmRoomMember *member;
-
-          member = room_find_member (self, G_LIST_MODEL (self->joined_members),
-                                     cm_event_get_sender_id (event), TRUE);
-          cm_event_set_sender (event, CM_USER (member));
-          if (g_strcmp0 (cm_event_get_sender_id (event),
-                         cm_client_get_user_id (self->client)) == 0)
-            cm_event_sender_is_self (event);
-        }
-
-      {
-        g_autoptr(GPtrArray) reversed = NULL;
-
-        reversed = g_ptr_array_new_full (events->len, g_object_unref);
-
-        while (events->len)
-          g_ptr_array_add (reversed, g_ptr_array_steal_index (events, events->len - 1));
-
-        g_list_store_splice (self->events_list,
-                             0, 0, reversed->pdata, reversed->len);
-      }
-
+      cm_room_add_events (self, events, FALSE);
       g_task_return_boolean (task, TRUE);
     }
   else if (self->prev_batch)
