@@ -1479,9 +1479,11 @@ cm_db_get_rooms (CmDb       *self,
 
   sqlite3_prepare_v2 (self->db,
                       "SELECT id,room_name,prev_batch,json_data FROM rooms "
-                      "WHERE account_id=? AND replacement_room_id IS NULL",
+                      "WHERE account_id=? AND replacement_room_id IS NULL "
+                      "AND room_state != ?",
                       -1, &stmt, NULL);
   matrix_bind_int (stmt, 1, account_id, "binding when getting rooms");
+  matrix_bind_int (stmt, 2, CM_STATUS_LEAVE, "binding when getting rooms");
 
   while (sqlite3_step (stmt) == SQLITE_ROW)
     {
@@ -1594,6 +1596,7 @@ cm_db_save_room (CmDb  *self,
   const char *replacement, *json = NULL;
   sqlite3_stmt *stmt;
   int account_id, room_id = 0, replacement_id = 0;
+  int room_status;
 
   g_assert (CM_IS_DB (self));
   g_assert (G_IS_TASK (task));
@@ -1606,6 +1609,7 @@ cm_db_save_room (CmDb  *self,
   json = g_object_get_data (G_OBJECT (task), "json");
   prev_batch = g_object_get_data (G_OBJECT (task), "prev-batch");
   replacement = g_object_get_data (G_OBJECT (task), "replacement");
+  room_status = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (task), "status"));
 
   account_id = matrix_db_get_account_id (self, username, client_device, NULL, FALSE);
 
@@ -1633,14 +1637,15 @@ cm_db_save_room (CmDb  *self,
 
   sqlite3_prepare_v2 (self->db,
                       "UPDATE rooms SET prev_batch=?1,json_data=?2, "
-                      "replacement_room_id=iif(?3 = 0, null, ?3) "
-                      "WHERE id=?4",
+                      "replacement_room_id=iif(?3 = 0, null, ?3),room_state=?4 "
+                      "WHERE id=?5",
                       -1, &stmt, NULL);
 
   matrix_bind_text (stmt, 1, prev_batch, "binding when saving room");
   matrix_bind_text (stmt, 2, json, "binding when saving room");
   matrix_bind_int (stmt, 3, replacement_id, "binding when saving room");
-  matrix_bind_int (stmt, 4, room_id, "binding when saving room");
+  matrix_bind_int (stmt, 4, room_status, "binding when saving room");
+  matrix_bind_int (stmt, 5, room_id, "binding when saving room");
 
   sqlite3_step (stmt);
   sqlite3_finalize (stmt);
@@ -2620,6 +2625,7 @@ cm_db_save_room_async (CmDb                *self,
 {
   const char *username, *device_id, *prev_batch;
   const char *replacement;
+  CmStatus room_status;
   GTask *task;
 
   g_return_if_fail (CM_IS_DB (self));
@@ -2633,6 +2639,7 @@ cm_db_save_room_async (CmDb                *self,
   device_id = cm_client_get_device_id (client);
   prev_batch = cm_room_get_prev_batch (room);
   replacement = cm_room_get_replacement_room (room);
+  room_status = cm_room_get_status (room);
 
   g_object_set_data_full (G_OBJECT (task), "username", g_strdup (username), g_free);
   g_object_set_data_full (G_OBJECT (task), "room", g_object_ref (room), g_object_unref);
@@ -2641,6 +2648,7 @@ cm_db_save_room_async (CmDb                *self,
   g_object_set_data_full (G_OBJECT (task), "client", g_object_ref (client), g_object_unref);
   g_object_set_data_full (G_OBJECT (task), "client-device", g_strdup (device_id), g_free);
   g_object_set_data_full (G_OBJECT (task), "replacement", g_strdup (replacement), g_free);
+  g_object_set_data (G_OBJECT (task), "status", GINT_TO_POINTER (room_status));
 
   g_async_queue_push (self->queue, task);
 }
