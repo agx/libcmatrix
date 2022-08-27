@@ -2255,17 +2255,22 @@ room_set_read_marker_cb (GObject      *obj,
 
 void
 cm_room_set_read_marker_async (CmRoom              *self,
-                               const char          *fully_read_id,
-                               const char          *read_receipt_id,
+                               CmEvent             *fully_read_event,
+                               CmEvent             *read_receipt_event,
                                GAsyncReadyCallback  callback,
                                gpointer             user_data)
 {
+  const char *fully_read_id, *read_receipt_id;
   g_autofree char *uri = NULL;
   JsonObject *root;
   GTask *task;
 
   g_return_if_fail (CM_IS_ROOM (self));
-  g_return_if_fail (fully_read_id && *fully_read_id);
+  g_return_if_fail (CM_IS_EVENT (fully_read_event));
+  g_return_if_fail (CM_IS_EVENT (read_receipt_event));
+
+  fully_read_id = cm_event_get_id (fully_read_event);
+  read_receipt_id = cm_event_get_id (read_receipt_event);
 
   root = json_object_new ();
   json_object_set_string_member (root, "m.fully_read", fully_read_id);

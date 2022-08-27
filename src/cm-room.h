@@ -76,8 +76,8 @@ gboolean      cm_room_leave_finish                (CmRoom                *self,
                                                    GAsyncResult          *result,
                                                    GError               **error);
 void          cm_room_set_read_marker_async       (CmRoom                *self,
-                                                   const char            *fully_read_id,
-                                                   const char            *read_receipt_id,
+                                                   CmEvent               *fully_read_event,
+                                                   CmEvent               *read_receipt_event,
                                                    GAsyncReadyCallback    callback,
                                                    gpointer               user_data);
 gboolean      cm_room_set_read_marker_finish      (CmRoom                *self,
