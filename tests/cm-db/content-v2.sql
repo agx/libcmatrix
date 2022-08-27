@@ -5,7 +5,7 @@ PRAGMA foreign_keys = ON;
 
 CREATE TABLE users(
   id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-  account_id INTEGER REFERENCES accounts(id),
+  account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
   username TEXT NOT NULL,
   outdated INTEGER DEFAULT 1,
   json_data TEXT,
@@ -35,10 +35,11 @@ CREATE TABLE accounts(
 
 CREATE TABLE rooms(
   id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-  account_id INTEGER NOT NULL REFERENCES accounts(id),
+  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
   room_name TEXT NOT NULL,
   prev_batch TEXT,
   replacement_room_id INTEGER REFERENCES rooms(id),
+  room_state INTEGER NOT NULL DEFAULT 0,
   json_data TEXT,
   UNIQUE (account_id, room_name)
 );
@@ -81,7 +82,7 @@ CREATE TABLE IF NOT EXISTS room_events (
 
 CREATE TABLE encryption_keys(
   id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-  account_id INTEGER REFERENCES accounts(id),
+  account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
   file_url TEXT NOT NULL,
   file_sha256 TEXT,
   iv TEXT NOT NULL,
@@ -130,13 +131,13 @@ INSERT INTO accounts VALUES(3, 2, 'alice example net batch', 'alice example net 
 INSERT INTO accounts VALUES(1, 3, 'alice example com batch', 'alice example com pickle', 1, NULL);
 INSERT INTO accounts VALUES(4, 4, 'bob example com batch', 'bob example com pickle', 0, NULL);
 
-INSERT INTO rooms VALUES(8, 3, 'alice example net room A', 'prev batch 1', NULL, NULL);
-INSERT INTO rooms VALUES(6, 3, 'alice example net room B', 'prev batch 2', NULL, NULL);
-INSERT INTO rooms VALUES(4, 4, 'bob example com room C', 'bob com batch 3', NULL, NULL);
-INSERT INTO rooms VALUES(3, 4, 'bob example com room A', 'bob com batch 1', NULL, NULL);
-INSERT INTO rooms VALUES(5, 3, 'alice example net room C', 'prev batch 3', NULL, NULL);
-INSERT INTO rooms VALUES(9, 4, 'bob example com room B', 'bob com batch 2', NULL, NULL);
-INSERT INTO rooms VALUES(2, 3, 'alice example net room D', 'prev batch 4', NULL, NULL);
+INSERT INTO rooms VALUES(8, 3, 'alice example net room A', 'prev batch 1', NULL, 0, NULL);
+INSERT INTO rooms VALUES(6, 3, 'alice example net room B', 'prev batch 2', NULL, 0, NULL);
+INSERT INTO rooms VALUES(4, 4, 'bob example com room C', 'bob com batch 3', NULL, 0, NULL);
+INSERT INTO rooms VALUES(3, 4, 'bob example com room A', 'bob com batch 1', NULL, 0, NULL);
+INSERT INTO rooms VALUES(5, 3, 'alice example net room C', 'prev batch 3', NULL, 0, NULL);
+INSERT INTO rooms VALUES(9, 4, 'bob example com room B', 'bob com batch 2', NULL, 0, NULL);
+INSERT INTO rooms VALUES(2, 3, 'alice example net room D', 'prev batch 4', NULL, 0, NULL);
 
 INSERT INTO session VALUES(1, 1, 'alice com key 1', 'alice com id 1', 1, 'alice com id 1', 11111111, NULL, NULL);
 INSERT INTO session VALUES(2, 4, 'bob key 1', 'bob id 1', 1, 'bob id 1', 22222222, NULL, NULL);

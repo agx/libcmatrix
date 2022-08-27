@@ -5,7 +5,7 @@ PRAGMA foreign_keys = ON;
 
 CREATE TABLE users(
   id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-  account_id INTEGER REFERENCES accounts(id),
+  account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
   username TEXT NOT NULL,
   outdated INTEGER DEFAULT 1,
   json_data TEXT,
@@ -35,10 +35,11 @@ CREATE TABLE accounts(
 
 CREATE TABLE rooms(
   id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-  account_id INTEGER NOT NULL REFERENCES accounts(id),
+  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
   room_name TEXT NOT NULL,
   prev_batch TEXT,
   replacement_room_id INTEGER REFERENCES rooms(id),
+  room_state INTEGER NOT NULL DEFAULT 0,
   json_data TEXT,
   UNIQUE (account_id, room_name)
 );
@@ -81,7 +82,7 @@ CREATE TABLE IF NOT EXISTS room_events (
 
 CREATE TABLE encryption_keys(
   id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-  account_id INTEGER REFERENCES accounts(id),
+  account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
   file_url TEXT NOT NULL,
   file_sha256 TEXT,
   iv TEXT NOT NULL,

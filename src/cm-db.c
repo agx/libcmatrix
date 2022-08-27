@@ -275,7 +275,7 @@ cm_db_create_schema (CmDb  *self,
     "CREATE TABLE IF NOT EXISTS users ("
     "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
     /* v2 */
-    "account_id INTEGER REFERENCES accounts(id), "
+    "account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE, "
     /* Version 1: Unique */
     /* v2: Remove Unique */
     "username TEXT NOT NULL, "
@@ -314,12 +314,15 @@ cm_db_create_schema (CmDb  *self,
 
     "CREATE TABLE IF NOT EXISTS rooms ("
     "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
-    "account_id INTEGER NOT NULL REFERENCES accounts(id), "
+    /* v2: on delete cascade */
+    "account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE, "
     "room_name TEXT NOT NULL, "
     "prev_batch TEXT, "
     /* Version 1 */
     /* Set if the room has tombstone and got replaced by a different room */
     "replacement_room_id INTEGER REFERENCES rooms(id),"
+    /* v2 */
+    "room_state INTEGER NOT NULL DEFAULT 0, "
     /* Version 1 */
     "json_data TEXT, "
     "UNIQUE (account_id, room_name));"
@@ -370,7 +373,7 @@ cm_db_create_schema (CmDb  *self,
     "CREATE TABLE IF NOT EXISTS encryption_keys ("
     "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
     /* v2 */
-    "account_id INTEGER REFERENCES accounts(id), "
+    "account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE, "
     "file_url TEXT NOT NULL, "
     "file_sha256 TEXT, "
     /* Initialization vector: iv in JSON */
@@ -664,7 +667,7 @@ cm_db_migrate_to_v2 (CmDb  *self,
                          "CREATE TABLE IF NOT EXISTS tmp_encryption_keys ("
                          "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
                          /* v2 */
-                         "account_id INTEGER REFERENCES accounts(id), "
+                         "account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE, "
                          "file_url TEXT NOT NULL, "
                          "file_sha256 TEXT, "
                          /* Initialization vector: iv in JSON */
@@ -688,7 +691,7 @@ cm_db_migrate_to_v2 (CmDb  *self,
 
                          "CREATE TABLE IF NOT EXISTS tmp_users ("
                          "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
-                         "account_id INTEGER REFERENCES accounts(id), "
+                         "account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE, "
                          "username TEXT NOT NULL, "
                          "outdated INTEGER DEFAULT 1, "
                          "json_data TEXT, "
@@ -697,9 +700,29 @@ cm_db_migrate_to_v2 (CmDb  *self,
                          "INSERT INTO tmp_users(id,username) "
                          "SELECT DISTINCT id,username FROM users;"
 
+                         "CREATE TABLE IF NOT EXISTS tmp_rooms ("
+                         "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
+                         /* v2: on delete cascade */
+                         "account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE, "
+                         "room_name TEXT NOT NULL, "
+                         "prev_batch TEXT, "
+                         /* v1 */
+                         /* Set if the room has tombstone and got replaced by a different room */
+                         "replacement_room_id INTEGER REFERENCES rooms(id),"
+                         /* v2 */
+                         "room_state INTEGER NOT NULL DEFAULT 0, "
+                         /* v1 */
+                         "json_data TEXT, "
+                         "UNIQUE (account_id, room_name));"
+
+                         "INSERT INTO tmp_rooms(id,account_id,room_name,prev_batch) "
+                         "SELECT DISTINCT id,account_id,room_name,prev_batch FROM rooms;"
+
+                         "DROP TABLE IF EXISTS rooms;"
                          "DROP TABLE IF EXISTS users;"
                          "DROP TABLE IF EXISTS encryption_keys;"
 
+                         "ALTER TABLE tmp_rooms RENAME TO rooms;"
                          "ALTER TABLE tmp_users RENAME TO users;"
                          "ALTER TABLE tmp_encryption_keys RENAME TO encryption_keys;"
 
