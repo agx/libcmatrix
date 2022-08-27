@@ -2153,6 +2153,42 @@ handle_room_join (CmClient   *self,
 }
 
 static void
+handle_room_leave (CmClient   *self,
+                   JsonObject *root)
+{
+  g_autoptr(GList) left_room_ids = NULL;
+
+  g_assert (CM_IS_CLIENT (self));
+
+  if (!root)
+    return;
+
+  left_room_ids = json_object_get_members (root);
+
+  for (GList *room_id = left_room_ids; room_id; room_id = room_id->next)
+    {
+      g_autoptr(GPtrArray) events = NULL;
+      CmRoom *room;
+      JsonObject *room_data;
+
+      room = client_find_room (self, room_id->data);
+      room_data = cm_utils_json_object_get_object (root, room_id->data);
+
+      if (!room)
+        continue;
+
+      events = cm_room_set_data (room, room_data);
+      cm_room_set_status (room, CM_STATUS_LEAVE);
+      cm_db_add_room_events (self->cm_db, room, events, FALSE);
+
+      if (self->callback)
+        self->callback (self->cb_data, self, room, events, NULL);
+
+      cm_utils_remove_list_item (self->joined_rooms, room);
+    }
+}
+
+static void
 handle_device_list (CmClient   *self,
                     JsonObject *root)
 {
@@ -2203,6 +2239,7 @@ handle_red_pill (CmClient   *self,
 
   object = cm_utils_json_object_get_object (root, "rooms");
   handle_room_join (self, cm_utils_json_object_get_object (object, "join"));
+  handle_room_leave (self, cm_utils_json_object_get_object (object, "leave"));
   handle_device_list (self, cm_utils_json_object_get_object (root, "device_lists"));
 }
 
