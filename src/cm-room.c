@@ -1028,41 +1028,6 @@ cm_room_get_room_type (CmRoom *self)
   return CM_ROOM_UNKNOWN;
 }
 
-/**
- * cm_room_decrypt_content:
- * @self: A #CmRoom
- * @json_str: The JSON string to decrypt
- *
- * Decrypt a JSON string event received via /sync
- * callback.  The json string shall have the type
- * "m.room.encrypted".
- *
- * Returns: (transfer full): The decrypted string or
- *  %NULL if failed to decrypt.  Free with g_free()
- */
-char *
-cm_room_decrypt_content (CmRoom     *self,
-                         const char *json_str)
-{
-  g_autoptr(JsonObject) root = NULL;
-  char *plain_text = NULL;
-  JsonObject *content;
-  CmEnc *enc;
-
-  g_return_val_if_fail (CM_IS_ROOM (self), NULL);
-
-  enc = cm_client_get_enc (self->client);
-
-  if (!enc || !json_str || !*json_str)
-    return NULL;
-
-  root = cm_utils_string_to_json_object (json_str);
-  content = cm_utils_json_object_get_object (root, "content");
-  plain_text = cm_enc_handle_join_room_encrypted (enc, self->room_id, content);
-
-  return plain_text;
-}
-
 JsonObject *
 cm_room_decrypt (CmRoom     *self,
                  JsonObject *root)

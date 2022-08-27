@@ -32,8 +32,6 @@ const char   *cm_room_get_past_name               (CmRoom                *self);
 gboolean      cm_room_is_encrypted                (CmRoom                *self);
 GListModel   *cm_room_get_joined_members          (CmRoom                *self);
 GListModel   *cm_room_get_events_list             (CmRoom                *self);
-char         *cm_room_decrypt_content             (CmRoom                *self,
-                                                   const char            *json_str);
 const char   *cm_room_send_text_async             (CmRoom                *self,
                                                    const char            *text,
                                                    GCancellable          *cancellable,
