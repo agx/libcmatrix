@@ -81,14 +81,6 @@ void           cm_db_save_room_async               (CmDb                *self,
 gboolean       cm_db_save_room_finish              (CmDb                *self,
                                                     GAsyncResult        *result,
                                                     GError             **error);
-void           cm_db_load_room_async               (CmDb                *self,
-                                                    CmClient            *client,
-                                                    CmRoom              *room,
-                                                    GAsyncReadyCallback  callback,
-                                                    gpointer             user_data);
-char          *cm_db_load_room_finish              (CmDb                *self,
-                                                    GAsyncResult        *result,
-                                                    GError             **error);
 void           cm_db_delete_client_async           (CmDb                *self,
                                                     CmClient            *client,
                                                     GAsyncReadyCallback  callback,

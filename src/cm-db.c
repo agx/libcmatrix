@@ -1626,55 +1626,6 @@ cm_db_save_room (CmDb  *self,
 }
 
 static void
-cm_db_load_room (CmDb  *self,
-                 GTask *task)
-{
-  const char *username, *room_name, *device_name;
-  sqlite3_stmt *stmt;
-  int account_id;
-
-  g_assert (CM_IS_DB (self));
-  g_assert (G_IS_TASK (task));
-  g_assert (g_thread_self () == self->worker_thread);
-  g_assert (self->db);
-
-  username = g_object_get_data (G_OBJECT (task), "account-id");
-  room_name = g_object_get_data (G_OBJECT (task), "room-id");
-  device_name = g_object_get_data (G_OBJECT (task), "device-id");
-
-  account_id = matrix_db_get_account_id (self, username, device_name, NULL, FALSE);
-
-  if (!account_id)
-    {
-      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR,
-                               "Error getting account id");
-      return;
-    }
-
-  sqlite3_prepare_v2 (self->db,
-                      "SELECT prev_batch,json_data FROM rooms "
-                      "WHERE account_id=? AND room_name=? ",
-                      -1, &stmt, NULL);
-
-  matrix_bind_int (stmt, 1, account_id, "binding when loading room");
-  matrix_bind_text (stmt, 2, room_name, "binding when loading room");
-
-  if (sqlite3_step (stmt) == SQLITE_ROW)
-    {
-      g_task_return_pointer (task, g_strdup ((char *)sqlite3_column_text (stmt, 1)), g_free);
-      g_object_set_data_full (G_OBJECT (task), "prev-batch",
-                              g_strdup ((char *)sqlite3_column_text (stmt, 0)), g_free);
-    }
-  else
-    {
-      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
-                               "Room not found");
-    }
-
-  sqlite3_finalize (stmt);
-}
-
-static void
 cm_db_delete_client (CmDb  *self,
                      GTask *task)
 {
@@ -2680,50 +2631,6 @@ cm_db_save_room_finish (CmDb          *self,
   g_return_val_if_fail (G_IS_TASK (result), FALSE);
 
   return g_task_propagate_boolean (G_TASK (result), error);
-}
-
-void
-cm_db_load_room_async (CmDb                *self,
-                       CmClient            *client,
-                       CmRoom              *room,
-                       GAsyncReadyCallback  callback,
-                       gpointer             user_data)
-{
-  const char *username, *device_id, *room_id;
-  GTask *task;
-
-  g_return_if_fail (CM_IS_DB (self));
-  g_return_if_fail (CM_IS_CLIENT (client));
-  g_return_if_fail (CM_IS_ROOM (room));
-
-  task = g_task_new (self, NULL, callback, user_data);
-  g_task_set_source_tag (task, cm_db_load_room_async);
-  g_task_set_task_data (task, cm_db_load_room, NULL);
-
-  username = cm_client_get_user_id (client);
-  device_id = cm_client_get_device_id (client);
-  room_id = cm_room_get_id (room);
-
-  g_object_set_data_full (G_OBJECT (task), "room-id", g_strdup (room_id), g_free);
-  g_object_set_data_full (G_OBJECT (task), "username", g_strdup (username), g_free);
-  g_object_set_data_full (G_OBJECT (task), "account-id", g_strdup (username), g_free);
-  g_object_set_data_full (G_OBJECT (task), "device-id", g_strdup (device_id), g_free);
-
-  g_object_set_data_full (G_OBJECT (task), "client", g_object_ref (client), g_object_unref);
-  g_object_set_data_full (G_OBJECT (task), "room", g_object_ref (room), g_object_unref);
-
-  g_async_queue_push (self->queue, task);
-}
-
-char *
-cm_db_load_room_finish (CmDb      *self,
-                            GAsyncResult  *result,
-                            GError       **error)
-{
-  g_return_val_if_fail (CM_IS_DB (self), FALSE);
-  g_return_val_if_fail (G_IS_TASK (result), FALSE);
-
-  return g_task_propagate_pointer (G_TASK (result), error);
 }
 
 void
