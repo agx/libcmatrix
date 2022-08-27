@@ -1444,8 +1444,9 @@ cm_db_get_room_id (CmDb       *self,
 }
 
 static GPtrArray *
-cm_db_get_rooms (CmDb *self,
-                 int   account_id)
+cm_db_get_rooms (CmDb       *self,
+                 int         account_id,
+                 const char *account_next_batch)
 {
   g_autoptr(GPtrArray) rooms = NULL;
   sqlite3_stmt *stmt;
@@ -1483,6 +1484,8 @@ cm_db_get_rooms (CmDb *self,
       event_id = db_get_last_room_event_id (self, room_id, &sorted_event_id);
       if (event_id)
         events = db_get_past_room_events (self, room, room_id, 0, sorted_event_id, 1);
+      else
+        cm_room_set_prev_batch (room, account_next_batch);
 
       if (events)
         cm_room_add_events (room, events, TRUE);
@@ -1550,7 +1553,7 @@ cm_db_load_client (CmDb  *self,
       if (filter && *filter)
         g_object_set_data_full (object, "filter-id", g_strdup (filter), g_free);
 
-      rooms = cm_db_get_rooms (self, account_id);
+      rooms = cm_db_get_rooms (self, account_id, (char *)sqlite3_column_text (stmt, 1));
       g_object_set_data_full (object, "rooms", rooms, (GDestroyNotify)g_ptr_array_unref);
     }
 
