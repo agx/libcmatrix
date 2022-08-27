@@ -2743,77 +2743,22 @@ get_room_state_cb (GObject      *object,
   cm_room_save (self);
 }
 
-static void
-room_load_from_db_cb (GObject      *object,
-                      GAsyncResult *result,
-                      gpointer      user_data)
-{
-  CmRoom *self;
-  g_autoptr(GCancellable) cancellable = NULL;
-  g_autoptr(GTask) task = user_data;
-  g_autoptr(GError) error = NULL;
-  g_autofree char *json_str;
-  char *prev_batch;
-
-  g_assert (G_IS_TASK (task));
-
-  self = g_task_get_source_object (task);
-  g_assert (CM_IS_ROOM (self));
-
-  cancellable = g_task_get_cancellable (task);
-  if (cancellable)
-    g_object_ref (cancellable);
-
-  json_str = cm_db_load_room_finish (CM_DB (object), result, &error);
-  prev_batch = g_object_get_data (G_OBJECT (task), "prev-batch");
-
-  if (json_str)
-    {
-      JsonObject *root = NULL;
-      JsonObject *obj;
-
-      self->initial_sync_done = TRUE;
-      self->name_loaded = TRUE;
-
-      root = cm_utils_string_to_json_object (json_str);
-      self->local_json = root;
-      obj = cm_utils_json_object_get_object (root, "local");
-      if (cm_utils_json_object_get_int (obj, "encryption"))
-        self->encryption = g_strdup ("encrypted");
-      cm_room_set_is_direct (self, cm_utils_json_object_get_bool (obj, "direct"));
-      g_free (self->name);
-      self->name = g_strdup (cm_utils_json_object_get_string (obj, "alias"));
-      cm_room_set_prev_batch (self, prev_batch);
-
-      g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_ENCRYPTED]);
-      g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
-      g_task_return_boolean (task, TRUE);
-      return;
-    }
-  else if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
-    {
-      g_autofree char *uri = NULL;
-
-      uri = g_strconcat ("/_matrix/client/r0/rooms/", self->room_id, "/state", NULL);
-      cm_net_send_json_async (cm_client_get_net (self->client), 0, NULL,
-                              uri, SOUP_METHOD_GET,
-                              NULL, NULL, get_room_state_cb,
-                              g_object_ref (self));
-    }
-}
-
 void
 cm_room_load_async (CmRoom              *self,
                     GCancellable        *cancellable,
                     GAsyncReadyCallback  callback,
                     gpointer             user_data)
 {
-  GTask *task;
+  g_autofree char *uri = NULL;
 
-  task = g_task_new (self, cancellable, callback, user_data);
-  cm_db_load_room_async (cm_client_get_db (self->client), self->client, self,
-                         room_load_from_db_cb,
-                         task);
+  if (self->initial_sync_done)
+    return;
+
+  uri = g_strconcat ("/_matrix/client/r0/rooms/", self->room_id, "/state", NULL);
+  cm_net_send_json_async (cm_client_get_net (self->client), 0, NULL,
+                          uri, SOUP_METHOD_GET,
+                          NULL, NULL, get_room_state_cb,
+                          g_object_ref (self));
 }
 
 gboolean
