@@ -62,6 +62,7 @@ struct _CmRoom
   GQueue     *message_queue;
   guint       retry_timeout_id;
 
+  CmStatus    room_status;
   gboolean    has_prev_batch;
   gboolean    is_direct;
 
@@ -1020,12 +1021,33 @@ cm_room_get_events_list (CmRoom *self)
   return G_LIST_MODEL (self->events_list);
 }
 
-CmRoomType
-cm_room_get_room_type (CmRoom *self)
+CmStatus
+cm_room_get_status (CmRoom *self)
 {
-  g_return_val_if_fail (CM_IS_ROOM (self), CM_ROOM_UNKNOWN);
+  g_return_val_if_fail (CM_IS_ROOM (self), CM_STATUS_UNKNOWN);
 
-  return CM_ROOM_UNKNOWN;
+  return self->room_status;
+}
+
+void
+cm_room_set_status (CmRoom   *self,
+                    CmStatus  status)
+{
+  g_return_if_fail (CM_IS_ROOM (self));
+  g_return_if_fail (status == CM_STATUS_INVITE ||
+                    status == CM_STATUS_JOIN ||
+                    status == CM_STATUS_LEAVE);
+
+  if (self->room_status == status)
+    return;
+
+  self->room_status = status;
+
+  if (self->client)
+    {
+      self->db_save_pending = TRUE;
+      cm_room_save (self);
+    }
 }
 
 JsonObject *

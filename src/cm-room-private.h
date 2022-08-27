@@ -47,7 +47,9 @@ void          cm_room_set_name                     (CmRoom              *self,
 void          cm_room_set_generated_name           (CmRoom              *self,
                                                     const char          *name);
 gint64        cm_room_get_encryption_rotation_time (CmRoom              *self);
-CmRoomType    cm_room_get_room_type                (CmRoom              *self);
+CmStatus      cm_room_get_status                   (CmRoom              *self);
+void          cm_room_set_status                   (CmRoom              *self,
+                                                    CmStatus             status);
 guint         cm_room_get_encryption_msg_count     (CmRoom              *self);
 gboolean      cm_room_is_direct                    (CmRoom              *self);
 void          cm_room_set_is_direct                (CmRoom              *self,
