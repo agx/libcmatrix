@@ -72,6 +72,7 @@ struct _CmRoom
    * also compare with typing_set_time and TYPING_TIMEOUT */
   gboolean   typing;
 
+  gboolean    loading_initial_sync;
   gboolean    loading_past_events;
   gboolean    db_save_pending;
   gboolean    is_sending_message;
@@ -2434,6 +2435,36 @@ room_get_past_db_events_cb (GObject      *object,
     }
 }
 
+static void
+room_load_sync_cb (GObject      *object,
+                   GAsyncResult *result,
+                   gpointer      user_data)
+{
+  CmRoom *self;
+  g_autoptr(GTask) task = user_data;
+  GError *error = NULL;
+  GAsyncReadyCallback callback;
+  gpointer cb_user_data;
+
+  g_assert (G_IS_TASK (task));
+
+  self = g_task_get_source_object (task);
+  g_assert (CM_IS_ROOM (self));
+
+  cm_room_load_finish (self, result, &error);
+  g_debug ("Loading room initial sync before past events done, has-error: %d", !!error);
+
+  if (error)
+    {
+      g_task_return_error (task, error);
+      return;
+    }
+
+  callback = g_object_get_data (G_OBJECT (task), "callback");
+  cb_user_data = g_object_get_data (G_OBJECT (task), "cb-user-data");
+  cm_room_load_past_events_async (self, callback, cb_user_data);
+}
+
 void
 cm_room_load_past_events_async (CmRoom              *self,
                                 GAsyncReadyCallback  callback,
@@ -2446,11 +2477,22 @@ cm_room_load_past_events_async (CmRoom              *self,
   g_return_if_fail (!from || CM_IS_ROOM_EVENT (from));
 
   task = g_task_new (self, NULL, callback, user_data);
+  g_object_set_data (G_OBJECT (task), "callback", callback);
+  g_object_set_data (G_OBJECT (task), "cb-user-data", user_data);
 
-  if (self->loading_past_events)
+  if (self->loading_initial_sync || self->loading_past_events)
     {
       g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_PENDING,
                                "Past events are being already loaded");
+      return;
+    }
+
+  if (!self->initial_sync_done)
+    {
+      g_debug ("Loading room initial sync before loading past events");
+      cm_room_load_async (self, NULL,
+                          room_load_sync_cb,
+                          g_steal_pointer (&task));
       return;
     }
 
@@ -2716,15 +2758,26 @@ get_room_state_cb (GObject      *object,
                    GAsyncResult *result,
                    gpointer      user_data)
 {
+  g_autoptr(GTask) task = user_data;
   g_autoptr(CmRoom) self = user_data;
   g_autoptr(JsonObject) root = NULL;
-  g_autoptr(GError) error = NULL;
+  GError *error = NULL;
   JsonArray *array;
 
+  g_assert (G_IS_TASK (task));
+
+  self = g_task_get_source_object (task);
+  g_assert (CM_IS_ROOM (self));
+
   array = g_task_propagate_pointer (G_TASK (result), &error);
+  g_debug ("Loading room initial sync done, has-error: %d", !!error);
+  self->loading_initial_sync = FALSE;
 
   if (error)
-    return;
+    {
+      g_task_return_error (task, error);
+      return;
+    }
 
   root = json_object_new ();
   json_object_set_array_member (root, "events", array);
@@ -2733,6 +2786,7 @@ get_room_state_cb (GObject      *object,
 
   self->db_save_pending = TRUE;
   cm_room_save (self);
+  g_task_return_boolean (task, TRUE);
 }
 
 void
@@ -2741,16 +2795,32 @@ cm_room_load_async (CmRoom              *self,
                     GAsyncReadyCallback  callback,
                     gpointer             user_data)
 {
+  g_autoptr(GTask) task = NULL;
   g_autofree char *uri = NULL;
 
-  if (self->initial_sync_done)
-    return;
+  task = g_task_new (self, cancellable, callback, user_data);
 
+  if (self->initial_sync_done)
+    {
+      g_task_return_boolean (task, TRUE);
+      return;
+    }
+
+  if (self->loading_initial_sync)
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_PENDING,
+                               "room initial sync is already in progress");
+      return;
+    }
+
+  g_debug ("Loading room initial sync");
+
+  self->loading_initial_sync = TRUE;
   uri = g_strconcat ("/_matrix/client/r0/rooms/", self->room_id, "/state", NULL);
   cm_net_send_json_async (cm_client_get_net (self->client), 0, NULL,
                           uri, SOUP_METHOD_GET,
                           NULL, NULL, get_room_state_cb,
-                          g_object_ref (self));
+                          g_steal_pointer (&task));
 }
 
 gboolean
