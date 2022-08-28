@@ -384,18 +384,18 @@ compare_matrix_db (sqlite3 *db)
 
   compare_table (db,
                  "SELECT COUNT (*) FROM ("
-                 "SELECT username,device,sender_key,session_id,type,session.pickle,time,session.json_data FROM main.session "
-                 "INNER JOIN main.accounts ON accounts.id=session.account_id "
+                 "SELECT username,device,sender_key,session_id,type,sessions.pickle,time,sessions.json_data FROM main.sessions "
+                 "INNER JOIN main.accounts ON accounts.id=sessions.account_id "
                  "INNER JOIN main.user_devices ON user_devices.id=accounts.user_device_id "
                  "INNER JOIN main.users ON user_devices.user_id=users.id "
                  "UNION "
-                 "SELECT username,device,sender_key,session_id,type,session.pickle,time,session.json_data FROM test.session "
-                 "INNER JOIN test.accounts ON accounts.id=session.account_id "
+                 "SELECT username,device,sender_key,session_id,type,sessions.pickle,time,sessions.json_data FROM test.sessions "
+                 "INNER JOIN test.accounts ON accounts.id=sessions.account_id "
                  "INNER JOIN test.user_devices ON user_devices.id=accounts.user_device_id "
                  "INNER JOIN test.users ON user_devices.user_id=users.id "
                  ");",
-                 db_get_int (db, "SELECT COUNT(*) FROM main.session;"),
-                 db_get_int (db, "SELECT COUNT(*) FROM test.session;"));
+                 db_get_int (db, "SELECT COUNT(*) FROM main.sessions;"),
+                 db_get_int (db, "SELECT COUNT(*) FROM test.sessions;"));
 }
 
 static void

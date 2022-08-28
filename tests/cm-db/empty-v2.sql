@@ -95,16 +95,18 @@ CREATE TABLE encryption_keys(
   UNIQUE (account_id, file_url)
 );
 
-CREATE TABLE session(
+CREATE TABLE sessions (
   id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-  account_id INTEGER NOT NULL REFERENCES accounts(id),
+  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
   sender_key TEXT NOT NULL,
   session_id TEXT NOT NULL,
   type INTEGER NOT NULL,
   pickle TEXT NOT NULL,
   time INT,
-  json_data TEXT,
+  origin_server_ts INTEGER,
   chain_index INTEGER,
+  session_state INTEGER NOT NULL DEFAULT 0,
+  json_data TEXT,
   UNIQUE (account_id, sender_key, session_id)
 );
 
@@ -114,7 +116,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS user_device_idx ON user_devices (user_id, devi
 CREATE INDEX IF NOT EXISTS room_event_state_idx ON room_events (state_key);
 CREATE UNIQUE INDEX IF NOT EXISTS room_event_cache_idx ON room_events_cache (room_id, event_uid);
 CREATE UNIQUE INDEX IF NOT EXISTS encryption_key_idx ON encryption_keys (account_id, file_url);
-CREATE INDEX IF NOT EXISTS session_sender_idx ON session (account_id, sender_key);
+CREATE INDEX IF NOT EXISTS session_sender_idx ON sessions (account_id, sender_key);
 CREATE INDEX IF NOT EXISTS user_idx ON users (username);
 
 COMMIT;

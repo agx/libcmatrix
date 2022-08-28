@@ -247,7 +247,7 @@ db_get_past_room_events (CmDb   *self,
    -  encryption = int (0 = "none", 1 = "m.megolm.v1.aes-sha2")
    -  rotation_period_ms = time_t (or may be use μs as provided by server?)
    -  rotation_count_msgs = int (message count max for key change)
-   session.json_data
+   sessions.json_data
    - local
    -  key_added_date = time_t (or may be use μs as provided by server?)
    room_members.json_data
@@ -392,20 +392,26 @@ cm_db_create_schema (CmDb  *self,
     "json_data TEXT, "
     "UNIQUE (account_id, file_url));"
 
-    "CREATE TABLE IF NOT EXISTS session ("
+    /* v2: Renamed to sessions from session */
+    "CREATE TABLE IF NOT EXISTS sessions ("
     "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
-    "account_id INTEGER NOT NULL REFERENCES accounts(id), "
+    "account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE, "
     "sender_key TEXT NOT NULL, "
     "session_id TEXT NOT NULL, "
     "type INTEGER NOT NULL, "
     "pickle TEXT NOT NULL, "
     "time INT, "
+    /* v2 */
+    "origin_server_ts INTEGER, "
     /* Version 1 */
     "room_id INTEGER REFERENCES rooms(id), "
-    /* Version 1 */
-    "json_data TEXT, "
     /* v2 */
     "chain_index INTEGER, "
+    /* v2 */
+    /* 0: usable, 1: rotated, 2: invalidated (on user/device removals) */
+    "session_state INTEGER NOT NULL DEFAULT 0, "
+    /* v1 */
+    "json_data TEXT, "
     "UNIQUE (account_id, sender_key, session_id));"
 
     /* v2 */
@@ -415,7 +421,7 @@ cm_db_create_schema (CmDb  *self,
     "CREATE INDEX IF NOT EXISTS room_event_state_idx ON room_events (state_key);"
     "CREATE UNIQUE INDEX IF NOT EXISTS room_event_cache_idx ON room_events_cache (room_id, event_uid);"
     "CREATE UNIQUE INDEX IF NOT EXISTS encryption_key_idx ON encryption_keys (account_id, file_url);"
-    "CREATE INDEX IF NOT EXISTS session_sender_idx ON session (account_id, sender_key);"
+    "CREATE INDEX IF NOT EXISTS session_sender_idx ON sessions (account_id, sender_key);"
     "CREATE INDEX IF NOT EXISTS user_idx ON users (username);"
 
     "COMMIT;";
@@ -718,15 +724,39 @@ cm_db_migrate_to_v2 (CmDb  *self,
                          "INSERT INTO tmp_rooms(id,account_id,room_name,prev_batch) "
                          "SELECT DISTINCT id,account_id,room_name,prev_batch FROM rooms;"
 
+                         "CREATE TABLE IF NOT EXISTS tmp_sessions ("
+                         "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
+                         "account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE, "
+                         "sender_key TEXT NOT NULL, "
+                         "session_id TEXT NOT NULL, "
+                         "type INTEGER NOT NULL, "
+                         "pickle TEXT NOT NULL, "
+                         "time INT, "
+                         /* v2 */
+                         "origin_server_ts INTEGER, "
+                         /* Version 1 */
+                         "room_id INTEGER REFERENCES rooms(id), "
+                         /* v2 */
+                         "chain_index INTEGER, "
+                         /* v2 */
+                         /* 0: usable, 1: rotated, 2: invalidated (on user/device removals) */
+                         "session_state INTEGER NOT NULL DEFAULT 0, "
+                         /* v1 */
+                         "json_data TEXT, "
+                         "UNIQUE (account_id, sender_key, session_id));"
+
+                         "INSERT INTO tmp_sessions(id,account_id,sender_key,session_id,type,pickle,time) "
+                         "SELECT DISTINCT id,account_id,sender_key,session_id,type,pickle,time FROM session;"
+
                          "DROP TABLE IF EXISTS rooms;"
                          "DROP TABLE IF EXISTS users;"
+                         "DROP TABLE IF EXISTS session;"
                          "DROP TABLE IF EXISTS encryption_keys;"
 
                          "ALTER TABLE tmp_rooms RENAME TO rooms;"
                          "ALTER TABLE tmp_users RENAME TO users;"
+                         "ALTER TABLE tmp_sessions RENAME TO sessions;"
                          "ALTER TABLE tmp_encryption_keys RENAME TO encryption_keys;"
-
-                         "ALTER TABLE session ADD COLUMN chain_index INTEGER;"
 
                          "CREATE UNIQUE INDEX IF NOT EXISTS room_event_idx ON room_events (room_id, event_uid);"
                          "CREATE UNIQUE INDEX IF NOT EXISTS room_event_txn_idx ON room_events (room_id, txnid);"
@@ -734,7 +764,7 @@ cm_db_migrate_to_v2 (CmDb  *self,
                          "CREATE INDEX IF NOT EXISTS room_event_state_idx ON room_events (state_key);"
                          "CREATE UNIQUE INDEX IF NOT EXISTS room_event_cache_idx ON room_events_cache (room_id, event_uid);"
                          "CREATE UNIQUE INDEX IF NOT EXISTS encryption_key_idx ON encryption_keys (account_id, file_url);"
-                         "CREATE INDEX IF NOT EXISTS session_sender_idx ON session (account_id, sender_key);"
+                         "CREATE INDEX IF NOT EXISTS session_sender_idx ON sessions (account_id, sender_key);"
                          "CREATE INDEX IF NOT EXISTS user_idx ON users (username);"
 
                          "PRAGMA user_version = 2;"
@@ -1680,8 +1710,8 @@ cm_db_delete_client (CmDb  *self,
     }
 
   status = sqlite3_prepare_v2 (self->db,
-                               "DELETE FROM session "
-                               "WHERE session.account_id=?1; ",
+                               "DELETE FROM sessions "
+                               "WHERE sessions.account_id=?1; ",
                                -1, &stmt, NULL);
   matrix_bind_int (stmt, 1, account_id, "binding when deleting account");
   sqlite3_step (stmt);
@@ -1744,7 +1774,7 @@ cm_db_add_session (CmDb  *self,
     room_id = cm_db_get_room_id (self, task, room, account_id);
 
   status = sqlite3_prepare_v2 (self->db,
-                               "INSERT INTO session(account_id,sender_key,session_id,type,pickle,room_id,time) "
+                               "INSERT INTO sessions(account_id,sender_key,session_id,type,pickle,room_id,time) "
                                "VALUES(?1,?2,?3,?4,?5,?6,?7)",
                                -1, &stmt, NULL);
 
@@ -1877,7 +1907,7 @@ db_lookup_session (CmDb  *self,
     }
 
   sqlite3_prepare_v2 (self->db,
-                      "SELECT pickle FROM session "
+                      "SELECT pickle FROM sessions "
                       "WHERE account_id=? AND sender_key=? AND session_id=? AND type=?",
                       -1, &stmt, NULL);
 
@@ -1930,7 +1960,7 @@ db_lookup_olm_session (CmDb  *self,
     }
 
   sqlite3_prepare_v2 (self->db,
-                      "SELECT pickle FROM session "
+                      "SELECT pickle FROM sessions "
                       "WHERE account_id=? AND sender_key=? AND type=?",
                       -1, &stmt, NULL);
 
