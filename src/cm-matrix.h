@@ -35,6 +35,8 @@ gboolean    cm_matrix_open_finish        (CmMatrix            *self,
                                           GError             **error);
 gboolean    cm_matrix_is_ready           (CmMatrix            *self);
 GListModel *cm_matrix_get_clients_list   (CmMatrix            *self);
+gboolean    cm_matrix_has_client_with_id (CmMatrix            *self,
+                                          const char          *user_id);
 CmClient   *cm_matrix_client_new         (CmMatrix            *self);
 void        cm_matrix_save_client_async    (CmMatrix            *self,
                                             CmClient            *client,

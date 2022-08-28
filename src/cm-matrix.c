@@ -46,6 +46,7 @@ struct _CmMatrix
   CmDb *cm_db;
 
   GListStore *clients_list;
+  GHashTable *clients_to_save;
 
   guint    network_change_id;
 
@@ -70,6 +71,51 @@ enum {
 };
 
 static GParamSpec *properties[N_PROPS];
+
+static gboolean
+matrix_has_client (CmMatrix *self,
+                   CmClient *client,
+                   gboolean  check_pending)
+{
+  const char *login_name, *user_name;
+  GListModel *model;
+  guint n_items;
+
+  g_assert (CM_IS_MATRIX (self));
+  g_assert (CM_IS_CLIENT (client));
+
+  model = G_LIST_MODEL (self->clients_list);
+  n_items = g_list_model_get_n_items (model);
+  user_name = cm_client_get_user_id (client);
+  login_name = cm_client_get_login_id (client);
+
+  /* For the time being, let's ignore the fact that the same username
+   * can exist in different homeservers
+   */
+  for (guint i = 0; i < n_items; i++)
+    {
+      g_autoptr(CmClient) item = NULL;
+
+      item = g_list_model_get_item (model, i);
+
+      if (login_name &&
+          g_strcmp0 (login_name, cm_client_get_login_id (item)) == 0)
+        return TRUE;
+
+      if (user_name &&
+          g_strcmp0 (user_name, cm_client_get_user_id (item)) == 0)
+        return TRUE;
+
+      if (user_name &&
+          g_strcmp0 (user_name, cm_client_get_login_id (item)) == 0)
+        return TRUE;
+    }
+
+  if (check_pending)
+    return g_hash_table_contains (self->clients_to_save, login_name);
+
+  return FALSE;
+}
 
 static gboolean
 matrix_reconnect (gpointer user_data)
@@ -164,6 +210,7 @@ cm_matrix_finalize (GObject *object)
   matrix_stop (self);
   g_list_store_remove_all (self->clients_list);
   g_clear_object (&self->clients_list);
+  g_hash_table_unref (self->clients_to_save);
 
   g_free (self->db_path);
   g_free (self->db_name);
@@ -204,6 +251,8 @@ cm_matrix_init (CmMatrix *self)
     g_error ("libgcrypt has not been initialized, did you run cm_init()?");
 
   self->clients_list = g_list_store_new (CM_TYPE_CLIENT);
+  self->clients_to_save = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                                 g_free, g_object_unref);
 
   g_signal_connect_object (g_network_monitor_get_default (),
                            "network-changed",
@@ -506,6 +555,35 @@ cm_matrix_get_clients_list (CmMatrix *self)
   return G_LIST_MODEL (self->clients_list);
 }
 
+gboolean
+cm_matrix_has_client_with_id (CmMatrix   *self,
+                              const char *user_id)
+{
+  GListModel *model;
+  guint n_items;
+
+  g_return_val_if_fail (CM_IS_MATRIX (self), FALSE);
+  g_return_val_if_fail (user_id && *user_id, FALSE);
+
+  model = G_LIST_MODEL (self->clients_list);
+  n_items = g_list_model_get_n_items (model);
+
+  for (guint i = 0; i < n_items; i++)
+    {
+      g_autoptr(CmClient) item = NULL;
+
+      item = g_list_model_get_item (model, i);
+
+      if (g_strcmp0 (user_id, cm_client_get_login_id (item)) == 0)
+        return TRUE;
+
+      if (g_strcmp0 (user_id, cm_client_get_user_id (item)) == 0)
+        return TRUE;
+    }
+
+  return g_hash_table_contains (self->clients_to_save, user_id);
+}
+
 /**
  * cm_matrix_client_new:
  * @self: A #CmMatrix
@@ -559,8 +637,9 @@ matrix_save_client_cb (GObject      *object,
     }
   else
     {
-      if (!cm_utils_get_item_position (G_LIST_MODEL (self->clients_list), object, NULL))
-        g_list_store_append (self->clients_list, object);
+      g_list_store_append (self->clients_list, object);
+      g_hash_table_remove (self->clients_to_save,
+                           cm_client_get_login_id (CM_CLIENT (object)));
       g_task_return_boolean (task, ret);
     }
 
@@ -573,19 +652,29 @@ cm_matrix_save_client_async (CmMatrix            *self,
                              GAsyncReadyCallback  callback,
                              gpointer             user_data)
 {
+  const char *login_id;
   GTask *task;
 
   g_return_if_fail (CM_IS_MATRIX (self));
   g_return_if_fail (CM_IS_CLIENT (client));
-  g_return_if_fail (cm_client_get_user_id (client) ||
-                    cm_client_get_login_id (client));
+  g_return_if_fail (cm_client_get_login_id (client));
+  /* user id is set after login, which should be set only by cmatrix */
+  g_return_if_fail (!cm_client_get_user_id (client));
   g_return_if_fail (cm_client_get_homeserver (client));
 
+  task = g_task_new (self, NULL, callback, user_data);
   g_object_set_data (G_OBJECT (client), "no-save", GINT_TO_POINTER (FALSE));
 
-  if (!cm_utils_get_item_position (G_LIST_MODEL (self->clients_list), client, NULL))
-    g_object_set_data (G_OBJECT (client), "enable", GINT_TO_POINTER (TRUE));
-  task = g_task_new (self, NULL, callback, user_data);
+  if (matrix_has_client (self, client, TRUE))
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_EXISTS,
+                               "User already exists");
+      return;
+    }
+
+  login_id = cm_client_get_login_id (client);
+  g_hash_table_insert (self->clients_to_save, g_strdup (login_id), g_object_ref (client));
+  g_object_set_data (G_OBJECT (client), "enable", GINT_TO_POINTER (TRUE));
   cm_client_save_secrets_async (client,
                                 matrix_save_client_cb,
                                 task);
