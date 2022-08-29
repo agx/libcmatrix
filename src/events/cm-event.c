@@ -84,6 +84,14 @@ event_parse_relations (CmEvent    *self,
       child = cm_utils_json_object_get_object (child, "m.replace");
       priv->replaces_event_id = g_strdup (cm_utils_json_object_get_string (child, "event_id"));
     }
+
+  if (!priv->replaces_event_id)
+    {
+      type = cm_utils_json_object_get_string (root, "type");
+
+      if (g_strcmp0 (event_type_string (CM_M_ROOM_REDACTION), type) == 0)
+        priv->replaces_event_id = cm_utils_json_object_dup_string (root, "redacts");
+    }
 }
 
 static gpointer
