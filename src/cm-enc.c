@@ -82,13 +82,6 @@ free_olm_session (gpointer data)
 }
 
 static void
-free_in_group_session (gpointer data)
-{
-  olm_clear_inbound_group_session (data);
-  g_free (data);
-}
-
-static void
 free_out_group_session (gpointer data)
 {
   olm_clear_outbound_group_session (data);
@@ -295,7 +288,7 @@ cm_enc_init (CmEnc *self)
   self->out_olm_sessions = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                   g_free, free_olm_session);
   self->in_group_sessions = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                                   g_free, free_in_group_session);
+                                                   g_free, g_object_unref);
   self->out_group_sessions = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                     g_free, free_out_group_session);
   self->out_group_room_session = g_hash_table_new_full (g_str_hash, g_str_equal,
@@ -840,12 +833,9 @@ handle_m_room_key (CmEnc      *self,
                    JsonObject *root,
                    const char *sender_key)
 {
-  g_autofree OlmInboundGroupSession *session = NULL;
+  CmOlm *session;
   JsonObject *object;
   const char *session_key, *session_id, *room_id;
-  g_autofree char *pickle = NULL;
-  size_t error;
-  int length;
 
   g_assert (CM_IS_ENC (self));
   g_assert (root);
@@ -863,27 +853,12 @@ handle_m_room_key (CmEnc      *self,
       g_hash_table_lookup (self->in_group_sessions, session_id))
     return;
 
-  error = olm_init_inbound_group_session (session, (gpointer)session_key,
-                                          strlen (session_key));
-  if (error == olm_error ())
-    {
-      g_warning ("Error creating group session from key: %s", olm_inbound_group_session_last_error (session));
-      return;
-    }
-
-  length = olm_pickle_inbound_group_session_length (session);
-  pickle = g_malloc (length + 1);
-  olm_pickle_inbound_group_session (session, self->pickle_key,
-                                    strlen (self->pickle_key),
-                                    pickle, length);
-  pickle[length] = '\0';
-  g_debug ("saving session, room id: %s", room_id);
-  cm_db_add_session_async (self->cm_db, self->user_id, self->device_id,
-                           room_id, session_id, sender_key,
-                           g_steal_pointer (&pickle),
-                           SESSION_MEGOLM_V1_IN, NULL, NULL);
-  g_hash_table_insert (self->in_group_sessions, g_strdup (session_id),
-                       g_steal_pointer (&session));
+  session = cm_olm_in_group_new (session_key, sender_key, session_id);
+  cm_olm_set_details (session, room_id, self->user_id, self->device_id);
+  cm_olm_set_key (session, self->pickle_key);
+  cm_olm_set_db (session, self->cm_db);
+  cm_olm_save (session);
+  g_hash_table_insert (self->in_group_sessions, g_strdup (session_id), session);
 }
 
 void
