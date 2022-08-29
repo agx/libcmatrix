@@ -191,6 +191,46 @@ cm_olm_outbound_new (gpointer    olm_account,
 }
 
 CmOlm *
+cm_olm_inbound_new (gpointer    olm_account,
+                    const char *sender_identity_key,
+                    const char *one_time_key_message)
+{
+  CmOlm *self = NULL;
+  OlmSession *session = NULL;
+  g_autofree char *message_copy = NULL;
+  size_t err;
+
+  message_copy = g_strdup (one_time_key_message);
+
+  session = g_malloc (olm_session_size ());
+  olm_session (session);
+
+  err = olm_create_inbound_session_from (session, olm_account,
+                                         sender_identity_key, strlen (sender_identity_key),
+                                         message_copy, strlen (message_copy));
+  if (err == olm_error ())
+    {
+      g_warning ("Error creating session: %s", olm_session_last_error (session));
+      olm_clear_session (session);
+      g_free (session);
+
+      return NULL;
+    }
+
+  /* Remove one time keys that are used */
+  err = olm_remove_one_time_keys (olm_account, session);
+  if (err == olm_error ())
+    g_warning ("Error removing key: %s", olm_account_last_error (olm_account));
+
+  self = g_object_new (CM_TYPE_OLM, NULL);
+  self->olm_session = g_steal_pointer (&session);
+  self->curve_key = g_strdup (sender_identity_key);
+  self->account = olm_account;
+
+  return self;
+}
+
+CmOlm *
 cm_olm_out_group_new (void)
 {
   CmOlm *self;
@@ -339,10 +379,103 @@ cm_olm_save (CmOlm *self)
   return success;
 }
 
+char *
+cm_olm_encrypt (CmOlm      *self,
+                const char *plain_text)
+{
+  g_autofree char *encrypted = NULL;
+  cm_gcry_t random = NULL;
+  size_t len, rand_len;
+
+  g_return_val_if_fail (CM_IS_OLM (self), NULL);
+  g_assert (self->olm_session);
+
+  if (!plain_text)
+    return NULL;
+
+  rand_len = olm_encrypt_random_length (self->olm_session);
+  if (rand_len)
+    random = gcry_random_bytes (rand_len, GCRY_STRONG_RANDOM);
+
+  len = olm_encrypt_message_length (self->olm_session, strlen (plain_text));
+  encrypted = g_malloc (len + 1);
+  len = olm_encrypt (self->olm_session, plain_text, strlen (plain_text),
+                     random, rand_len, encrypted, len);
+  gcry_free (random);
+
+  if (len == olm_error ())
+    {
+      g_warning ("Error encrypting: %s", olm_session_last_error (self->olm_session));
+
+      return NULL;
+    }
+  encrypted[len] = '\0';
+
+  return g_steal_pointer (&encrypted);
+}
+
+char *
+cm_olm_decrypt (CmOlm      *self,
+                size_t      type,
+                const char *message)
+{
+  g_autofree char *plaintext = NULL;
+  g_autofree char *copy = NULL;
+  size_t len;
+
+  g_assert (CM_IS_OLM (self));
+  g_return_val_if_fail (message, NULL);
+
+  copy = g_strdup (message);
+  len = olm_decrypt_max_plaintext_length (self->olm_session, type, copy, strlen (copy));
+
+  if (len == olm_error ())
+    {
+      g_warning ("Error getting max length: %s", olm_session_last_error (self->olm_session));
+
+      return NULL;
+    }
+
+  g_free (copy);
+  copy = g_strdup (message);
+  plaintext = g_malloc (len + 1);
+  len = olm_decrypt (self->olm_session, type, copy, strlen (copy), plaintext, len);
+
+  if (len == olm_error ())
+    {
+      g_warning ("Error decrypting: %s", olm_session_last_error (self->olm_session));
+
+      return NULL;
+    }
+
+  plaintext[len] = '\0';
+
+  return g_steal_pointer (&plaintext);
+}
+
+size_t
+cm_olm_get_message_type (CmOlm *self)
+{
+  g_assert (CM_IS_OLM (self));
+  g_assert (self->olm_session);
+
+  return olm_encrypt_message_type (self->olm_session);
+}
+
 const char *
 cm_olm_get_session_id (CmOlm *self)
 {
   g_return_val_if_fail (CM_IS_OLM (self), NULL);
+
+  if (!self->session_id && self->olm_session)
+    {
+      size_t len;
+
+      len = olm_session_id_length (self->olm_session);
+      self->session_id = g_malloc (len + 1);
+      olm_session_id (self->olm_session, self->session_id, len);
+      self->session_id[len] = '\0';
+    }
 
   return self->session_id;
 }
@@ -363,6 +496,7 @@ cm_olm_match_olm_session (const char  *body,
                           const char  *pickle_key,
                           char       **out_decrypted)
 {
+  CmOlm *self = NULL;
   g_autofree char *body_copy = NULL;
   g_autofree char *pickle_copy = NULL;
   g_autofree OlmSession *session = NULL;
@@ -398,7 +532,9 @@ cm_olm_match_olm_session (const char  *body,
       plaintext[length] = '\0';
       *out_decrypted = g_steal_pointer (&plaintext);
 
-      return g_steal_pointer (&session);
+      self = g_object_new (CM_TYPE_OLM, NULL);
+      self->olm_session = g_steal_pointer (&session);
+      return self;
     }
 
   if (message_type == OLM_MESSAGE_TYPE_PRE_KEY)
@@ -415,7 +551,9 @@ cm_olm_match_olm_session (const char  *body,
               plaintext[length] = '\0';
               *out_decrypted = g_steal_pointer (&plaintext);
 
-              return g_steal_pointer (&session);
+              self = g_object_new (CM_TYPE_OLM, NULL);
+              self->olm_session = g_steal_pointer (&session);
+              return self;
             }
         }
 

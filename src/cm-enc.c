@@ -108,42 +108,7 @@ free_all_details (CmEnc *self)
   g_hash_table_remove_all (self->out_group_sessions);
 }
 
-static char *
-ma_olm_encrypt (OlmSession *session,
-                const char *plain_text)
-{
-  g_autofree char *encrypted = NULL;
-  cm_gcry_t random = NULL;
-  size_t length, rand_len;
-
-  g_assert (session);
-
-  if (!plain_text)
-    return NULL;
-
-  rand_len = olm_encrypt_random_length (session);
-  if (rand_len)
-    random = gcry_random_bytes (rand_len, GCRY_STRONG_RANDOM);
-
-  length = olm_encrypt_message_length (session, strlen (plain_text));
-  encrypted = g_malloc (length + 1);
-  length = olm_encrypt (session, plain_text, strlen (plain_text),
-                        random, rand_len,
-                        encrypted, length);
-  gcry_free (random);
-
-  if (length == olm_error ())
-    {
-      g_warning ("Error encrypting: %s", olm_session_last_error (session));
-
-      return NULL;
-    }
-  encrypted[length] = '\0';
-
-  return g_steal_pointer (&encrypted);
-}
-
-static OlmSession *
+static CmOlm *
 ma_create_olm_out_session (CmEnc      *self,
                            const char *curve_key,
                            const char *one_time_key,
@@ -163,7 +128,7 @@ ma_create_olm_out_session (CmEnc      *self,
   cm_olm_set_details (session, room_id, self->user_id, self->device_id);
   cm_olm_save (session);
 
-  return cm_olm_steal_session (session, SESSION_OLM_V1_OUT);
+  return session;
 }
 
 /*
@@ -929,8 +894,7 @@ cm_enc_handle_room_encrypted (CmEnc      *self,
   g_autofree char *plaintext = NULL;
   g_autofree char *body = NULL;
   g_autofree char *copy = NULL;
-  OlmSession *session = NULL;
-  size_t error, length;
+  CmOlm *session = NULL;
   size_t type;
   gboolean force_save = FALSE;
 
@@ -975,26 +939,9 @@ cm_enc_handle_room_encrypted (CmEnc      *self,
 
       if (!session)
         {
-          g_autofree char *body_copy = NULL;
-          session = g_malloc (olm_session_size ());
-          olm_session (session);
-
-          body_copy = g_strdup (body);
-          error = olm_create_inbound_session_from (session, self->account,
-                                                   sender_key, strlen (sender_key),
-                                                   body_copy, strlen (body_copy));
-          if (error == olm_error ())
-            {
-              g_warning ("Error creating session: %s", olm_session_last_error (session));
-              free_olm_session (session);
-
-              return;
-            }
-
-          /* Remove one time keys that are used */
-          error = olm_remove_one_time_keys (self->account, session);
-          if (error == olm_error ())
-            g_warning ("Error removing key: %s", olm_account_last_error (self->account));
+          session = cm_olm_inbound_new (self->account, sender_key, body);
+          cm_olm_set_db (session, self->cm_db);
+          cm_olm_set_key (session, self->pickle_key);
 
           force_save = TRUE;
         }
@@ -1004,29 +951,7 @@ cm_enc_handle_room_encrypted (CmEnc      *self,
     return;
 
   if (!plaintext)
-    {
-      copy = g_strdup (body);
-      length = olm_decrypt_max_plaintext_length (session, type, copy, strlen (copy));
-
-      if (length == olm_error ())
-        {
-          g_warning ("Error getting max length: %s", olm_session_last_error (session));
-
-          return;
-        }
-
-      plaintext = g_malloc (length + 1);
-      length = olm_decrypt (session, type, body, strlen (body), plaintext, length);
-
-      if (length == olm_error ())
-        {
-          g_warning ("Error decrypting: %s", olm_session_last_error (session));
-
-          return;
-        }
-
-      plaintext[length] = '\0';
-    }
+    plaintext = cm_olm_decrypt (session, type, body);
 
   {
     g_autoptr(JsonObject) content = NULL;
@@ -1058,9 +983,8 @@ cm_enc_handle_room_encrypted (CmEnc      *self,
     if (force_save)
       {
         GHashTable *in_olm_sessions;
-        g_autofree char *pickle = NULL;
-        g_autofree char *id = NULL;
         g_autofree char *room_id = NULL;
+        const char *id;
 
         data = cm_utils_json_object_get_object (content, "content");
         room_id = g_strdup (cm_utils_json_object_get_string (data, "room_id"));
@@ -1069,29 +993,15 @@ cm_enc_handle_room_encrypted (CmEnc      *self,
         if (!in_olm_sessions)
           {
             in_olm_sessions = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                                     g_free, free_olm_session);
+                                                     g_free, g_object_unref);
             g_hash_table_insert (self->in_olm_sessions, g_strdup (sender_key),
                                  in_olm_sessions);
           }
 
-        length = olm_session_id_length (session);
-        id = g_malloc (length + 1);
-        olm_session_id (session, id, length);
-        id[length] = '\0';
-
+        id = cm_olm_get_session_id (session);
         g_hash_table_insert (in_olm_sessions, g_strdup (id), session);
-
-        length = olm_pickle_session_length (session);
-        pickle = g_malloc (length + 1);
-        olm_pickle_session (session, self->pickle_key,
-                            strlen (self->pickle_key),
-                            pickle, length);
-        pickle[length] = '\0';
-
-        cm_db_add_session_async (self->cm_db, self->user_id, self->device_id,
-                                 room_id, id, sender_key,
-                                 g_steal_pointer (&pickle),
-                                 SESSION_OLM_V1_IN, NULL, NULL);
+        cm_olm_set_details (session, room_id, self->user_id, self->device_id);
+        cm_olm_save (session);
       }
 
     if (g_strcmp0 (message_type, "m.room_key") == 0)
@@ -1348,7 +1258,7 @@ cm_enc_create_out_group_keys (CmEnc      *self,
       for (guint j = 0; j < n_items; j++)
         {
           g_autoptr(CmDevice) device = NULL;
-          OlmSession *olm_session = NULL;
+          CmOlm *olm_session = NULL;
           g_autofree char *one_time_key = NULL;
           JsonObject *content;
 
@@ -1411,10 +1321,10 @@ cm_enc_create_out_group_keys (CmEnc      *self,
 
             /* Now encrypt the above JSON */
             data = cm_utils_json_object_to_string (object, FALSE);
-            encrypted = ma_olm_encrypt (olm_session, data);
+            encrypted = cm_olm_encrypt (olm_session, data);
 
             /* Add the encrypted data as the content */
-            json_object_set_int_member (content, "type", olm_encrypt_message_type (olm_session));
+            json_object_set_int_member (content, "type", cm_olm_get_message_type (olm_session));
             json_object_set_string_member (content, "body", encrypted);
           }
         }

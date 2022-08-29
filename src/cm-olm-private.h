@@ -25,6 +25,9 @@ CmOlm      *cm_olm_outbound_new        (gpointer        olm_account,
                                         const char     *curve_key,
                                         const char     *one_time_key,
                                         const char     *room_id);
+CmOlm      *cm_olm_inbound_new         (gpointer        olm_account,
+                                        const char     *sender_identity_key,
+                                        const char     *one_time_key_message);
 CmOlm      *cm_olm_out_group_new       (void);
 void        cm_olm_set_details         (CmOlm          *self,
                                         const char     *room_id,
@@ -35,6 +38,12 @@ void        cm_olm_set_db              (CmOlm          *self,
 void        cm_olm_set_key             (CmOlm          *self,
                                         const char     *key);
 gboolean    cm_olm_save                (CmOlm          *self);
+char       *cm_olm_encrypt             (CmOlm          *self,
+                                        const char     *plain_text);
+char       *cm_olm_decrypt             (CmOlm          *self,
+                                        size_t          type,
+                                        const char     *message);
+size_t      cm_olm_get_message_type    (CmOlm          *self);
 
 const char *cm_olm_get_session_id        (CmOlm        *self);
 const char *cm_olm_get_session_key       (CmOlm        *self);

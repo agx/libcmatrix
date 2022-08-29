@@ -2062,7 +2062,7 @@ db_lookup_olm_session (CmDb  *self,
 
   g_object_set_data_full (G_OBJECT (task), "plaintext", plain_text,
                           (GDestroyNotify)cm_utils_free_buffer);
-  g_task_return_pointer (task, session, g_free);
+  g_task_return_pointer (task, session, g_object_unref);
 }
 
 static void
