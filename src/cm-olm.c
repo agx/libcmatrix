@@ -284,6 +284,18 @@ cm_olm_in_group_new (const char *session_key,
 }
 
 CmOlm *
+cm_olm_in_group_new_from_out (CmOlm      *out_group,
+                              const char *sender_identity_key)
+{
+  g_assert (CM_IS_OLM (out_group));
+  g_assert (out_group->out_gp_session);
+
+  return cm_olm_in_group_new (out_group->session_key,
+                              sender_identity_key,
+                              out_group->session_id);
+}
+
+CmOlm *
 cm_olm_out_group_new (void)
 {
   CmOlm *self;
