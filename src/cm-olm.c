@@ -464,28 +464,49 @@ cm_olm_encrypt (CmOlm      *self,
                 const char *plain_text)
 {
   g_autofree char *encrypted = NULL;
-  cm_gcry_t random = NULL;
-  size_t len, rand_len;
+  size_t len;
 
   g_return_val_if_fail (CM_IS_OLM (self), NULL);
-  g_assert (self->olm_session);
+  g_assert (self->olm_session || self->out_gp_session);
 
   if (!plain_text)
     return NULL;
 
-  rand_len = olm_encrypt_random_length (self->olm_session);
-  if (rand_len)
-    random = gcry_random_bytes (rand_len, GCRY_STRONG_RANDOM);
+  if (self->olm_session)
+    {
+      cm_gcry_t random = NULL;
+      size_t rand_len;
 
-  len = olm_encrypt_message_length (self->olm_session, strlen (plain_text));
-  encrypted = g_malloc (len + 1);
-  len = olm_encrypt (self->olm_session, plain_text, strlen (plain_text),
-                     random, rand_len, encrypted, len);
-  gcry_free (random);
+      rand_len = olm_encrypt_random_length (self->olm_session);
+      if (rand_len)
+        random = gcry_random_bytes (rand_len, GCRY_STRONG_RANDOM);
+
+      len = olm_encrypt_message_length (self->olm_session, strlen (plain_text));
+      encrypted = g_malloc (len + 1);
+      len = olm_encrypt (self->olm_session, plain_text, strlen (plain_text),
+                         random, rand_len, encrypted, len);
+      gcry_free (random);
+    }
+  else if (self->out_gp_session)
+    {
+      len = olm_group_encrypt_message_length (self->out_gp_session, strlen (plain_text));
+      encrypted = g_malloc (len + 1);
+      len = olm_group_encrypt (self->out_gp_session,
+                               (gpointer)plain_text, strlen (plain_text),
+                               (gpointer)encrypted, len);
+    }
 
   if (len == olm_error ())
     {
-      g_warning ("Error encrypting: %s", olm_session_last_error (self->olm_session));
+      const char *error = NULL;
+
+      if (self->olm_session)
+        error = olm_session_last_error (self->olm_session);
+      else if (self->out_gp_session)
+        error = olm_outbound_group_session_last_error (self->out_gp_session);
+
+      if (error)
+        g_warning ("Error encrypting: %s", error);
 
       return NULL;
     }
