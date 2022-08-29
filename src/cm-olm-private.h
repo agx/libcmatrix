@@ -19,8 +19,6 @@ G_BEGIN_DECLS
 
 G_DECLARE_FINAL_TYPE (CmOlm, cm_olm, CM, OLM, GObject)
 
-gpointer    cm_olm_steal_session       (CmOlm          *self,
-                                        CmSessionType   type);
 CmOlm      *cm_olm_new_from_pickle     (char           *pickle,
                                         const char     *pickle_key,
                                         const char     *sender_identity_key,
