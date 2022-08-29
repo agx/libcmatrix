@@ -23,6 +23,7 @@
 #include "users/cm-user-private.h"
 #include "cm-device-private.h"
 #include "cm-enc-private.h"
+#include "cm-olm-private.h"
 #include "cm-client-private.h"
 #include "cm-room-private.h"
 #include "cm-utils-private.h"
@@ -2050,7 +2051,7 @@ db_lookup_olm_session (CmDb  *self,
       char *pickle;
 
       pickle = (char *)sqlite3_column_text (stmt, 0);
-      session = cm_enc_olm_session_match (body, strlen (body), message_type,
+      session = cm_olm_match_olm_session (body, strlen (body), message_type,
                                           pickle, pickle_key, &plain_text);
 
       if (session)
