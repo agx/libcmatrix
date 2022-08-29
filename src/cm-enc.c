@@ -1355,16 +1355,3 @@ cm_enc_get_ed25519_key (CmEnc *self)
 
   return self->ed_key;
 }
-
-
-gpointer
-cm_enc_olm_session_match (const char  *body,
-                          gsize        body_len,
-                          size_t       message_type,
-                          const char  *pickle,
-                          const char  *pickle_key,
-                          char       **out_decrypted)
-{
-  return cm_olm_match_olm_session (body, body_len, message_type,
-                                   pickle, pickle_key, out_decrypted);
-}

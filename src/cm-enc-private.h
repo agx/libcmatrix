@@ -87,12 +87,6 @@ CmEncFileInfo *cm_enc_find_file_enc_finish       (CmEnc               *self,
                                                   GAsyncResult        *result,
                                                   GError             **error);
 void           cm_enc_file_info_free             (gpointer             data);
-gpointer       cm_enc_olm_session_match          (const char          *body,
-                                                  gsize                body_len,
-                                                  size_t               message_type,
-                                                  const char          *pickle,
-                                                  const char          *pickle_key,
-                                                  char              **out_decrypted);
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (CmEncFileInfo, cm_enc_file_info_free)
 /* G_DEFINE_AUTOPTR_CLEANUP_FUNC (cm_gcry_t, gcry_free) */
