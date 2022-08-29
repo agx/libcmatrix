@@ -279,6 +279,7 @@ cm_olm_in_group_new (const char *session_key,
   self->in_gp_session = g_steal_pointer (&session);
   self->curve_key = g_strdup (sender_identity_key);
   self->session_id = g_strdup (session_id);
+  self->session_key = g_strdup (session_key);
 
   return self;
 }
