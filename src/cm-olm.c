@@ -500,36 +500,41 @@ cm_olm_encrypt (CmOlm      *self,
   return g_steal_pointer (&encrypted);
 }
 
-char *
-cm_olm_decrypt (CmOlm      *self,
-                size_t      type,
-                const char *message)
+static char *
+session_decrypt (CmOlm      *self,
+                 size_t      type,
+                 const char *ciphertext)
 {
   g_autofree char *plaintext = NULL;
-  g_autofree char *copy = NULL;
+  char *copy;
   size_t len;
 
   g_assert (CM_IS_OLM (self));
-  g_return_val_if_fail (message, NULL);
+  g_assert (self->olm_session);
 
-  copy = g_strdup (message);
-  len = olm_decrypt_max_plaintext_length (self->olm_session, type, copy, strlen (copy));
+  copy = g_strdup (ciphertext);
+  len = olm_decrypt_max_plaintext_length (self->olm_session,
+                                          type, copy, strlen (copy));
+  g_free (copy);
 
   if (len == olm_error ())
     {
-      g_warning ("Error getting max length: %s", olm_session_last_error (self->olm_session));
+      g_warning ("Error getting max length: %s",
+                 olm_session_last_error (self->olm_session));
 
       return NULL;
     }
 
-  g_free (copy);
-  copy = g_strdup (message);
+  copy = g_strdup (ciphertext);
   plaintext = g_malloc (len + 1);
-  len = olm_decrypt (self->olm_session, type, copy, strlen (copy), plaintext, len);
+  len = olm_decrypt (self->olm_session, type, copy,
+                     strlen (copy), plaintext, len);
+  g_free (copy);
 
   if (len == olm_error ())
     {
-      g_warning ("Error decrypting: %s", olm_session_last_error (self->olm_session));
+      g_warning ("Error decrypting: %s",
+                 olm_session_last_error (self->olm_session));
 
       return NULL;
     }
@@ -537,6 +542,57 @@ cm_olm_decrypt (CmOlm      *self,
   plaintext[len] = '\0';
 
   return g_steal_pointer (&plaintext);
+}
+
+static char *
+group_session_decrypt (CmOlm      *self,
+                       const char *ciphertext)
+{
+  g_autofree char *plaintext = NULL;
+  char *copy;
+  size_t len;
+
+  g_assert (CM_IS_OLM (self));
+  g_assert (self->in_gp_session);
+
+  copy = g_strdup (ciphertext);
+  len = olm_group_decrypt_max_plaintext_length (self->in_gp_session,
+                                                (gpointer)copy, strlen (copy));
+  g_free (copy);
+
+  plaintext = g_malloc (len + 1);
+  copy = g_strdup (ciphertext);
+  len = olm_group_decrypt (self->in_gp_session, (gpointer)copy, strlen (copy),
+                           (gpointer)plaintext, len, NULL);
+  g_free (copy);
+
+  if (len == olm_error ())
+    {
+      g_warning ("Error decrypting: %s",
+                 olm_inbound_group_session_last_error (self->in_gp_session));
+      return NULL;
+    }
+
+  plaintext[len] = '\0';
+
+  return g_steal_pointer (&plaintext);
+}
+
+char *
+cm_olm_decrypt (CmOlm      *self,
+                size_t      type,
+                const char *message)
+{
+  g_assert (CM_IS_OLM (self));
+  g_return_val_if_fail (message, NULL);
+
+  if (self->olm_session)
+    return session_decrypt (self, type, message);
+
+  if (self->in_gp_session)
+    return group_session_decrypt (self, message);
+
+  return NULL;
 }
 
 size_t
