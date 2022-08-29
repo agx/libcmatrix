@@ -371,6 +371,15 @@ cm_olm_out_group_new (void)
   return self;
 }
 
+size_t
+cm_olm_get_message_index (CmOlm *self)
+{
+  g_return_val_if_fail (CM_IS_OLM (self), 0);
+  g_return_val_if_fail (self->out_gp_session, 0);
+
+  return olm_outbound_group_session_message_index (self->out_gp_session);
+}
+
 void
 cm_olm_set_details (CmOlm      *self,
                     const char *room_id,
