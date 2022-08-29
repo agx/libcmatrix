@@ -50,6 +50,12 @@ struct _CmDb
 #define VERIFICATION_BLACKLISTED 3
 #define VERIFICATION_IGNORED     4
 
+#define EVENT_NOT_ENCRYPTED       0
+#define EVENT_NOT_DECRYPTED       1
+#define EVENT_DECRYPTED           2
+/* We got m.room.encrypted, but with empty content */
+#define EVENT_MAY_BE_DECRYPTED    3
+
 #define ENCRYPTION_NONE                       0
 #define ENCRYPTION_MEGOLM_V1_AES_SHA2         1
 #define ENCRYPTION_OLM_v1_curve25519_AES_SHA2 2
@@ -153,6 +159,34 @@ db_event_state_from_int (int state)
     return CM_EVENT_STATE_RECEIVED;
 
   g_return_val_if_reached (CM_EVENT_STATE_UNKNOWN);
+}
+
+static int
+db_event_get_decryption_value (CmEvent *event)
+{
+  gboolean encrypted = 0, decrypted = 0, has_content = 0;
+
+  if (!event)
+    return EVENT_NOT_ENCRYPTED;
+
+  g_assert (CM_IS_EVENT (event));
+
+  encrypted = cm_event_is_encrypted (event);
+  decrypted = cm_event_is_decrypted (event);
+  has_content = cm_event_has_encrypted_content (event);
+
+  if (encrypted)
+    {
+      if (has_content && decrypted)
+        return EVENT_DECRYPTED;
+
+      if (!has_content)
+        return EVENT_MAY_BE_DECRYPTED;
+
+      return EVENT_NOT_DECRYPTED;
+    }
+
+  return EVENT_NOT_ENCRYPTED;
 }
 
 static GPtrArray *
@@ -362,10 +396,16 @@ cm_db_create_schema (CmDb  *self,
     /* If set to 0, this event is a reply to some other, which is not yet in db */
     "replaces_event_id INTEGER REFERENCES room_events(id), "
     "replaces_event_cache_id INTEGER REFERENCES room_events_cache(id), "
+    /* This event has been replaced with the given event id */
+    /* This will likely point to the latest replacement id available */
+    "replaced_with_id INTEGER REFERENCES room_events(id), "
     /* sending, sent, sending failed, */
     "event_state INTEGER, "
     "state_key TEXT, "
     "origin_server_ts INTEGER NOT NULL, "
+    /* 0: not encrypted, 1: not decrypted 2: decrypted */
+    /* 3: may be decrypted, we got m.room.encrypted but without content */
+    "decryption INTEGER NOT NULL DEFAULT 0, "
     /* direction int, encrypted int, verified int, txnid */
     "json_data TEXT, "
     "UNIQUE (room_id, event_uid));"
@@ -423,6 +463,22 @@ cm_db_create_schema (CmDb  *self,
     "CREATE UNIQUE INDEX IF NOT EXISTS encryption_key_idx ON encryption_keys (account_id, file_url);"
     "CREATE INDEX IF NOT EXISTS session_sender_idx ON sessions (account_id, sender_key);"
     "CREATE INDEX IF NOT EXISTS user_idx ON users (username);"
+
+    /* v2 */
+    "CREATE TRIGGER IF NOT EXISTS insert_replaced_with_id AFTER INSERT "
+    "ON room_events FOR EACH ROW WHEN NEW.replaces_event_id IS NOT NULL "
+    "BEGIN "
+    "UPDATE room_events SET replaced_with_id=NEW.id "
+    "WHERE id=NEW.replaces_event_id AND (replaced_with_id IS NULL or replaced_with_id < NEW.id); "
+    "END;"
+
+    /* v2 */
+    "CREATE TRIGGER IF NOT EXISTS update_replaced_with_id AFTER UPDATE OF replaces_event_id "
+    "ON room_events FOR EACH ROW WHEN NEW.replaces_event_id IS NOT NULL "
+    "BEGIN "
+    "UPDATE room_events SET replaced_with_id=NEW.id "
+    "WHERE id=NEW.replaces_event_id AND (replaced_with_id IS NULL or replaced_with_id < NEW.id); "
+    "END;"
 
     "COMMIT;";
 
@@ -662,10 +718,16 @@ cm_db_migrate_to_v2 (CmDb  *self,
                          /* If set to 0, this event is a reply to some other, which is not yet in db */
                          "replaces_event_id INTEGER REFERENCES room_events(id), "
                          "replaces_event_cache_id INTEGER REFERENCES room_events_cache(id), "
+                         /* This event has been replaced with the given event id */
+                         /* This will likely point to the latest replacement id available */
+                         "replaced_with_id INTEGER REFERENCES room_events(id), "
                          /* sending, sent, sending failed, */
                          "event_state INTEGER, "
                          "state_key TEXT, "
                          "origin_server_ts INTEGER NOT NULL, "
+                         /* 0: not encrypted, 1: not decrypted 2: decrypted */
+                         /* 3: may be decrypted, we got m.room.encrypted but without content */
+                         "decryption INTEGER NOT NULL DEFAULT 0, "
                          /* direction int, encrypted int, verified int, txnid */
                          "json_data TEXT, "
                          "UNIQUE (room_id, event_uid));"
@@ -766,6 +828,22 @@ cm_db_migrate_to_v2 (CmDb  *self,
                          "CREATE UNIQUE INDEX IF NOT EXISTS encryption_key_idx ON encryption_keys (account_id, file_url);"
                          "CREATE INDEX IF NOT EXISTS session_sender_idx ON sessions (account_id, sender_key);"
                          "CREATE INDEX IF NOT EXISTS user_idx ON users (username);"
+
+                         /* v2 */
+                         "CREATE TRIGGER IF NOT EXISTS insert_replaced_with_id AFTER INSERT "
+                         "ON room_events FOR EACH ROW WHEN NEW.replaces_event_id IS NOT NULL "
+                         "BEGIN "
+                         "UPDATE room_events SET replaced_with_id=NEW.id "
+                         "WHERE id=NEW.replaces_event_id AND (replaced_with_id IS NULL or replaced_with_id < NEW.id); "
+                         "END;"
+
+                         /* v2 */
+                         "CREATE TRIGGER IF NOT EXISTS update_replaced_with_id AFTER UPDATE OF replaces_event_id "
+                         "ON room_events FOR EACH ROW WHEN NEW.replaces_event_id IS NOT NULL "
+                         "BEGIN "
+                         "UPDATE room_events SET replaced_with_id=NEW.id "
+                         "WHERE id=NEW.replaces_event_id AND (replaced_with_id IS NULL or replaced_with_id < NEW.id); "
+                         "END;"
 
                          "PRAGMA user_version = 2;"
 
@@ -2166,9 +2244,9 @@ db_add_room_events (CmDb  *self,
                           "INSERT INTO room_events(sorted_id,room_id,sender_id,"
                           /*   4           5      6          7                    8 */
                           "event_type,event_uid,txnid,replaces_event_id,replaces_event_cache_id,"
-                          /*   9           10             11          12 */
-                          "event_state,state_key,origin_server_ts,json_data) "
-                          "VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)",
+                          /*   9           10             11          12         13*/
+                          "event_state,state_key,origin_server_ts,decryption,json_data) "
+                          "VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)",
                           -1, &stmt, NULL);
       matrix_bind_int (stmt, 1, sorted_event_id, "binding when adding event");
       matrix_bind_int (stmt, 2, room_id, "binding when adding event");
@@ -2184,7 +2262,8 @@ db_add_room_events (CmDb  *self,
       matrix_bind_int (stmt, 9, event_state, "binding when adding event");
       matrix_bind_text (stmt, 10, cm_event_get_state_key (event), "binding when adding event");
       matrix_bind_int (stmt, 11, cm_event_get_time_stamp (event), "binding when adding event");
-      matrix_bind_text (stmt, 12, json_str, "binding when adding event");
+      matrix_bind_int (stmt, 12, db_event_get_decryption_value (event), "binding when adding event");
+      matrix_bind_text (stmt, 13, json_str, "binding when adding event");
       status = sqlite3_step (stmt);
       sqlite3_finalize (stmt);
 

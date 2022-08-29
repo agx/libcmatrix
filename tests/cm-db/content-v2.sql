@@ -72,10 +72,13 @@ CREATE TABLE IF NOT EXISTS room_events (
   event_uid TEXT,
   txnid TEXT,
   replaces_event_id INTEGER REFERENCES room_events(id),
+  replaces_event_cache_id INTEGER REFERENCES room_events_cache(id),
+  replaced_with_id INTEGER REFERENCES room_events(id),
   reply_to_id INTEGER REFERENCES room_events(id),
   event_state INTEGER,
   state_key TEXT,
   origin_server_ts INTEGER NOT NULL,
+  decryption INTEGER NOT NULL DEFAULT 0,
   json_data TEXT,
   UNIQUE (room_id, event_uid)
 );
@@ -118,6 +121,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS room_event_cache_idx ON room_events_cache (roo
 CREATE UNIQUE INDEX IF NOT EXISTS encryption_key_idx ON encryption_keys (account_id, file_url);
 CREATE INDEX IF NOT EXISTS session_sender_idx ON sessions (account_id, sender_key);
 CREATE INDEX IF NOT EXISTS user_idx ON users (username);
+
+CREATE TRIGGER IF NOT EXISTS insert_replaced_with_id AFTER INSERT
+ON room_events FOR EACH ROW WHEN NEW.replaces_event_id IS NOT NULL
+BEGIN
+  UPDATE room_events SET replaced_with_id=NEW.id
+  WHERE id=NEW.replaces_event_id AND (replaced_with_id IS NULL or replaced_with_id < NEW.id);
+END;
+
+CREATE TRIGGER IF NOT EXISTS update_replaced_with_id AFTER UPDATE OF replaces_event_id
+ON room_events FOR EACH ROW WHEN NEW.replaces_event_id IS NOT NULL
+BEGIN
+  UPDATE room_events SET replaced_with_id=NEW.id
+  WHERE id=NEW.replaces_event_id AND (replaced_with_id IS NULL or replaced_with_id < NEW.id);
+END;
 
 INSERT INTO users VALUES(1,NULL,'@alice:example.com', 1, NULL);
 INSERT INTO users VALUES(2,NULL,'@alice:example.net', 1, NULL);
