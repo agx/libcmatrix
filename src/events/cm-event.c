@@ -549,6 +549,22 @@ cm_event_is_encrypted (CmEvent *self)
 }
 
 gboolean
+cm_event_has_encrypted_content (CmEvent *self)
+{
+  CmEventPrivate *priv = cm_event_get_instance_private (self);
+  JsonObject *child;
+
+  g_return_val_if_fail (CM_IS_EVENT (self), FALSE);
+
+  if (!priv->encrypted_json)
+    return FALSE;
+
+  child = cm_utils_json_object_get_object (priv->encrypted_json, "content");
+
+  return cm_utils_json_object_has_member (child, "ciphertext");
+}
+
+gboolean
 cm_event_is_decrypted (CmEvent *self)
 {
   CmEventPrivate *priv = cm_event_get_instance_private (self);
