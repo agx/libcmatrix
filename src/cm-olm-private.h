@@ -13,6 +13,8 @@
 
 #include <glib-object.h>
 
+#include "cm-db-private.h"
+
 G_BEGIN_DECLS
 
 #define CM_TYPE_OLM (cm_olm_get_type ())
