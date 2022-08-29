@@ -1330,7 +1330,6 @@ cm_db_update_user (CmDb   *self,
 
   matrix_bind_text (stmt, 1, json_str, "binding when updating user");
   matrix_bind_int (stmt, 2, user_id, "binding when updating user");
-  g_warning ("%s", sqlite3_errmsg (self->db));
 
   sqlite3_step (stmt);
   sqlite3_finalize (stmt);
@@ -2134,7 +2133,6 @@ db_add_room_members (CmDb  *self,
       cm_db_update_user (self, user_id, cm_user);
       devices = cm_user_get_devices (cm_user);
       n_items = g_list_model_get_n_items (devices);
-      g_warning ("devices: %u", n_items);
 
       for (guint j = 0; j < n_items; j++)
         {
