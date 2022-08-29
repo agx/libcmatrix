@@ -377,6 +377,9 @@ cm_event_set_json (CmEvent    *self,
       priv->txn_id = cm_utils_json_object_dup_string (child, "transaction_id");
     }
 
+  if (encrypted)
+    event_parse_relations (self, encrypted);
+
   if (!root)
     return;
 
