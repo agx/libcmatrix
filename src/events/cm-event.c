@@ -540,6 +540,16 @@ cm_event_is_encrypted (CmEvent *self)
   return !!priv->encrypted_json;
 }
 
+gboolean
+cm_event_is_decrypted (CmEvent *self)
+{
+  CmEventPrivate *priv = cm_event_get_instance_private (self);
+
+  g_return_val_if_fail (CM_IS_EVENT (self), FALSE);
+
+  return !!priv->json;
+}
+
 /**
  * cm_event_get_time_stamp:
  * @self: A #CmEvent
