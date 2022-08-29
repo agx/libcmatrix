@@ -102,6 +102,17 @@ cm_olm_finalize (GObject *object)
   g_free (self->device_id);
   g_free (self->room_id);
 
+  if (self->olm_session)
+    olm_clear_session (self->olm_session);
+  if (self->in_gp_session)
+    olm_clear_inbound_group_session (self->in_gp_session);
+  if (self->out_gp_session)
+    olm_clear_outbound_group_session (self->out_gp_session);
+
+  g_free (self->olm_session);
+  g_free (self->in_gp_session);
+  g_free (self->out_gp_session);
+
   cm_utils_free_buffer (self->session_key);
   cm_utils_free_buffer (self->session_id);
 
