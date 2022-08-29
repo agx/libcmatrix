@@ -170,6 +170,37 @@ cm_olm_steal_session (CmOlm         *self,
 }
 
 CmOlm *
+cm_olm_new_from_pickle (char          *pickle,
+                        const char    *pickle_key,
+                        const char    *sender_identity_key,
+                        CmSessionType  session_type)
+{
+  CmOlm *self;
+  g_autofree OlmInboundGroupSession *session = NULL;
+  size_t err;
+
+  g_assert (session_type == SESSION_MEGOLM_V1_IN);
+
+  session = g_malloc (olm_inbound_group_session_size ());
+  err = olm_unpickle_inbound_group_session (session, pickle_key,
+                                            strlen (pickle_key),
+                                            pickle, strlen (pickle));
+  if (err == olm_error ())
+    {
+      g_debug ("Error in group unpickle: %s",
+               olm_inbound_group_session_last_error (session));
+
+      return NULL;
+    }
+
+  self = g_object_new (CM_TYPE_OLM, NULL);
+  self->in_gp_session = g_steal_pointer (&session);
+  self->pickle_key = g_strdup (pickle_key);
+
+  return self;
+}
+
+CmOlm *
 cm_olm_outbound_new (gpointer    olm_account,
                      const char *curve_key,
                      const char *one_time_key,
