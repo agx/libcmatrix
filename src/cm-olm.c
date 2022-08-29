@@ -68,7 +68,7 @@ static char *
 cm_olm_get_olm_session_pickle (CmOlm *self)
 {
   g_autofree char *pickle = NULL;
-  size_t length;
+  size_t length, len;
 
   g_return_val_if_fail (self->pickle_key, NULL);
 
@@ -80,12 +80,26 @@ cm_olm_get_olm_session_pickle (CmOlm *self)
       self->session_id[length] = '\0';
     }
 
-  length = olm_pickle_session_length (self->olm_session);
-  pickle = g_malloc (length + 1);
-  olm_pickle_session (self->olm_session, self->pickle_key,
-                      strlen (self->pickle_key),
-                      pickle, length);
-  pickle[length] = '\0';
+  if (self->olm_session)
+    {
+      len = olm_pickle_session_length (self->olm_session);
+      pickle = g_malloc (len + 1);
+      olm_pickle_session (self->olm_session, self->pickle_key,
+                          strlen (self->pickle_key),
+                          pickle, len);
+    }
+  else if (self->in_gp_session)
+    {
+      len = olm_pickle_inbound_group_session_length (self->in_gp_session);
+      pickle = g_malloc (len + 1);
+      olm_pickle_inbound_group_session (self->in_gp_session, self->pickle_key,
+                                        strlen (self->pickle_key),
+                                        pickle, len);
+    }
+  else
+    g_return_val_if_reached (NULL);
+
+  pickle[len] = '\0';
 
   return g_steal_pointer (&pickle);
 }
@@ -241,6 +255,35 @@ cm_olm_inbound_new (gpointer    olm_account,
 }
 
 CmOlm *
+cm_olm_in_group_new (const char *session_key,
+                     const char *sender_identity_key,
+                     const char *session_id)
+{
+  CmOlm *self;
+  g_autofree OlmInboundGroupSession *session = NULL;
+  size_t err;
+
+  session = g_malloc (olm_inbound_group_session_size ());
+  olm_inbound_group_session (session);
+
+  err = olm_init_inbound_group_session (session, (gpointer)session_key,
+                                        strlen (session_key));
+  if (err == olm_error ())
+    {
+      g_warning ("Error creating group session from key: %s",
+                 olm_inbound_group_session_last_error (session));
+      return NULL;
+    }
+
+  self = g_object_new (CM_TYPE_OLM, NULL);
+  self->in_gp_session = g_steal_pointer (&session);
+  self->curve_key = g_strdup (sender_identity_key);
+  self->session_id = g_strdup (session_id);
+
+  return self;
+}
+
+CmOlm *
 cm_olm_out_group_new (void)
 {
   CmOlm *self;
@@ -360,6 +403,7 @@ cm_olm_save (CmOlm *self)
 {
   g_autoptr(GTask) task = NULL;
   g_autoptr(GError) error = NULL;
+  CmSessionType type;
   char *pickle;
   gboolean success;
 
@@ -372,10 +416,15 @@ cm_olm_save (CmOlm *self)
   pickle = cm_olm_get_olm_session_pickle (self);
   g_return_val_if_fail (pickle && *pickle, FALSE);
 
+  if (self->in_gp_session)
+    type = SESSION_MEGOLM_V1_IN;
+  else
+    type = SESSION_OLM_V1_IN;
+
   task = g_task_new (self, NULL, NULL, NULL);
   cm_db_add_session_async (self->cm_db, self->sender_id, self->device_id,
                            self->room_id, self->session_id, self->curve_key,
-                           pickle, SESSION_OLM_V1_IN,
+                           pickle, type,
                            olm_task_bool_cb, task);
 
   while (!g_task_get_completed (task))
