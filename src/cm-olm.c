@@ -96,7 +96,6 @@ cm_olm_finalize (GObject *object)
   CmOlm *self = (CmOlm *)object;
 
   g_free (self->pickle_key);
-  g_free (self->session_id);
   g_free (self->curve_key);
   g_free (self->sender_id);
   g_free (self->device_id);
