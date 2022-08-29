@@ -62,14 +62,6 @@ typedef enum {
   CM_ERROR_BAD_HOME_SERVER,
 } CmError;
 
-
-typedef enum {
-  CM_ROOM_UNKNOWN,
-  CM_ROOM_JOINED,
-  CM_ROOM_LEFT,
-  CM_ROOM_INVITED
-} CmRoomType;
-
 typedef enum {
   CM_STATUS_UNKNOWN,
   CM_STATUS_JOIN,
