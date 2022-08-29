@@ -2340,45 +2340,6 @@ db_get_past_events (CmDb  *self,
   g_task_return_pointer (task, events, (GDestroyNotify)g_ptr_array_unref);
 }
 
-static void
-history_get_olm_sessions (CmDb  *self,
-                          GTask *task)
-{
-  GPtrArray *sessions = NULL;
-  sqlite3_stmt *stmt;
-  int status;
-
-  g_assert (CM_IS_DB (self));
-  g_assert (g_thread_self () == self->worker_thread);
-  g_assert (G_IS_TASK (task));
-
-  status = sqlite3_prepare_v2 (self->db,
-                               "SELECT sender,sender_key,session_pickle FROM olm_session "
-                               "ORDER BY id DESC LIMIT 100", -1, &stmt, NULL);
-
-  warn_if_sql_error (status, "getting olm sessions");
-
-  while (sqlite3_step (stmt) == SQLITE_ROW)
-    {
-      CmDbData *data;
-
-      if (!sessions)
-        sessions = g_ptr_array_new_full (100, NULL);
-
-      data = g_new (CmDbData, 1);
-      data->sender = g_strdup ((char *)sqlite3_column_text (stmt, 0));
-      data->sender_key = g_strdup ((char *)sqlite3_column_text (stmt, 1));
-      data->session_pickle = g_strdup ((char *)sqlite3_column_text (stmt, 2));
-
-      g_ptr_array_insert (sessions, 0, data);
-    }
-
-  status = sqlite3_finalize (stmt);
-  warn_if_sql_error (status, "finalizing when getting olm sessions");
-
-  g_task_return_pointer (task, sessions, (GDestroyNotify)g_ptr_array_unref);
-}
-
 static gpointer
 cm_db_worker (gpointer user_data)
 {
@@ -3167,34 +3128,6 @@ GPtrArray *
 cm_db_get_past_events_finish (CmDb          *self,
                               GAsyncResult  *result,
                               GError       **error)
-{
-  g_return_val_if_fail (CM_IS_DB (self), NULL);
-  g_return_val_if_fail (G_IS_TASK (result), NULL);
-  g_return_val_if_fail (!error || !*error, NULL);
-
-  return g_task_propagate_pointer (G_TASK (result), error);
-}
-
-void
-cm_db_get_olm_sessions_async (CmDb                *self,
-                              GAsyncReadyCallback  callback,
-                              gpointer             user_data)
-{
-  GTask *task;
-
-  g_return_if_fail (CM_IS_DB (self));
-
-  task = g_task_new (self, NULL, callback, user_data);
-  g_task_set_source_tag (task, cm_db_get_olm_sessions_async);
-  g_task_set_task_data (task, history_get_olm_sessions, NULL);
-
-  g_async_queue_push (self->queue, task);
-}
-
-GPtrArray *
-cm_db_get_olm_sessions_finish (CmDb          *self,
-                               GAsyncResult  *result,
-                               GError       **error)
 {
   g_return_val_if_fail (CM_IS_DB (self), NULL);
   g_return_val_if_fail (G_IS_TASK (result), NULL);

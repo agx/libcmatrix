@@ -19,12 +19,6 @@
 
 G_BEGIN_DECLS
 
-typedef struct {
-  char *sender;
-  char *sender_key;
-  char *session_pickle;
-} CmDbData;
-
 /* These values shouldn’t be changed. They are used in DB */
 typedef enum {
   SESSION_OLM_V1_IN      = 1,
@@ -145,34 +139,5 @@ gpointer       cm_db_lookup_olm_session            (CmDb                *self,
                                                     CmSessionType        type,
                                                     size_t               message_type,
                                                     char               **out_plain_text);
-void           cm_db_get_olm_sessions_async        (CmDb                *self,
-                                                    GAsyncReadyCallback  callback,
-                                                    gpointer             user_data);
-GPtrArray     *cm_db_get_olm_sessions_finish       (CmDb                *self,
-                                                    GAsyncResult        *result,
-                                                    GError              **error);
-void           cm_db_add_olm_session_async         (CmDb                *self,
-                                                    const char          *sender,
-                                                    const char          *sender_key,
-                                                    const char          *pickle,
-                                                    GAsyncReadyCallback  callback,
-                                                    gpointer             user_data);
-GPtrArray     *cm_db_get_messages_finish           (CmDb                *self,
-                                                    GAsyncResult        *result,
-                                                    GError             **error);
-void           cm_db_get_group_in_sessions_async   (CmDb                *self,
-                                                    guint                limit,
-                                                    GAsyncReadyCallback  callback,
-                                                    gpointer             user_data);
-GPtrArray     *cm_db_group_in_sessions_finish      (CmDb                *self,
-                                                    GAsyncResult        *result,
-                                                    GError             **error);
-void           cm_db_get_group_out_sessions_async  (CmDb                *self,
-                                                    guint                limit,
-                                                    GAsyncReadyCallback  callback,
-                                                    gpointer             user_data);
-GPtrArray     *cm_db_get_group_out_sessions_finish (CmDb                *self,
-                                                    GAsyncResult        *result,
-                                                    GError             **error);
 
 G_END_DECLS
