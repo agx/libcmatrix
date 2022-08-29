@@ -352,22 +352,6 @@ cm_olm_out_group_new (void)
   self->session_id = (char *)g_steal_pointer (&session_id);
   self->session_key = (char *)g_steal_pointer (&session_key);
 
-  /*
-   * We should also create an inbound session with the same key so
-   * that we we'll be able to decrypt the messages we sent (when
-   * we receive them via sync requests)
-   */
-  {
-    g_autofree char *session_key_copy = NULL;
-
-    session_key_copy = g_strdup (self->session_key);
-    self->in_gp_session = g_malloc (olm_inbound_group_session_size ());
-    olm_inbound_group_session (self->in_gp_session);
-    olm_init_inbound_group_session (self->in_gp_session,
-                                    (gpointer)session_key_copy,
-                                    strlen (session_key_copy));
-  }
-
   return self;
 }
 
