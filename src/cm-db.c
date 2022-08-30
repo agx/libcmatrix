@@ -279,7 +279,7 @@ db_get_past_room_events (CmDb   *self,
    -  alias = string
    -  draft = json object
    -    m.text = string
-   -  encryption = int (0 = "none", 1 = "m.megolm.v1.aes-sha2")
+   -  encryption = string
    -  rotation_period_ms = time_t (or may be use μs as provided by server?)
    -  rotation_count_msgs = int (message count max for key change)
    sessions.json_data
