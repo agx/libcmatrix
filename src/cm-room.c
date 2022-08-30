@@ -687,8 +687,7 @@ cm_room_new_from_json (const char *room_id,
       self->generated_name = cm_utils_json_object_dup_string (local, "generated_alias");
       self->past_name = cm_utils_json_object_dup_string (local, "past_alias");
       cm_room_set_is_direct (self, cm_utils_json_object_get_bool (local, "direct"));
-      if (cm_utils_json_object_get_int (local, "encryption") > 0)
-        self->encryption = g_strdup ("encrypted");
+      self->encryption = cm_utils_json_object_dup_string (local, "encryption");
 
       child = cm_utils_json_object_get_object (local, cm_utils_get_event_type_str (CM_M_ROOM_CREATE));
       if (child)
@@ -1321,6 +1320,15 @@ cm_room_parse_events (CmRoom     *self,
         {
           if (!self->encryption)
             self->encryption = g_strdup (cm_room_event_get_encryption (event));
+
+          if (self->local_json)
+            {
+              JsonObject *local;
+
+              local = cm_utils_json_object_get_object (self->local_json, "local");
+              json_object_set_string_member (local, "encryption", self->encryption);
+            }
+
           self->db_save_pending = TRUE;
         }
       else if (type == CM_M_ROOM_NAME)
