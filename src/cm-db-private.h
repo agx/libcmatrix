@@ -96,19 +96,14 @@ void           cm_db_find_file_enc_async           (CmDb                *self,
 CmEncFileInfo *cm_db_find_file_enc_finish          (CmDb                *self,
                                                     GAsyncResult        *result,
                                                     GError             **error);
-void           cm_db_add_session_async             (CmDb                *self,
+gboolean       cm_db_add_session                   (CmDb                *self,
                                                     const char          *account_id,
                                                     const char          *device_id,
                                                     const char          *room_id,
                                                     const char          *session_id,
                                                     const char          *sender_key,
                                                     char                *pickle,
-                                                    CmSessionType        type,
-                                                    GAsyncReadyCallback  callback,
-                                                    gpointer             user_data);
-gboolean       cm_db_add_session_finish            (CmDb                *self,
-                                                    GAsyncResult        *result,
-                                                    GError             **error);
+                                                    CmSessionType        type);
 char          *cm_db_lookup_session                (CmDb                *self,
                                                     const char          *account_id,
                                                     const char          *account_device,

@@ -1817,8 +1817,8 @@ cm_db_delete_client (CmDb  *self,
 }
 
 static void
-cm_db_add_session (CmDb  *self,
-                   GTask *task)
+db_add_session (CmDb  *self,
+                GTask *task)
 {
   sqlite3_stmt *stmt;
   const char *username, *account_device, *session_id, *sender_key, *pickle, *room;
@@ -2770,31 +2770,32 @@ cm_db_delete_client_finish (CmDb          *self,
   return g_task_propagate_boolean (G_TASK (result), error);
 }
 
-void
-cm_db_add_session_async (CmDb                *self,
-                         const char          *account_id,
-                         const char          *device_id,
-                         const char          *room_id,
-                         const char          *session_id,
-                         const char          *sender_key,
-                         char                *pickle,
-                         CmSessionType        type,
-                         GAsyncReadyCallback  callback,
-                         gpointer             user_data)
+gboolean
+cm_db_add_session (CmDb          *self,
+                   const char    *account_id,
+                   const char    *device_id,
+                   const char    *room_id,
+                   const char    *session_id,
+                   const char    *sender_key,
+                   char          *pickle,
+                   CmSessionType  type)
 {
+  g_autoptr(GTask) task = NULL;
+  g_autoptr(GError) error = NULL;
   GObject *object;
-  GTask *task;
+  gboolean success;
 
-  g_return_if_fail (CM_IS_DB (self));
-  g_return_if_fail (account_id && *account_id);
-  g_return_if_fail (device_id && *device_id);
-  g_return_if_fail (session_id && *session_id);
-  g_return_if_fail (sender_key && *sender_key);
-  g_return_if_fail (pickle && *pickle);
+  g_return_val_if_fail (CM_IS_DB (self), FALSE);
+  g_return_val_if_fail (account_id && *account_id, FALSE);
+  g_return_val_if_fail (device_id && *device_id, FALSE);
+  g_return_val_if_fail (session_id && *session_id, FALSE);
+  g_return_val_if_fail (sender_key && *sender_key, FALSE);
+  g_return_val_if_fail (pickle && *pickle, FALSE);
 
-  task = g_task_new (self, NULL, callback, user_data);
-  g_task_set_source_tag (task, cm_db_add_session_async);
-  g_task_set_task_data (task, cm_db_add_session, NULL);
+  task = g_task_new (self, NULL, NULL, NULL);
+  g_object_ref (task);
+  g_task_set_source_tag (task, cm_db_add_session);
+  g_task_set_task_data (task, db_add_session, NULL);
   object = G_OBJECT (task);
 
   g_object_set_data_full (object, "account-id", g_strdup (account_id), g_free);
@@ -2805,7 +2806,17 @@ cm_db_add_session_async (CmDb                *self,
   g_object_set_data_full (object, "pickle", pickle, g_free);
   g_object_set_data (object, "type", GINT_TO_POINTER (type));
 
-  g_async_queue_push (self->queue, task);
+  g_async_queue_push_front (self->queue, task);
+
+  while (!g_task_get_completed (task))
+    g_main_context_iteration (NULL, TRUE);
+
+  success = g_task_propagate_boolean (task, &error);
+
+  if (error)
+    g_warning ("Failed to save olm session with id: %s", session_id);
+
+  return success;
 }
 
 void

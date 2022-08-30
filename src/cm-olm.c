@@ -47,25 +47,6 @@ struct _CmOlm
 G_DEFINE_TYPE (CmOlm, cm_olm, G_TYPE_OBJECT)
 
 
-static void
-olm_task_bool_cb (GObject      *object,
-                  GAsyncResult *result,
-                  gpointer      user_data)
-{
-  GTask *task = user_data;
-  GError *error = NULL;
-  gboolean status;
-
-  g_assert_true (G_IS_TASK (task));
-
-  status = g_task_propagate_boolean (G_TASK (result), &error);
-  if (error)
-    g_task_return_error (task, error);
-  else
-    g_task_return_boolean (task, status);
-}
-
-
 static char *
 cm_olm_get_olm_session_pickle (CmOlm *self)
 {
@@ -432,11 +413,8 @@ cm_olm_set_key (CmOlm      *self,
 gboolean
 cm_olm_save (CmOlm *self)
 {
-  g_autoptr(GTask) task = NULL;
-  g_autoptr(GError) error = NULL;
   CmSessionType type;
   char *pickle;
-  gboolean success;
 
   g_return_val_if_fail (CM_IS_OLM (self), FALSE);
   g_return_val_if_fail (self->cm_db, FALSE);
@@ -452,22 +430,10 @@ cm_olm_save (CmOlm *self)
   else
     type = SESSION_OLM_V1_IN;
 
-  task = g_task_new (self, NULL, NULL, NULL);
-  cm_db_add_session_async (self->cm_db, self->account_user_id,
-                           self->account_device_id, self->room_id,
-                           self->session_id, self->curve_key,
-                           pickle, type,
-                           olm_task_bool_cb, task);
-
-  while (!g_task_get_completed (task))
-    g_main_context_iteration (NULL, TRUE);
-
-  success = g_task_propagate_boolean (task, &error);
-
-  if (error)
-    g_warning ("Failed to save olm session with id: %s", self->session_id);
-
-  return success;
+  return cm_db_add_session (self->cm_db, self->account_user_id,
+                            self->account_device_id, self->room_id,
+                            self->session_id, self->curve_key,
+                            pickle, type);
 }
 
 char *
