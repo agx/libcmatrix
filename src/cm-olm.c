@@ -629,6 +629,38 @@ cm_olm_get_session_key (CmOlm *self)
   return self->session_key;
 }
 
+const char *
+cm_olm_get_room_id (CmOlm *self)
+{
+  g_return_val_if_fail (CM_IS_OLM (self), NULL);
+
+  return self->room_id;
+}
+
+const char *
+cm_olm_get_sender_key (CmOlm *self)
+{
+  g_return_val_if_fail (CM_IS_OLM (self), NULL);
+
+  return self->curve_key;
+}
+
+const char *
+cm_olm_get_account_id (CmOlm *self)
+{
+  g_return_val_if_fail (CM_IS_OLM (self), NULL);
+
+  return self->account_user_id;
+}
+
+const char *
+cm_olm_get_account_device (CmOlm *self)
+{
+  g_return_val_if_fail (CM_IS_OLM (self), NULL);
+
+  return self->account_device_id;
+}
+
 gpointer
 cm_olm_match_olm_session (const char  *body,
                           gsize        body_len,

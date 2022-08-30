@@ -62,6 +62,10 @@ size_t      cm_olm_get_message_type    (CmOlm          *self);
 
 const char *cm_olm_get_session_id        (CmOlm        *self);
 const char *cm_olm_get_session_key       (CmOlm        *self);
+const char *cm_olm_get_room_id           (CmOlm        *self);
+const char *cm_olm_get_sender_key        (CmOlm        *self);
+const char *cm_olm_get_account_id        (CmOlm        *self);
+const char *cm_olm_get_account_device    (CmOlm        *self);
 
 gpointer    cm_olm_match_olm_session     (const char  *body,
                                           gsize        body_len,
