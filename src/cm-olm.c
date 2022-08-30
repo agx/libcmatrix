@@ -380,13 +380,12 @@ cm_olm_get_message_index (CmOlm *self)
 }
 
 void
-cm_olm_set_details (CmOlm      *self,
-                    const char *room_id,
-                    const char *sender_id,
-                    const char *device_id)
+cm_olm_set_sender_details (CmOlm      *self,
+                           const char *room_id,
+                           const char *sender_id)
 {
   g_return_if_fail (CM_IS_OLM (self));
-  g_return_if_fail (sender_id);
+  g_return_if_fail (sender_id && *sender_id == '@');
   g_return_if_fail (!self->sender_id);
 
   self->room_id = g_strdup (room_id);
@@ -442,8 +441,8 @@ cm_olm_save (CmOlm *self)
   g_return_val_if_fail (CM_IS_OLM (self), FALSE);
   g_return_val_if_fail (self->cm_db, FALSE);
   g_return_val_if_fail (self->pickle_key, FALSE);
-  g_return_val_if_fail (self->sender_id, FALSE);
-  g_return_val_if_fail (self->device_id, FALSE);
+  g_return_val_if_fail (self->account_user_id, FALSE);
+  g_return_val_if_fail (self->account_device_id, FALSE);
 
   pickle = cm_olm_get_olm_session_pickle (self);
   g_return_val_if_fail (pickle && *pickle, FALSE);
@@ -454,8 +453,9 @@ cm_olm_save (CmOlm *self)
     type = SESSION_OLM_V1_IN;
 
   task = g_task_new (self, NULL, NULL, NULL);
-  cm_db_add_session_async (self->cm_db, self->sender_id, self->device_id,
-                           self->room_id, self->session_id, self->curve_key,
+  cm_db_add_session_async (self->cm_db, self->account_user_id,
+                           self->account_device_id, self->room_id,
+                           self->session_id, self->curve_key,
                            pickle, type,
                            olm_task_bool_cb, task);
 

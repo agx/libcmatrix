@@ -104,7 +104,7 @@ ma_create_olm_out_session (CmEnc      *self,
 
   cm_olm_set_db (session, self->cm_db);
   cm_olm_set_key (session, self->pickle_key);
-  cm_olm_set_details (session, room_id, self->user_id, self->device_id);
+  cm_olm_set_sender_details (session, room_id, self->user_id);
   cm_olm_set_account_details (session, self->user_id, self->device_id);
   cm_olm_save (session);
 
@@ -838,7 +838,7 @@ handle_m_room_key (CmEnc      *self,
     return;
 
   session = cm_olm_in_group_new (session_key, sender_key, session_id);
-  cm_olm_set_details (session, room_id, self->user_id, self->device_id);
+  cm_olm_set_sender_details (session, room_id, self->user_id);
   cm_olm_set_account_details (session, self->user_id, self->device_id);
   cm_olm_set_key (session, self->pickle_key);
   cm_olm_set_db (session, self->cm_db);
@@ -943,11 +943,10 @@ cm_enc_handle_room_encrypted (CmEnc      *self,
     if (force_save)
       {
         GHashTable *in_olm_sessions;
-        g_autofree char *room_id = NULL;
-        const char *id;
+        const char *id, *room_id;
 
         data = cm_utils_json_object_get_object (content, "content");
-        room_id = g_strdup (cm_utils_json_object_get_string (data, "room_id"));
+        room_id = cm_utils_json_object_get_string (data, "room_id");
         in_olm_sessions = g_hash_table_lookup (self->in_olm_sessions, sender_key);
 
         if (!in_olm_sessions)
@@ -960,7 +959,7 @@ cm_enc_handle_room_encrypted (CmEnc      *self,
 
         id = cm_olm_get_session_id (session);
         g_hash_table_insert (in_olm_sessions, g_strdup (id), session);
-        cm_olm_set_details (session, room_id, self->user_id, self->device_id);
+        cm_olm_set_sender_details (session, room_id, sender);
         cm_olm_set_account_details (session, self->user_id, self->device_id);
         cm_olm_save (session);
       }

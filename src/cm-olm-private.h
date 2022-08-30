@@ -40,10 +40,9 @@ CmOlm      *cm_olm_in_group_new_from_out (CmOlm          *out_group,
 CmOlm      *cm_olm_out_group_new       (void);
 size_t      cm_olm_get_message_index   (CmOlm          *self);
 
-void        cm_olm_set_details         (CmOlm          *self,
+void        cm_olm_set_sender_details  (CmOlm          *self,
                                         const char     *room_id,
-                                        const char     *sender_id,
-                                        const char     *device_id);
+                                        const char     *sender_id);
 void        cm_olm_set_account_details (CmOlm          *self,
                                         const char     *account_user_id,
                                         const char     *account_device_id);
