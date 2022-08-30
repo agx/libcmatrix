@@ -1820,6 +1820,7 @@ static void
 db_add_session (CmDb  *self,
                 GTask *task)
 {
+  CmOlm *session;
   sqlite3_stmt *stmt;
   const char *username, *account_device, *session_id, *sender_key, *pickle, *room;
   CmSessionType type;
@@ -1830,14 +1831,16 @@ db_add_session (CmDb  *self,
   g_assert (g_thread_self () == self->worker_thread);
   g_assert (self->db);
 
-  type = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (task), "type"));
+  session = g_object_get_data (G_OBJECT (task), "session");
+  g_assert (CM_IS_OLM (session));
 
-  room = g_object_get_data (G_OBJECT (task), "room-id");
+  room = cm_olm_get_room_id (session);
+  type = cm_olm_get_session_type (session);
+  username = cm_olm_get_account_id (session);
+  session_id = cm_olm_get_session_id (session);
+  sender_key = cm_olm_get_sender_key (session);
+  account_device = cm_olm_get_account_device (session);
   pickle = g_object_get_data (G_OBJECT (task), "pickle");
-  username = g_object_get_data (G_OBJECT (task), "account-id");
-  session_id = g_object_get_data (G_OBJECT (task), "session-id");
-  sender_key = g_object_get_data (G_OBJECT (task), "sender-key");
-  account_device = g_object_get_data (G_OBJECT (task), "device-id");
 
   account_id = matrix_db_get_account_id (self, username, account_device, NULL, FALSE);
 
@@ -2771,14 +2774,9 @@ cm_db_delete_client_finish (CmDb          *self,
 }
 
 gboolean
-cm_db_add_session (CmDb          *self,
-                   const char    *account_id,
-                   const char    *device_id,
-                   const char    *room_id,
-                   const char    *session_id,
-                   const char    *sender_key,
-                   char          *pickle,
-                   CmSessionType  type)
+cm_db_add_session (CmDb     *self,
+                   gpointer  session,
+                   char     *pickle)
 {
   g_autoptr(GTask) task = NULL;
   g_autoptr(GError) error = NULL;
@@ -2786,10 +2784,7 @@ cm_db_add_session (CmDb          *self,
   gboolean success;
 
   g_return_val_if_fail (CM_IS_DB (self), FALSE);
-  g_return_val_if_fail (account_id && *account_id, FALSE);
-  g_return_val_if_fail (device_id && *device_id, FALSE);
-  g_return_val_if_fail (session_id && *session_id, FALSE);
-  g_return_val_if_fail (sender_key && *sender_key, FALSE);
+  g_return_val_if_fail (CM_IS_OLM (session), FALSE);
   g_return_val_if_fail (pickle && *pickle, FALSE);
 
   task = g_task_new (self, NULL, NULL, NULL);
@@ -2798,13 +2793,10 @@ cm_db_add_session (CmDb          *self,
   g_task_set_task_data (task, db_add_session, NULL);
   object = G_OBJECT (task);
 
-  g_object_set_data_full (object, "account-id", g_strdup (account_id), g_free);
-  g_object_set_data_full (object, "device-id", g_strdup (device_id), g_free);
-  g_object_set_data_full (object, "room-id", g_strdup (room_id), g_free);
-  g_object_set_data_full (object, "session-id", g_strdup (session_id), g_free);
-  g_object_set_data_full (object, "sender-key", g_strdup (sender_key), g_free);
+  g_object_set_data_full (object, "session", g_object_ref (session), g_object_unref);
   g_object_set_data_full (object, "pickle", pickle, g_free);
-  g_object_set_data (object, "type", GINT_TO_POINTER (type));
+  if (cm_olm_get_session_type (session) == SESSION_MEGOLM_V1_OUT)
+    g_object_set_data (object, "chain-index", GINT_TO_POINTER (cm_olm_get_message_index (session)));
 
   g_async_queue_push_front (self->queue, task);
 
@@ -2814,7 +2806,8 @@ cm_db_add_session (CmDb          *self,
   success = g_task_propagate_boolean (task, &error);
 
   if (error)
-    g_warning ("Failed to save olm session with id: %s", session_id);
+    g_warning ("Failed to save olm session with id: %s",
+               cm_olm_get_session_id (session));
 
   return success;
 }

@@ -97,13 +97,8 @@ CmEncFileInfo *cm_db_find_file_enc_finish          (CmDb                *self,
                                                     GAsyncResult        *result,
                                                     GError             **error);
 gboolean       cm_db_add_session                   (CmDb                *self,
-                                                    const char          *account_id,
-                                                    const char          *device_id,
-                                                    const char          *room_id,
-                                                    const char          *session_id,
-                                                    const char          *sender_key,
-                                                    char                *pickle,
-                                                    CmSessionType        type);
+                                                    gpointer             session,
+                                                    char                *pickle);
 char          *cm_db_lookup_session                (CmDb                *self,
                                                     const char          *account_id,
                                                     const char          *account_device,

@@ -437,10 +437,7 @@ cm_olm_save (CmOlm *self)
   pickle = cm_olm_get_olm_session_pickle (self);
   g_return_val_if_fail (pickle && *pickle, FALSE);
 
-  return cm_db_add_session (self->cm_db, self->account_user_id,
-                            self->account_device_id, self->room_id,
-                            self->session_id, self->curve_key,
-                            pickle, cm_olm_get_session_type (self));
+  return cm_db_add_session (self->cm_db, self, pickle);
 }
 
 char *
