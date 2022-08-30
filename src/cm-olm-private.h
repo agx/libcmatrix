@@ -44,6 +44,9 @@ void        cm_olm_set_details         (CmOlm          *self,
                                         const char     *room_id,
                                         const char     *sender_id,
                                         const char     *device_id);
+void        cm_olm_set_account_details (CmOlm          *self,
+                                        const char     *account_user_id,
+                                        const char     *account_device_id);
 void        cm_olm_set_db              (CmOlm          *self,
                                         gpointer        cm_db);
 void        cm_olm_set_key             (CmOlm          *self,

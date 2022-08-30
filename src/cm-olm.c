@@ -29,6 +29,8 @@ struct _CmOlm
   char                    *room_id;
   char                    *sender_id;
   char                    *device_id;
+  char                    *account_user_id;
+  char                    *account_device_id;
   OlmAccount              *account;
 
   char                    *curve_key;
@@ -114,6 +116,9 @@ cm_olm_finalize (GObject *object)
   g_free (self->sender_id);
   g_free (self->device_id);
   g_free (self->room_id);
+
+  g_free (self->account_user_id);
+  g_free (self->account_device_id);
 
   if (self->olm_session)
     olm_clear_session (self->olm_session);
@@ -386,6 +391,21 @@ cm_olm_set_details (CmOlm      *self,
 
   self->room_id = g_strdup (room_id);
   self->sender_id = g_strdup (sender_id);
+}
+
+void
+cm_olm_set_account_details (CmOlm *self,
+                            const char *account_user_id,
+                            const char *account_device_id)
+{
+  g_return_if_fail (CM_IS_OLM (self));
+  g_return_if_fail (account_user_id && *account_user_id == '@');
+  g_return_if_fail (account_device_id && *account_device_id);
+  g_return_if_fail (!self->account_user_id);
+  g_return_if_fail (!self->account_device_id);
+
+  self->account_user_id = g_strdup (account_user_id);
+  self->account_device_id = g_strdup (account_device_id);
 }
 
 void
