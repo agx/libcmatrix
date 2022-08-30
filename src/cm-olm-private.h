@@ -38,6 +38,8 @@ CmOlm      *cm_olm_in_group_new        (const char     *session_key,
 CmOlm      *cm_olm_in_group_new_from_out (CmOlm          *out_group,
                                           const char     *sender_identity_key);
 CmOlm      *cm_olm_out_group_new       (void);
+
+CmSessionType cm_olm_get_session_type    (CmOlm          *self);
 size_t      cm_olm_get_message_index   (CmOlm          *self);
 
 void        cm_olm_set_sender_details  (CmOlm          *self,

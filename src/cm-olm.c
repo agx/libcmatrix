@@ -160,6 +160,7 @@ cm_olm_new_from_pickle (char          *pickle,
   self = g_object_new (CM_TYPE_OLM, NULL);
   self->in_gp_session = g_steal_pointer (&session);
   self->pickle_key = g_strdup (pickle_key);
+  self->type = session_type;
 
   return self;
 }
@@ -205,6 +206,7 @@ cm_olm_outbound_new (gpointer    olm_account,
   self->olm_session = g_steal_pointer (&session);
   self->curve_key = g_strdup (curve_key);
   self->account = olm_account;
+  self->type = SESSION_OLM_V1_OUT;
 
   return self;
 }
@@ -245,6 +247,7 @@ cm_olm_inbound_new (gpointer    olm_account,
   self->olm_session = g_steal_pointer (&session);
   self->curve_key = g_strdup (sender_identity_key);
   self->account = olm_account;
+  self->type = SESSION_OLM_V1_IN;
 
   return self;
 }
@@ -275,6 +278,7 @@ cm_olm_in_group_new (const char *session_key,
   self->curve_key = g_strdup (sender_identity_key);
   self->session_id = g_strdup (session_id);
   self->session_key = g_strdup (session_key);
+  self->type = SESSION_MEGOLM_V1_IN;
 
   return self;
 }
@@ -347,8 +351,17 @@ cm_olm_out_group_new (void)
   self->out_gp_session = g_steal_pointer (&session);
   self->session_id = (char *)g_steal_pointer (&session_id);
   self->session_key = (char *)g_steal_pointer (&session_key);
+  self->type = SESSION_MEGOLM_V1_OUT;
 
   return self;
+}
+
+CmSessionType
+cm_olm_get_session_type (CmOlm *self)
+{
+  g_return_val_if_fail (CM_IS_OLM (self), 0);
+
+  return self->type;
 }
 
 size_t
@@ -413,7 +426,6 @@ cm_olm_set_key (CmOlm      *self,
 gboolean
 cm_olm_save (CmOlm *self)
 {
-  CmSessionType type;
   char *pickle;
 
   g_return_val_if_fail (CM_IS_OLM (self), FALSE);
@@ -425,15 +437,10 @@ cm_olm_save (CmOlm *self)
   pickle = cm_olm_get_olm_session_pickle (self);
   g_return_val_if_fail (pickle && *pickle, FALSE);
 
-  if (self->in_gp_session)
-    type = SESSION_MEGOLM_V1_IN;
-  else
-    type = SESSION_OLM_V1_IN;
-
   return cm_db_add_session (self->cm_db, self->account_user_id,
                             self->account_device_id, self->room_id,
                             self->session_id, self->curve_key,
-                            pickle, type);
+                            pickle, cm_olm_get_session_type (self));
 }
 
 char *
