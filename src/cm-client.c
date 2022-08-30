@@ -73,6 +73,8 @@ struct _CmClient
   char           *key;
   char           *pickle_key;
 
+  GHashTable     *users_table;
+
   /* direct_rooms are set on initial sync from 'account_data',
    * which will then be moved to joined_rooms later */
   GHashTable     *direct_rooms;
@@ -481,6 +483,7 @@ cm_client_finalize (GObject *object)
   g_clear_object (&self->joined_rooms);
 
   g_hash_table_unref (self->direct_rooms);
+  g_hash_table_unref (self->users_table);
 
   g_clear_object (&self->key_verification_event);
 
@@ -542,6 +545,8 @@ cm_client_init (CmClient *self)
   self->joined_rooms = g_list_store_new (CM_TYPE_ROOM);
   self->direct_rooms = g_hash_table_new_full (g_str_hash, g_str_equal,
                                               g_free, g_object_unref);
+  self->users_table = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                             g_free, g_object_unref);
 }
 
 /**
@@ -1421,6 +1426,28 @@ cm_client_get_next_batch (CmClient *self)
   g_return_val_if_fail (CM_IS_CLIENT (self), NULL);
 
   return self->next_batch;
+}
+
+CmUser *
+cm_client_find_user (CmClient   *self,
+                     const char *user_id,
+                     gboolean    create_if_missing)
+{
+  CmUser *user;
+
+  g_return_val_if_fail (CM_IS_CLIENT (self), NULL);
+  g_return_val_if_fail (user_id && *user_id == '@', NULL);
+
+  user = g_hash_table_lookup (self->users_table, user_id);
+
+  if (user || !create_if_missing)
+    return user;
+
+  user = (CmUser *)cm_room_member_new (user_id);
+  cm_user_set_client (user, self);
+  g_hash_table_insert (self->users_table, g_strdup (user_id), user);
+
+  return user;
 }
 
 /**

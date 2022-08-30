@@ -45,6 +45,9 @@ void        cm_client_set_db                      (CmClient            *self,
 const char *cm_client_get_filter_id               (CmClient            *self);
 void        cm_client_save                        (CmClient            *self);
 const char *cm_client_get_next_batch              (CmClient            *self);
+CmUser       *cm_client_find_user                     (CmClient              *self,
+                                                       const char            *user_id,
+                                                       gboolean               create_if_missing);
 void          cm_client_get_file_async                (CmClient              *self,
                                                        const char            *uri,
                                                        GCancellable          *cancellable,
