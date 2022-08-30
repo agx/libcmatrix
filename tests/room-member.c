@@ -29,9 +29,9 @@ test_room_member_new (void)
   room = cm_room_new ("random room");
   client = cm_client_new ();
   cm_room_set_client (room, client);
-  member = cm_room_member_new (room, "@alice:example.co");
+  member = cm_room_member_new ("@alice:example.co");
   user = CM_USER (member);
-  g_object_unref (room);
+  cm_user_set_client (user, client);
   g_object_unref (client);
   g_assert (CM_IS_ROOM_MEMBER (member));
 

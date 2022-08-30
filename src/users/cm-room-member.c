@@ -28,28 +28,13 @@
 struct _CmRoomMember
 {
   CmUser      parent_instance;
-
-  CmRoom     *room;
 };
 
 G_DEFINE_TYPE (CmRoomMember, cm_room_member, CM_TYPE_USER)
 
 static void
-cm_room_member_finalize (GObject *object)
-{
-  CmRoomMember *self = (CmRoomMember *)object;
-
-  g_clear_object (&self->room);
-
-  G_OBJECT_CLASS (cm_room_member_parent_class)->finalize (object);
-}
-
-static void
 cm_room_member_class_init (CmRoomMemberClass *klass)
 {
-  GObjectClass *object_class = G_OBJECT_CLASS (klass);
-
-  object_class->finalize = cm_room_member_finalize;
 }
 
 static void
@@ -58,19 +43,14 @@ cm_room_member_init (CmRoomMember *self)
 }
 
 CmRoomMember *
-cm_room_member_new (gpointer    room,
-                    const char *user_id)
+cm_room_member_new (const char *user_id)
 {
   CmRoomMember *self;
 
-  g_return_val_if_fail (CM_IS_ROOM (room), NULL);
   g_return_val_if_fail (user_id && *user_id == '@', NULL);
 
   self = g_object_new (CM_TYPE_ROOM_MEMBER, NULL);
   cm_user_set_user_id (CM_USER (self), user_id);
-  if (cm_room_get_client (room))
-    cm_user_set_client (CM_USER (self), cm_room_get_client (room));
-  self->room = g_object_ref (room);
 
   return self;
 }
