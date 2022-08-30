@@ -57,10 +57,6 @@ struct _CmDb
 /* We got m.room.encrypted, but with empty content */
 #define EVENT_MAY_BE_DECRYPTED    3
 
-#define ENCRYPTION_NONE                       0
-#define ENCRYPTION_MEGOLM_V1_AES_SHA2         1
-#define ENCRYPTION_OLM_v1_curve25519_AES_SHA2 2
-
 /*
  * CmDb->db should never be accessed nor modified in main thread
  * except for checking if it’s %NULL.  Any operation should be done only
