@@ -23,7 +23,9 @@ CmDevice *cm_device_new                (gpointer    client,
                                         JsonObject *root);
 JsonObject *cm_device_get_json         (CmDevice   *self);
 void      cm_device_set_one_time_key   (CmDevice   *self,
+                                        const char *room_id,
                                         const char *key);
-char     *cm_device_steal_one_time_key (CmDevice *self);
+char     *cm_device_steal_one_time_key (CmDevice   *self,
+                                        const char *room_id);
 
 G_END_DECLS

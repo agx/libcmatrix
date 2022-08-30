@@ -37,10 +37,12 @@ gboolean       cm_user_get_device_changed   (CmUser         *self);
 void           cm_user_set_device_changed   (CmUser         *self);
 gboolean       cm_user_get_device_removed   (CmUser         *self);
 JsonObject    *cm_user_get_device_key_json  (CmUser         *self,
+                                             const char     *room_id,
                                              gboolean        all_device);
 void           cm_user_set_devices          (CmUser         *self,
                                              JsonObject     *root);
 void           cm_user_add_one_time_keys    (CmUser         *self,
+                                             const char     *room_id,
                                              JsonObject     *root);
 
 G_END_DECLS

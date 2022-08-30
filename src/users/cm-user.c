@@ -402,6 +402,7 @@ cm_user_get_device_removed (CmUser *self)
  */
 JsonObject *
 cm_user_get_device_key_json (CmUser   *self,
+                             const char *room_id,
                              gboolean  all_device)
 {
   CmUserPrivate *priv = cm_user_get_instance_private (self);
@@ -424,7 +425,7 @@ cm_user_get_device_key_json (CmUser   *self,
       device = g_list_model_get_item (G_LIST_MODEL (priv->devices), i);
       device_id = cm_device_get_id (device);
 
-      if (!cm_device_has_one_time_key (device))
+      if (!cm_device_has_one_time_key (device, room_id))
         json_object_set_string_member (object, device_id, "signed_curve25519");
     }
 
@@ -526,6 +527,7 @@ cm_user_set_devices (CmUser     *self,
 
 void
 cm_user_add_one_time_keys (CmUser     *self,
+                           const char *room_id,
                            JsonObject *root)
 {
   CmUserPrivate *priv = cm_user_get_instance_private (self);
@@ -566,7 +568,7 @@ cm_user_add_one_time_keys (CmUser     *self,
               const char *key;
 
               key = cm_utils_json_object_get_string (object, "key");
-              cm_device_set_one_time_key (device, key);
+              cm_device_set_one_time_key (device, room_id, key);
               priv->device_changed = FALSE;
               priv->device_removed = FALSE;
               priv->device_added = FALSE;

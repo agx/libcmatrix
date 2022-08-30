@@ -332,7 +332,7 @@ cm_room_claim_keys_async (CmRoom              *self,
       JsonObject *key_json;
 
       user = g_list_model_get_item (members, i);
-      key_json = cm_user_get_device_key_json (user, TRUE);
+      key_json = cm_user_get_device_key_json (user, self->room_id, TRUE);
 
       if (key_json)
         json_object_set_object_member (child,
@@ -468,7 +468,7 @@ claim_key_cb (GObject      *obj,
             }
 
           keys = cm_utils_json_object_get_object (object, member->data);
-          cm_user_add_one_time_keys (CM_USER (user), keys);
+          cm_user_add_one_time_keys (CM_USER (user), self->room_id, keys);
         }
     }
 

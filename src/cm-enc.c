@@ -1178,7 +1178,7 @@ cm_enc_create_out_group_keys (CmEnc      *self,
           device = g_list_model_get_item (devices, j);
           curve_key = cm_device_get_curve_key (device);
 
-          one_time_key = cm_device_steal_one_time_key (device);
+          one_time_key = cm_device_steal_one_time_key (device, room_id);
           olm_session = ma_create_olm_out_session (self, curve_key, one_time_key, room_id);
 
           if (!one_time_key || !curve_key || !olm_session)
