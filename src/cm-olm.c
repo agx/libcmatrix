@@ -382,13 +382,10 @@ cm_olm_set_details (CmOlm      *self,
 {
   g_return_if_fail (CM_IS_OLM (self));
   g_return_if_fail (sender_id);
-  g_return_if_fail (device_id);
   g_return_if_fail (!self->sender_id);
-  g_return_if_fail (!self->device_id);
 
   self->room_id = g_strdup (room_id);
   self->sender_id = g_strdup (sender_id);
-  self->device_id = g_strdup (device_id);
 }
 
 void
