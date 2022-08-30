@@ -105,6 +105,7 @@ ma_create_olm_out_session (CmEnc      *self,
   cm_olm_set_db (session, self->cm_db);
   cm_olm_set_key (session, self->pickle_key);
   cm_olm_set_details (session, room_id, self->user_id, self->device_id);
+  cm_olm_set_account_details (session, self->user_id, self->device_id);
   cm_olm_save (session);
 
   return session;
@@ -838,6 +839,7 @@ handle_m_room_key (CmEnc      *self,
 
   session = cm_olm_in_group_new (session_key, sender_key, session_id);
   cm_olm_set_details (session, room_id, self->user_id, self->device_id);
+  cm_olm_set_account_details (session, self->user_id, self->device_id);
   cm_olm_set_key (session, self->pickle_key);
   cm_olm_set_db (session, self->cm_db);
   cm_olm_save (session);
@@ -959,6 +961,7 @@ cm_enc_handle_room_encrypted (CmEnc      *self,
         id = cm_olm_get_session_id (session);
         g_hash_table_insert (in_olm_sessions, g_strdup (id), session);
         cm_olm_set_details (session, room_id, self->user_id, self->device_id);
+        cm_olm_set_account_details (session, self->user_id, self->device_id);
         cm_olm_save (session);
       }
 
