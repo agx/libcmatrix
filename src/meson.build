@@ -17,6 +17,7 @@ libcmatrix_sources = [
   'users/cm-user.c',
   'users/cm-account.c',
   'users/cm-room-member.c',
+  'users/cm-user-list.c',
 ]
 
 libcmatrix_headers = [

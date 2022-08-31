@@ -31,6 +31,7 @@ typedef struct _CmRoomMessageEvent  CmRoomMessageEvent;
 /* Private types */
 #ifdef CMATRIX_COMPILATION
 typedef struct _CmDb                CmDb;
+typedef struct _CmUserList          CmUserList;
 #endif /* CMATRIX_COMPILATION */
 
 G_END_DECLS
