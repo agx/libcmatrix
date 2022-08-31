@@ -27,6 +27,7 @@
 #include "events/cm-event-private.h"
 #include "users/cm-room-member-private.h"
 #include "users/cm-user-private.h"
+#include "users/cm-user-list-private.h"
 #include "users/cm-account.h"
 #include "cm-room-private.h"
 #include "cm-room.h"
@@ -73,8 +74,7 @@ struct _CmClient
   char           *key;
   char           *pickle_key;
 
-  GHashTable     *users_table;
-
+  CmUserList     *user_list;
   /* direct_rooms are set on initial sync from 'account_data',
    * which will then be moved to joined_rooms later */
   GHashTable     *direct_rooms;
@@ -483,7 +483,6 @@ cm_client_finalize (GObject *object)
   g_clear_object (&self->joined_rooms);
 
   g_hash_table_unref (self->direct_rooms);
-  g_hash_table_unref (self->users_table);
 
   g_clear_object (&self->key_verification_event);
 
@@ -541,12 +540,11 @@ static void
 cm_client_init (CmClient *self)
 {
   self->cm_net = cm_net_new ();
+  self->user_list = cm_user_list_new (self);
   self->cancellable = g_cancellable_new ();
   self->joined_rooms = g_list_store_new (CM_TYPE_ROOM);
   self->direct_rooms = g_hash_table_new_full (g_str_hash, g_str_equal,
                                               g_free, g_object_unref);
-  self->users_table = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                             g_free, g_object_unref);
 }
 
 /**
@@ -1428,26 +1426,12 @@ cm_client_get_next_batch (CmClient *self)
   return self->next_batch;
 }
 
-CmUser *
-cm_client_find_user (CmClient   *self,
-                     const char *user_id,
-                     gboolean    create_if_missing)
+CmUserList *
+cm_client_get_user_list (CmClient *self)
 {
-  CmUser *user;
-
   g_return_val_if_fail (CM_IS_CLIENT (self), NULL);
-  g_return_val_if_fail (user_id && *user_id == '@', NULL);
 
-  user = g_hash_table_lookup (self->users_table, user_id);
-
-  if (user || !create_if_missing)
-    return user;
-
-  user = (CmUser *)cm_room_member_new (user_id);
-  cm_user_set_client (user, self);
-  g_hash_table_insert (self->users_table, g_strdup (user_id), user);
-
-  return user;
+  return self->user_list;
 }
 
 /**

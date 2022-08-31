@@ -21,6 +21,7 @@
 #include "users/cm-room-member.h"
 #include "users/cm-user.h"
 #include "users/cm-user-private.h"
+#include "users/cm-user-list-private.h"
 #include "cm-room-private.h"
 #include "cm-room.h"
 
@@ -109,6 +110,7 @@ room_find_user (CmRoom     *self,
                 const char *matrix_id,
                 gboolean    add_if_missing)
 {
+  CmUserList *user_list;
   GListModel *model;
   CmUser *user = NULL;
 
@@ -116,7 +118,8 @@ room_find_user (CmRoom     *self,
   g_assert (matrix_id && *matrix_id == '@');
   g_return_val_if_fail (self->client, NULL);
 
-  user = cm_client_find_user (self->client, matrix_id, add_if_missing);
+  user_list = cm_client_get_user_list (self->client);
+  user = cm_user_list_find_user (user_list, matrix_id, add_if_missing);
   model = G_LIST_MODEL (self->joined_members);
 
   if (user &&
@@ -1224,7 +1227,7 @@ cm_room_parse_events (CmRoom     *self,
                 {
                   CmRoomMember *cm_member;
 
-                  cm_member = g_hash_table_lookup (self->joined_members_table, user_id);
+                  cm_member = g_hash_table_lookup (self->invited_members_table, user_id);
                   cm_room_member_set_json_data (cm_member, child);
 
                   /* Clear the name so that it will be regenerated when name is requested */

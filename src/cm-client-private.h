@@ -17,6 +17,7 @@
 #include "cm-db-private.h"
 #include "cm-enc-private.h"
 #include "cm-net-private.h"
+#include "cm-types.h"
 #include "cm-client.h"
 
 G_BEGIN_DECLS
@@ -45,9 +46,7 @@ void        cm_client_set_db                      (CmClient            *self,
 const char *cm_client_get_filter_id               (CmClient            *self);
 void        cm_client_save                        (CmClient            *self);
 const char *cm_client_get_next_batch              (CmClient            *self);
-CmUser       *cm_client_find_user                     (CmClient              *self,
-                                                       const char            *user_id,
-                                                       gboolean               create_if_missing);
+CmUserList *cm_client_get_user_list               (CmClient            *self);
 void          cm_client_get_file_async                (CmClient              *self,
                                                        const char            *uri,
                                                        GCancellable          *cancellable,
