@@ -23,7 +23,7 @@ G_DECLARE_FINAL_TYPE (CmUserList, cm_user_list, CM, USER_LIST, GObject)
 
 CmUserList   *cm_user_list_new                     (CmClient            *self);
 CmUser       *cm_user_list_find_user               (CmUserList          *self,
-                                                    const char          *user_id,
+                                                    GRefString          *user_id,
                                                     gboolean             create_if_missing);
 
 G_END_DECLS

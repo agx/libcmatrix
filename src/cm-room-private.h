@@ -38,7 +38,7 @@ void          cm_room_add_events                   (CmRoom              *self,
                                                     GPtrArray           *events,
                                                     gboolean             append);
 void          cm_room_user_changed                 (CmRoom              *self,
-                                                    const char          *user_id);
+                                                    GRefString          *user_id);
 const char   *cm_room_get_prev_batch               (CmRoom              *self);
 void          cm_room_set_prev_batch               (CmRoom              *self,
                                                     const char          *prev_batch);

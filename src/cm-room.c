@@ -107,7 +107,7 @@ static void     room_send_message_from_queue (CmRoom *self);
 
 static CmUser *
 room_find_user (CmRoom     *self,
-                const char *matrix_id,
+                GRefString *matrix_id,
                 gboolean    add_if_missing)
 {
   CmUserList *user_list;
@@ -127,7 +127,8 @@ room_find_user (CmRoom     *self,
     {
       g_list_store_append (self->joined_members, user);
       g_hash_table_insert (self->joined_members_table,
-                           g_strdup (matrix_id), g_object_ref (user));
+                           g_ref_string_acquire (matrix_id),
+                           g_object_ref (user));
     }
 
   return user;
@@ -188,7 +189,7 @@ cm_room_generate_name (CmRoom *self)
       user = g_list_model_get_item (model, 0);
 
       /* Don't add self to create room name */
-      if (g_strcmp0 (cm_user_get_id (user), cm_client_get_user_id (self->client)) == 0)
+      if (cm_user_get_id (user) == cm_client_get_user_id (self->client))
         count = n_items = 0;
     }
 
@@ -203,10 +204,11 @@ cm_room_generate_name (CmRoom *self)
     user = g_list_model_get_item (model, i);
 
     /* Don't add self to create room name */
-    if (g_strcmp0 (cm_user_get_id (user), cm_client_get_user_id (self->client)) == 0) {
-      count--;
-      continue;
-    }
+    if (cm_user_get_id (user) == cm_client_get_user_id (self->client))
+      {
+        count--;
+        continue;
+      }
 
     if (!name_a) {
       name_a = cm_user_get_display_name (user);
@@ -439,10 +441,12 @@ claim_key_cb (GObject      *obj,
 
       for (GList *member = members; member; member = member->next)
         {
+          g_autoptr(GRefString) user_id = NULL;
           CmUser *user;
           JsonObject *keys;
 
-          user = g_hash_table_lookup (self->joined_members_table, member->data);
+          user_id = g_ref_string_new_intern (member->data);
+          user = g_hash_table_lookup (self->joined_members_table, user_id);
 
           if (!user)
             {
@@ -622,11 +626,15 @@ cm_room_init (CmRoom *self)
 {
   self->events_list = g_list_store_new (CM_TYPE_EVENT);
   self->joined_members = g_list_store_new (CM_TYPE_ROOM_MEMBER);
-  self->joined_members_table = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                                      g_free, g_object_unref);
+  self->joined_members_table = g_hash_table_new_full (g_direct_hash,
+                                                      g_direct_equal,
+                                                      (GDestroyNotify)g_ref_string_release,
+                                                      g_object_unref);
   self->invited_members = g_list_store_new (CM_TYPE_ROOM_MEMBER);
-  self->invited_members_table = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                                       g_free, g_object_unref);
+  self->invited_members_table = g_hash_table_new_full (g_direct_hash,
+                                                       g_direct_equal,
+                                                       (GDestroyNotify)g_ref_string_release,
+                                                       g_object_unref);
   self->message_queue = g_queue_new ();
 }
 
@@ -871,8 +879,8 @@ cm_room_set_client (CmRoom   *self,
 
         cm_user_set_client (user, client);
 
-      if (g_strcmp0 (cm_event_get_sender_id (event),
-                     cm_client_get_user_id (self->client)) == 0)
+        if (cm_event_get_sender_id (event) ==
+            cm_client_get_user_id (self->client))
         cm_event_sender_is_self (event);
     }
 }
@@ -1083,8 +1091,8 @@ cm_room_add_events (CmRoom    *self,
 
       user = room_find_user (self, cm_event_get_sender_id (event), TRUE);
       cm_event_set_sender (event, user);
-      if (g_strcmp0 (cm_event_get_sender_id (event),
-                     cm_client_get_user_id (self->client)) == 0)
+      if (cm_event_get_sender_id (event) ==
+          cm_client_get_user_id (self->client))
         cm_event_sender_is_self (event);
     }
 
@@ -1153,8 +1161,8 @@ cm_room_parse_events (CmRoom     *self,
       value = cm_event_get_sender_id (CM_EVENT (event));
       user = room_find_user (self, cm_event_get_sender_id (CM_EVENT (event)), TRUE);
       cm_event_set_sender (CM_EVENT (event), user);
-      if (g_strcmp0 (cm_event_get_sender_id (CM_EVENT (event)),
-                     cm_client_get_user_id (self->client)) == 0)
+      if (cm_event_get_sender_id (CM_EVENT (event)) ==
+          cm_client_get_user_id (self->client))
         cm_event_sender_is_self (CM_EVENT (event));
 
       if (!state_events)
@@ -1170,21 +1178,22 @@ cm_room_parse_events (CmRoom     *self,
 
       if (type == CM_M_ROOM_MEMBER)
         {
-          g_autoptr(CmRoomMember) room_member = NULL;
-          const char *user_id;
+          CmUserList *user_list;
+          CmUser *member = NULL;
+          GRefString *user_id;
           CmStatus member_status;
 
           member_status = cm_room_event_get_status (event);
 
           if (member_status == CM_STATUS_JOIN &&
-              g_strcmp0 (cm_event_get_sender_id (CM_EVENT (event)),
-                         cm_client_get_user_id (self->client)) == 0)
+              cm_event_get_sender_id (CM_EVENT (event)) ==
+              cm_client_get_user_id (self->client))
             continue;
 
           user_id = cm_room_event_get_room_member_id (event);
-          room_member = cm_room_member_new (user_id);
-          cm_user_set_client (CM_USER (room_member), self->client);
-          cm_room_member_set_json_data (room_member, child);
+          user_list = cm_client_get_user_list (self->client);
+          member = cm_user_list_find_user (user_list, user_id, TRUE);
+          cm_room_member_set_json_data (CM_ROOM_MEMBER (member), child);
 
           if (member_status == CM_STATUS_JOIN)
             {
@@ -1211,9 +1220,10 @@ cm_room_parse_events (CmRoom     *self,
                   continue;
                 }
 
-              g_list_store_append (self->joined_members, room_member);
+              g_list_store_append (self->joined_members, user);
               g_hash_table_insert (self->joined_members_table,
-                                   g_strdup (user_id), g_steal_pointer (&room_member));
+                                   g_ref_string_acquire (user_id),
+                                   g_object_ref (user));
 
               /* Clear the name so that it will be regenerated when name is requested */
               g_free (self->past_name);
@@ -1237,9 +1247,10 @@ cm_room_parse_events (CmRoom     *self,
                   continue;
                 }
 
-              g_list_store_append (self->invited_members, room_member);
+              g_list_store_append (self->invited_members, user);
               g_hash_table_insert (self->invited_members_table,
-                                   g_strdup (user_id), g_steal_pointer (&room_member));
+                                   g_ref_string_acquire (user_id),
+                                   g_object_ref (user));
               self->db_save_pending = TRUE;
 
               /* Clear the name so that it will be regenerated when name is requested */
@@ -1483,15 +1494,17 @@ cm_room_set_data (CmRoom     *self,
 
   for (guint i = 0; i < length; i++)
     {
+      g_autoptr(GRefString) user_id = NULL;
       CmRoomMember *member;
       const char *member_id;
 
       member_id = json_array_get_string_element (array, i);
-      member = g_hash_table_lookup (self->joined_members_table, member_id);
+      user_id = g_ref_string_new_intern (member_id);
+      member = g_hash_table_lookup (self->joined_members_table, user_id);
 
       if (member)
         {
-          g_hash_table_remove (self->joined_members_table, member_id);
+          g_hash_table_remove (self->joined_members_table, user_id);
           cm_utils_remove_list_item (self->joined_members, member);
           self->keys_queried = FALSE;
           self->keys_claimed = FALSE;
@@ -1520,7 +1533,7 @@ cm_room_set_data (CmRoom     *self,
  */
 void
 cm_room_user_changed (CmRoom     *self,
-                      const char *user_id)
+                      GRefString *user_id)
 {
   CmRoomMember *member;
 
@@ -2542,22 +2555,27 @@ get_joined_members_cb (GObject      *obj,
 
       for (GList *member = members; member; member = member->next)
         {
-          CmRoomMember *cm_member;
+          g_autoptr(GRefString) user_id = NULL;
+          CmUser *user;
           JsonObject *data;
 
-          cm_member = g_hash_table_lookup (self->joined_members_table, member->data);
+          user_id = g_ref_string_new_intern (member->data);
+          user = g_hash_table_lookup (self->joined_members_table, user_id);
 
-          if (!cm_member)
+          if (!user)
             {
-              cm_member = cm_room_member_new (member->data);
-              cm_user_set_client (CM_USER (cm_member), self->client);
-              g_hash_table_insert (self->joined_members_table, g_strdup (member->data), cm_member);
-              g_list_store_append (self->joined_members, cm_member);
-              g_object_unref (cm_member);
+              CmUserList *user_list;
+
+              user_list = cm_client_get_user_list (self->client);
+              user = cm_user_list_find_user (user_list, user_id, TRUE);
+              g_hash_table_insert (self->joined_members_table,
+                                   g_ref_string_acquire (user_id),
+                                   g_object_ref (user));
+              g_list_store_append (self->joined_members, user);
             }
 
           data = json_object_get_object_member (joined, member->data);
-          cm_room_member_set_json_data (cm_member, data);
+          cm_room_member_set_json_data (CM_ROOM_MEMBER (user), data);
         }
 
       self->joined_members_loaded = TRUE;
@@ -2645,10 +2663,12 @@ keys_query_cb (GObject      *obj,
 
       for (GList *member = members; member; member = member->next)
         {
+          g_autoptr(GRefString) user_id = NULL;
           CmUser *user;
           JsonObject *key;
 
-          user = g_hash_table_lookup (self->joined_members_table, member->data);
+          user_id = g_ref_string_new_intern (member->data);
+          user = g_hash_table_lookup (self->joined_members_table, user_id);
 
           if (!user)
             {

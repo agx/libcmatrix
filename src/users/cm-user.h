@@ -32,7 +32,7 @@ struct _CmUserClass
   gpointer reserved[8];
 };
 
-const char   *cm_user_get_id                  (CmUser              *self);
+GRefString   *cm_user_get_id                  (CmUser              *self);
 const char   *cm_user_get_display_name        (CmUser              *self);
 const char   *cm_user_get_avatar_url          (CmUser              *self);
 void          cm_user_get_avatar_async        (CmUser              *self,

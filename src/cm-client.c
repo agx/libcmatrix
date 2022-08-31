@@ -50,7 +50,7 @@ struct _CmClient
 {
   GObject         parent_instance;
 
-  char           *user_id;
+  GRefString     *user_id;
   /* @login_username can be email/[incomplete] matrix-id/phone-number etc */
   char           *login_user_id;
   char           *homeserver;
@@ -486,7 +486,7 @@ cm_client_finalize (GObject *object)
 
   g_clear_object (&self->key_verification_event);
 
-  g_free (self->user_id);
+  g_clear_pointer (&self->user_id, g_ref_string_release);
   g_free (self->login_user_id);
   g_free (self->homeserver);
   g_free (self->device_id);
@@ -1169,6 +1169,10 @@ gboolean
 cm_client_set_user_id (CmClient   *self,
                        const char *matrix_user_id)
 {
+  g_autoptr(GRefString) old_user_id = NULL;
+  GRefString *new_user_id = NULL;
+  g_autofree char *user_id = NULL;
+
   g_return_val_if_fail (CM_IS_CLIENT (self), FALSE);
   g_return_val_if_fail (!self->is_logging_in, FALSE);
   g_return_val_if_fail (!self->login_success, FALSE);
@@ -1176,8 +1180,10 @@ cm_client_set_user_id (CmClient   *self,
   if (!cm_utils_user_name_valid (matrix_user_id))
     return FALSE;
 
-  g_free (self->user_id);
-  self->user_id = g_ascii_strdown (matrix_user_id, -1);
+  old_user_id = self->user_id;
+  user_id = g_ascii_strdown (matrix_user_id, -1);
+  new_user_id = g_ref_string_new_intern (user_id);
+  g_atomic_pointer_set (&self->user_id, new_user_id);
 
   client_mark_for_save (self, TRUE, TRUE);
 
@@ -1193,9 +1199,9 @@ cm_client_set_user_id (CmClient   *self,
  * login has succeeded and may return %NULL
  * otherwise.
  *
- * Returns: (nullable): The matrix user ID of the client
+ * Returns: (nullable) (transfer none): The matrix user ID of the client
  */
-const char *
+GRefString *
 cm_client_get_user_id (CmClient *self)
 {
   g_return_val_if_fail (CM_IS_CLIENT (self), NULL);
@@ -1797,7 +1803,11 @@ client_password_login_cb (GObject      *obj,
 
   /* https://matrix.org/docs/spec/client_server/r0.6.1#post-matrix-client-r0-login */
   value = cm_utils_json_object_get_string (root, "user_id");
-  cm_set_string_value (&self->user_id, value);
+  if (value)
+    {
+      g_clear_pointer (&self->user_id, g_ref_string_release);
+      self->user_id = g_ref_string_new_intern (value);
+    }
 
   value = cm_utils_json_object_get_string (root, "access_token");
   cm_net_set_access_token (self->cm_net, value);
@@ -2074,7 +2084,7 @@ handle_to_device (CmClient   *self,
     {
       g_autoptr(GPtrArray) events = NULL;
       g_autoptr(CmEvent) event = NULL;
-      const char *user_id;
+      GRefString *user_id;
       CmEventType type;
 
       object = json_array_get_object_element (array, i);
@@ -2217,9 +2227,11 @@ handle_device_list (CmClient   *self,
 
   for (guint i = 0; i < length; i++)
     {
+      g_autoptr(GRefString) matrix_id = NULL;
       const char *user_id;
 
       user_id = json_array_get_string_element (users, i);
+      matrix_id = g_ref_string_new_intern (user_id);
       n_items = g_list_model_get_n_items (G_LIST_MODEL (self->joined_rooms));
 
       for (guint j = 0; j < n_items; j++)
@@ -2227,7 +2239,7 @@ handle_device_list (CmClient   *self,
           g_autoptr(CmRoom) room = NULL;
 
           room = g_list_model_get_item (G_LIST_MODEL (self->joined_rooms), j);
-          cm_room_user_changed (room, user_id);
+          cm_room_user_changed (room, matrix_id);
         }
     }
 }

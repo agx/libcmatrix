@@ -27,7 +27,7 @@ struct _CmOlm
 
   CmDb                    *cm_db;
   char                    *room_id;
-  char                    *sender_id;
+  GRefString              *sender_id;
   char                    *device_id;
   char                    *account_user_id;
   char                    *account_device_id;
@@ -94,11 +94,11 @@ cm_olm_finalize (GObject *object)
 
   g_free (self->pickle_key);
   g_free (self->curve_key);
-  g_free (self->sender_id);
+  g_clear_pointer (&self->sender_id, g_ref_string_release);
   g_free (self->device_id);
   g_free (self->room_id);
 
-  g_free (self->account_user_id);
+  g_clear_pointer (&self->account_user_id, g_ref_string_release);
   g_free (self->account_device_id);
 
   if (self->olm_session)
@@ -376,19 +376,19 @@ cm_olm_get_message_index (CmOlm *self)
 void
 cm_olm_set_sender_details (CmOlm      *self,
                            const char *room_id,
-                           const char *sender_id)
+                           GRefString *sender_id)
 {
   g_return_if_fail (CM_IS_OLM (self));
   g_return_if_fail (sender_id && *sender_id == '@');
   g_return_if_fail (!self->sender_id);
 
   self->room_id = g_strdup (room_id);
-  self->sender_id = g_strdup (sender_id);
+  self->sender_id = g_ref_string_acquire (sender_id);
 }
 
 void
-cm_olm_set_account_details (CmOlm *self,
-                            const char *account_user_id,
+cm_olm_set_account_details (CmOlm      *self,
+                            GRefString *account_user_id,
                             const char *account_device_id)
 {
   g_return_if_fail (CM_IS_OLM (self));
@@ -397,7 +397,7 @@ cm_olm_set_account_details (CmOlm *self,
   g_return_if_fail (!self->account_user_id);
   g_return_if_fail (!self->account_device_id);
 
-  self->account_user_id = g_strdup (account_user_id);
+  self->account_user_id = g_ref_string_acquire (account_user_id);
   self->account_device_id = g_strdup (account_device_id);
 }
 
@@ -642,7 +642,7 @@ cm_olm_get_sender_key (CmOlm *self)
   return self->curve_key;
 }
 
-const char *
+GRefString *
 cm_olm_get_account_id (CmOlm *self)
 {
   g_return_val_if_fail (CM_IS_OLM (self), NULL);

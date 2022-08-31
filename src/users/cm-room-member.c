@@ -43,7 +43,7 @@ cm_room_member_init (CmRoomMember *self)
 }
 
 CmRoomMember *
-cm_room_member_new (const char *user_id)
+cm_room_member_new (GRefString *user_id)
 {
   CmRoomMember *self;
 

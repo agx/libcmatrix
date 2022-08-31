@@ -22,7 +22,7 @@ struct _CmDevice
 
   CmClient *client;
   JsonObject *json;
-  char     *user_id;
+  GRefString *user_id;
   char     *device_id;
   char     *device_name;
   char     *ed_key;
@@ -44,7 +44,7 @@ cm_device_finalize (GObject *object)
 
   g_clear_object (&self->client);
   g_free (self->device_id);
-  g_free (self->user_id);
+  g_clear_pointer (&self->user_id, g_ref_string_release);
   g_free (self->device_name);
   g_free (self->ed_key);
   g_free (self->curve_key);
@@ -90,7 +90,8 @@ cm_device_new (gpointer    client,
   g_return_val_if_fail (text && *text, NULL);
 
   text = cm_utils_json_object_get_string (root, "user_id");
-  self->user_id = g_strdup (text);
+  if (text)
+    self->user_id = g_ref_string_new_intern (text);
 
   object = cm_utils_json_object_get_object (root, "unsigned");
   text = cm_utils_json_object_get_string (object, "device_display_name");

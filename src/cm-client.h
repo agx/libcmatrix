@@ -40,7 +40,7 @@ void          cm_client_set_sync_callback             (CmClient            *self
                                                        GDestroyNotify       callback_data_destroy);
 gboolean      cm_client_set_user_id                   (CmClient            *self,
                                                        const char          *matrix_user_id);
-const char   *cm_client_get_user_id                   (CmClient            *self);
+GRefString   *cm_client_get_user_id                   (CmClient            *self);
 gboolean      cm_client_set_login_id                  (CmClient            *self,
                                                        const char          *login_id);
 const char   *cm_client_get_login_id                  (CmClient            *self);

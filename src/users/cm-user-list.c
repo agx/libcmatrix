@@ -63,7 +63,8 @@ cm_user_list_class_init (CmUserListClass *klass)
 static void
 cm_user_list_init (CmUserList *self)
 {
-  self->users_table = g_hash_table_new_full (g_str_hash, g_str_equal,
+  self->users_table = g_hash_table_new_full (g_direct_hash,
+                                             g_direct_equal,
                                              (GDestroyNotify)g_ref_string_release,
                                              g_object_unref);
 }
@@ -83,7 +84,7 @@ cm_user_list_new (CmClient *client)
 
 CmUser *
 cm_user_list_find_user (CmUserList *self,
-                        const char *user_id,
+                        GRefString *user_id,
                         gboolean    create_if_missing)
 {
   CmUser *user;
@@ -99,7 +100,7 @@ cm_user_list_find_user (CmUserList *self,
   user = (CmUser *)cm_room_member_new (user_id);
   cm_user_set_client (user, self->client);
   g_hash_table_insert (self->users_table,
-                       g_ref_string_new (user_id), user);
+                       g_ref_string_acquire (user_id), user);
 
   return user;
 }

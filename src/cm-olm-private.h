@@ -44,9 +44,9 @@ size_t      cm_olm_get_message_index   (CmOlm          *self);
 
 void        cm_olm_set_sender_details  (CmOlm          *self,
                                         const char     *room_id,
-                                        const char     *sender_id);
+                                        GRefString     *sender_id);
 void        cm_olm_set_account_details (CmOlm          *self,
-                                        const char     *account_user_id,
+                                        GRefString     *account_user_id,
                                         const char     *account_device_id);
 void        cm_olm_set_db              (CmOlm          *self,
                                         gpointer        cm_db);
@@ -64,7 +64,7 @@ const char *cm_olm_get_session_id        (CmOlm        *self);
 const char *cm_olm_get_session_key       (CmOlm        *self);
 const char *cm_olm_get_room_id           (CmOlm        *self);
 const char *cm_olm_get_sender_key        (CmOlm        *self);
-const char *cm_olm_get_account_id        (CmOlm        *self);
+GRefString *cm_olm_get_account_id        (CmOlm        *self);
 const char *cm_olm_get_account_device    (CmOlm        *self);
 
 gpointer    cm_olm_match_olm_session     (const char  *body,

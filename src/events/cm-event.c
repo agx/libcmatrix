@@ -16,7 +16,7 @@
 typedef struct
 {
   CmUser        *sender;
-  char          *sender_id;
+  GRefString    *sender_id;
   char          *sender_device_id;
   char          *event_id;
   char          *replaces_event_id;
@@ -121,7 +121,7 @@ cm_event_finalize (GObject *object)
   CmEventPrivate *priv = cm_event_get_instance_private (self);
 
   g_clear_object (&priv->sender);
-  g_free (priv->sender_id);
+  g_clear_pointer (&priv->sender_id, g_ref_string_release);
   g_free (priv->sender_device_id);
   g_free (priv->event_id);
   g_free (priv->replaces_event_id);
@@ -376,7 +376,8 @@ cm_event_set_json (CmEvent    *self,
 
   priv->event_id = g_strdup (cm_utils_json_object_get_string (encrypted ?: root, "event_id"));
   priv->time_stamp = cm_utils_json_object_get_int (encrypted ?: root, "origin_server_ts");
-  priv->sender_id = g_strdup (cm_utils_json_object_get_string (encrypted ?: root, "sender"));
+  if (cm_utils_json_object_get_string (encrypted ?: root, "sender"))
+    priv->sender_id = g_ref_string_new_intern (cm_utils_json_object_get_string (encrypted ?: root, "sender"));
 
   child = cm_utils_json_object_get_object (encrypted ?: root, "unsigned");
   if (cm_utils_json_object_has_member (child, "transaction_id"))
@@ -469,7 +470,7 @@ cm_event_set_json (CmEvent    *self,
     g_warning ("unhandled event type: %s", type);
 }
 
-const char *
+GRefString *
 cm_event_get_sender_id (CmEvent *self)
 {
   CmEventPrivate *priv = cm_event_get_instance_private (self);
@@ -502,7 +503,7 @@ cm_event_set_sender (CmEvent *self,
   g_return_if_fail (!priv->sender);
 
   if (priv->sender_id &&
-      g_strcmp0 (priv->sender_id, cm_user_get_id (sender)) != 0)
+      priv->sender_id != cm_user_get_id (sender))
     g_critical ("user name '%s' and '%s' doesn't match",
                 priv->sender_id, cm_user_get_id (sender));
 

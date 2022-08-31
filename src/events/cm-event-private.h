@@ -49,7 +49,7 @@ void          cm_event_set_m_type         (CmEvent      *self,
 void          cm_event_set_json           (CmEvent      *self,
                                            JsonObject   *root,
                                            JsonObject   *encrypted);
-const char   *cm_event_get_sender_id      (CmEvent      *self);
+GRefString   *cm_event_get_sender_id      (CmEvent      *self);
 void          cm_event_set_sender         (CmEvent      *self,
                                            CmUser       *sender);
 void          cm_event_sender_is_self     (CmEvent      *self);

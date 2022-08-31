@@ -23,7 +23,7 @@
 
 G_BEGIN_DECLS
 
-CmRoomMember *cm_room_member_new                  (const char            *user_id);
+CmRoomMember *cm_room_member_new                  (GRefString            *user_id);
 void          cm_room_member_set_json_data        (CmRoomMember          *self,
                                                    JsonObject            *object);
 

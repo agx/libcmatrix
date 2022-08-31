@@ -22,7 +22,7 @@ typedef struct
   CmRoom        *room;
   char          *room_name;
   char          *encryption;
-  char          *member_id;
+  GRefString    *member_id;
   char          *replacement_room_id;
   GPtrArray     *users;
   JsonObject    *json;
@@ -55,7 +55,7 @@ cm_room_event_finalize (GObject *object)
   g_clear_object (&priv->room);
   g_free (priv->room_name);
   g_free (priv->encryption);
-  g_free (priv->member_id);
+  g_clear_pointer (&priv->member_id, g_ref_string_release);
   g_free (priv->replacement_room_id);
   g_clear_pointer (&priv->users, g_ptr_array_unref);
   g_clear_pointer (&priv->json, json_object_unref);
@@ -149,9 +149,9 @@ cm_room_event_new_from_json (gpointer    room,
         priv->member_status = CM_STATUS_KNOCK;
 
       if (priv->member_status == CM_STATUS_INVITE)
-        priv->member_id = g_strdup (cm_event_get_state_key (CM_EVENT (self)));
+        priv->member_id = g_ref_string_new_intern (cm_event_get_state_key (CM_EVENT (self)));
       else
-        priv->member_id = g_strdup (cm_event_get_sender_id (CM_EVENT (self)));
+        priv->member_id = g_ref_string_new_intern (cm_event_get_sender_id (CM_EVENT (self)));
     }
   else if (type == CM_M_ROOM_TOMBSTONE)
     {
@@ -251,7 +251,7 @@ cm_room_event_get_room_member (CmRoomEvent *self)
   return priv->users->pdata[0];
 }
 
-const char *
+GRefString *
 cm_room_event_get_room_member_id (CmRoomEvent *self)
 {
   CmRoomEventPrivate *priv = cm_room_event_get_instance_private (self);

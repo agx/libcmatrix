@@ -81,10 +81,19 @@ test_enc_chat_new (void)
   }
 
   /* Generate new keys for each */
-  alice_enc = cm_enc_new (cm_matrix_get_db (matrix), NULL, NULL);
-  cm_enc_set_details (alice_enc, "@alice:example.org", "SYNAPSE");
-  bob_enc = cm_enc_new (cm_matrix_get_db (matrix), NULL, NULL);
-  cm_enc_set_details (bob_enc, "@bob:example.org", "DENDRITE");
+  {
+    GRefString *matrix_id;
+
+    matrix_id = g_ref_string_new_intern ("@alice:example.org");
+    alice_enc = cm_enc_new (cm_matrix_get_db (matrix), NULL, NULL);
+    cm_enc_set_details (alice_enc, matrix_id, "SYNAPSE");
+    g_ref_string_release (matrix_id);
+
+    matrix_id = g_ref_string_new_intern ("@bob:example.org");
+    bob_enc = cm_enc_new (cm_matrix_get_db (matrix), NULL, NULL);
+    cm_enc_set_details (bob_enc, matrix_id, "DENDRITE");
+    g_ref_string_release (matrix_id);
+  }
 
   /* Generate one time keys */
   len = cm_enc_create_one_time_keys (alice_enc, 3);

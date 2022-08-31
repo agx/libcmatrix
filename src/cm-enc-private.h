@@ -49,7 +49,7 @@ CmEnc          *cm_enc_new                       (gpointer             matrix_db
                                                   const char          *pickle,
                                                   const char          *key);
 void           cm_enc_set_details                (CmEnc               *self,
-                                                  const char          *user_id,
+                                                  GRefString          *user_id,
                                                   const char          *device_id);
 char          *cm_enc_get_pickle                 (CmEnc               *self);
 char          *cm_enc_get_pickle_key             (CmEnc               *self);
@@ -92,7 +92,7 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (CmEncFileInfo, cm_enc_file_info_free)
 /* G_DEFINE_AUTOPTR_CLEANUP_FUNC (cm_gcry_t, gcry_free) */
 
 /* For tests */
-const char    *cm_enc_get_user_id            (CmEnc    *self);
+GRefString    *cm_enc_get_user_id            (CmEnc    *self);
 const char    *cm_enc_get_device_id          (CmEnc    *self);
 const char    *cm_enc_get_curve25519_key     (CmEnc    *self);
 const char    *cm_enc_get_ed25519_key        (CmEnc    *self);

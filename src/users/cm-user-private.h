@@ -29,7 +29,7 @@ void           cm_user_set_client            (CmUser        *self,
                                               CmClient      *client);
 CmClient      *cm_user_get_client            (CmUser        *self);
 void           cm_user_set_user_id           (CmUser        *self,
-                                              const char    *user_id);
+                                              GRefString    *user_id);
 void           cm_user_set_details          (CmUser         *self,
                                              const char     *display_name,
                                              const char     *avatar_url);

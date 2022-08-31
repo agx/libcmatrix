@@ -25,7 +25,7 @@ typedef struct
 {
   CmClient *cm_client;
 
-  char *user_id;
+  GRefString   *user_id;
   char *display_name;
   char *avatar_url;
   char *avatar_file_path;
@@ -55,7 +55,7 @@ cm_user_finalize (GObject *object)
   CmUser *self = (CmUser *)object;
   CmUserPrivate *priv = cm_user_get_instance_private (self);
 
-  g_free (priv->user_id);
+  g_clear_pointer (&priv->user_id, g_ref_string_release);
   g_free (priv->display_name);
   g_free (priv->avatar_url);
   g_free (priv->avatar_file_path);
@@ -147,14 +147,14 @@ cm_user_get_client (CmUser *self)
 
 void
 cm_user_set_user_id (CmUser     *self,
-                     const char *user_id)
+                     GRefString *user_id)
 {
   CmUserPrivate *priv = cm_user_get_instance_private (self);
 
   g_return_if_fail (CM_IS_USER (self));
   g_return_if_fail (!priv->user_id);
 
-  priv->user_id = g_strdup (user_id);
+  priv->user_id = g_ref_string_acquire (user_id);
 }
 
 void
@@ -173,7 +173,7 @@ cm_user_set_details (CmUser     *self,
   priv->avatar_url = g_strdup (avatar_url);
 }
 
-const char *
+GRefString *
 cm_user_get_id (CmUser *self)
 {
   CmUserPrivate *priv = cm_user_get_instance_private (self);

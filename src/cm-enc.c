@@ -65,7 +65,7 @@ struct _CmEnc
   GHashTable *out_group_sessions;
   GHashTable *out_group_room_session;
 
-  char *user_id;
+  GRefString *user_id;
   char *device_id;
 
   char *curve_key; /* Public part of Curve25519 identity key */
@@ -238,7 +238,8 @@ cm_enc_finalize (GObject *object)
   g_hash_table_unref (self->in_group_sessions);
   g_hash_table_unref (self->out_group_sessions);
   g_hash_table_unref (self->out_group_room_session);
-  g_free (self->user_id);
+
+  g_clear_pointer (&self->user_id, g_ref_string_release);
   g_free (self->device_id);
   gcry_free (self->pickle_key);
   cm_utils_free_buffer (self->curve_key);
@@ -356,19 +357,20 @@ cm_enc_new (gpointer    matrix_db,
  */
 void
 cm_enc_set_details (CmEnc      *self,
-                    const char *user_id,
+                    GRefString *user_id,
                     const char *device_id)
 {
-  g_autofree char *old_user = NULL;
+  g_autoptr(GRefString) old_user = NULL;
   g_autofree char *old_device = NULL;
 
   g_return_if_fail (CM_IS_ENC (self));
   g_return_if_fail (!user_id || *user_id == '@');
 
-  old_user = self->user_id;
+  old_user = g_steal_pointer (&self->user_id);
   old_device = self->device_id;
 
-  self->user_id = g_strdup (user_id);
+  if (user_id)
+    self->user_id = g_ref_string_acquire (user_id);
   self->device_id = g_strdup (device_id);
 
   if (self->user_id && old_device &&
@@ -850,7 +852,8 @@ void
 cm_enc_handle_room_encrypted (CmEnc      *self,
                               JsonObject *object)
 {
-  const char *algorithm, *sender, *sender_key;
+  g_autoptr(GRefString) sender = NULL;
+  const char *algorithm, *sender_key;
   g_autofree char *plaintext = NULL;
   g_autofree char *body = NULL;
   g_autofree char *copy = NULL;
@@ -861,7 +864,8 @@ cm_enc_handle_room_encrypted (CmEnc      *self,
   g_return_if_fail (CM_IS_ENC (self));
   g_return_if_fail (object);
 
-  sender = cm_utils_json_object_get_string (object, "sender");
+  if (cm_utils_json_object_get_string (object, "sender"))
+    sender = g_ref_string_new_intern (cm_utils_json_object_get_string (object, "sender"));
   object = cm_utils_json_object_get_object (object, "content");
   algorithm = cm_utils_json_object_get_string (object, "algorithm");
   /* sender_key is the Curve25519 identity key of the sender */
@@ -1326,7 +1330,7 @@ cm_enc_file_info_free (gpointer data)
   g_free (file);
 }
 
-const char *
+GRefString *
 cm_enc_get_user_id (CmEnc *self)
 {
   g_return_val_if_fail (CM_IS_ENC (self), NULL);

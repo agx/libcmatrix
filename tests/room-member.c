@@ -22,6 +22,7 @@ static void
 test_room_member_new (void)
 {
   CmRoomMember *member;
+  GRefString *user_id;
   CmClient *client;
   CmRoom *room;
   CmUser *user;
@@ -29,7 +30,9 @@ test_room_member_new (void)
   room = cm_room_new ("random room");
   client = cm_client_new ();
   cm_room_set_client (room, client);
-  member = cm_room_member_new ("@alice:example.co");
+  user_id = g_ref_string_new_intern ("@alice:example.co");
+  member = cm_room_member_new (user_id);
+  g_ref_string_release (user_id);
   user = CM_USER (member);
   cm_user_set_client (user, client);
   g_object_unref (client);
