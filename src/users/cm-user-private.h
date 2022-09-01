@@ -41,7 +41,10 @@ JsonObject    *cm_user_get_device_key_json  (CmUser         *self,
                                              const char     *room_id,
                                              gboolean        all_device);
 void           cm_user_set_devices          (CmUser         *self,
-                                             JsonObject     *root);
+                                             JsonObject     *root,
+                                             gboolean        update_state,
+                                             int            *added,
+                                             int            *removed);
 void           cm_user_add_one_time_keys    (CmUser         *self,
                                              const char     *room_id,
                                              JsonObject     *root);

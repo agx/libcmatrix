@@ -434,26 +434,41 @@ cm_user_get_device_key_json (CmUser   *self,
 
 /*
  * cm_user_set_devices:
+ * @self: A #CmUser
+ * @root: A #JsonObject
+ * @update_state: Whether to update state
+ * @added: (out): The number of new devices added
+ * @removed: (out): The number of existing devices removed
  *
  * Set devices for @self removing all
  * non existing devices in @root
+ *
+ * If @update_state is %FALSE, the device changed info
+ * shall not be updated, and so cm_user_get_device_changed()
+ * shall return the old values.
+ *
  */
 void
 cm_user_set_devices (CmUser     *self,
-                     JsonObject *root)
+                     JsonObject *root,
+                     gboolean    update_state,
+                     int        *added,
+                     int        *removed)
 {
   CmUserPrivate *priv = cm_user_get_instance_private (self);
   g_autoptr(GHashTable) devices_table = NULL;
   g_autoptr(GList) members = NULL;
   GHashTable *old_devices;
   JsonObject *child;
+  int n_added = 0, n_removed = 0;
 
   g_return_if_fail (CM_IS_USER (self));
   g_return_if_fail (root);
 
   /* Reset generice device_changed, we shall set precise
    * removed/added value later */
-  priv->device_changed = FALSE;
+  if (update_state)
+    priv->device_changed = FALSE;
 
   /* Create a table of devices and add the items here */
   devices_table = g_hash_table_new_full (g_str_hash, g_str_equal,
@@ -499,6 +514,7 @@ cm_user_set_devices (CmUser     *self,
           continue;
         }
 
+      n_added++;
       priv->device_added = TRUE;
       device = cm_device_new (priv->cm_client, child);
       g_hash_table_insert (devices_table, g_strdup (device_id), g_object_ref (device));
@@ -516,13 +532,19 @@ cm_user_set_devices (CmUser     *self,
 
       /* The old table now contains the devices that are not used by the user anymore */
       devices = g_hash_table_get_values (old_devices);
+      n_removed = g_hash_table_size (old_devices);
 
-      if (g_hash_table_size (old_devices) > 0)
+      if (n_removed > 0)
         priv->device_removed = TRUE;
 
       for (GList *device = devices; device && device->data; device = device->next)
         cm_utils_remove_list_item (priv->devices, device->data);
     }
+
+  if (added)
+    *added = n_added;
+  if (removed)
+    *removed = n_removed;
 }
 
 void

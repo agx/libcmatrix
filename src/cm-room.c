@@ -2677,7 +2677,7 @@ keys_query_cb (GObject      *obj,
             }
 
           key = cm_utils_json_object_get_object (keys, member->data);
-          cm_user_set_devices (user, key);
+          cm_user_set_devices (user, key, TRUE, NULL, NULL);
           self->keys_queried = TRUE;
 
           if (!room_members)
