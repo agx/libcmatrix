@@ -60,6 +60,7 @@ typedef enum {
   CM_ERROR_BAD_PASSWORD,
   CM_ERROR_NO_HOME_SERVER,
   CM_ERROR_BAD_HOME_SERVER,
+  CM_ERROR_USER_DEVICE_CHANGED,
 } CmError;
 
 typedef enum {
