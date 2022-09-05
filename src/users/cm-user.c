@@ -18,6 +18,7 @@
 #include "cm-device.h"
 #include "cm-device-private.h"
 #include "cm-matrix-private.h"
+#include "cm-user-list-private.h"
 #include "cm-user-private.h"
 #include "cm-user.h"
 
@@ -452,15 +453,14 @@ void
 cm_user_set_devices (CmUser     *self,
                      JsonObject *root,
                      gboolean    update_state,
-                     int        *added,
-                     int        *removed)
+                     GPtrArray  *added,
+                     GPtrArray  *removed)
 {
   CmUserPrivate *priv = cm_user_get_instance_private (self);
   g_autoptr(GHashTable) devices_table = NULL;
   g_autoptr(GList) members = NULL;
   GHashTable *old_devices;
   JsonObject *child;
-  int n_added = 0, n_removed = 0;
 
   g_return_if_fail (CM_IS_USER (self));
   g_return_if_fail (root);
@@ -514,11 +514,12 @@ cm_user_set_devices (CmUser     *self,
           continue;
         }
 
-      n_added++;
       priv->device_added = TRUE;
       device = cm_device_new (self, priv->cm_client, child);
       g_hash_table_insert (devices_table, g_strdup (device_id), g_object_ref (device));
       g_list_store_append (priv->devices, device);
+      if (added)
+        g_ptr_array_add (added, g_object_ref (device));
     }
 
   old_devices = priv->devices_table;
@@ -532,19 +533,17 @@ cm_user_set_devices (CmUser     *self,
 
       /* The old table now contains the devices that are not used by the user anymore */
       devices = g_hash_table_get_values (old_devices);
-      n_removed = g_hash_table_size (old_devices);
 
-      if (n_removed > 0)
+      if (g_hash_table_size (old_devices) > 0)
         priv->device_removed = TRUE;
 
       for (GList *device = devices; device && device->data; device = device->next)
-        cm_utils_remove_list_item (priv->devices, device->data);
+        {
+          if (removed)
+            g_ptr_array_add (removed, g_object_ref (device->data));
+          cm_utils_remove_list_item (priv->devices, device->data);
+        }
     }
-
-  if (added)
-    *added = n_added;
-  if (removed)
-    *removed = n_removed;
 }
 
 void
