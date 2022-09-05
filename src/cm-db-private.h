@@ -104,7 +104,8 @@ char          *cm_db_lookup_session                (CmDb                *self,
                                                     const char          *account_device,
                                                     const char          *session_id,
                                                     const char          *sender_key,
-                                                    CmSessionType        type);
+                                                    CmSessionType        type,
+                                                    int                 *out_db_id);
 void           cm_db_add_room_members              (CmDb                *self,
                                                     CmRoom              *cm_room,
                                                     GPtrArray           *members);

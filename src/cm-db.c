@@ -1820,6 +1820,7 @@ db_add_session (CmDb  *self,
   sqlite3_stmt *stmt;
   const char *username, *account_device, *session_id, *sender_key, *pickle, *room;
   CmSessionType type;
+  CmOlmState state;
   int status, account_id, room_id = 0;
 
   g_assert (CM_IS_DB (self));
@@ -1837,6 +1838,7 @@ db_add_session (CmDb  *self,
   sender_key = cm_olm_get_sender_key (session);
   account_device = cm_olm_get_account_device (session);
   pickle = g_object_get_data (G_OBJECT (task), "pickle");
+  state = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (task), "state"));
 
   account_id = matrix_db_get_account_id (self, username, account_device, NULL, FALSE);
 
@@ -1851,8 +1853,13 @@ db_add_session (CmDb  *self,
     room_id = cm_db_get_room_id (self, task, room, account_id);
 
   status = sqlite3_prepare_v2 (self->db,
-                               "INSERT INTO sessions(account_id,sender_key,session_id,type,pickle,room_id,time) "
-                               "VALUES(?1,?2,?3,?4,?5,?6,?7)",
+                               /*                        1           2         3 */
+                               "INSERT INTO sessions(account_id,sender_key,session_id,"
+                               /* 4    5      6       7        8              9            10 */
+                               "type,pickle,room_id,time,session_state,origin_server_ts,json_data) "
+                               "VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10) "
+                               "ON CONFLICT(account_id, sender_key, session_id) DO UPDATE SET "
+                               "pickle=?5, session_state=?8",
                                -1, &stmt, NULL);
 
   matrix_bind_int (stmt, 1, account_id, "binding when adding session");
@@ -1864,10 +1871,32 @@ db_add_session (CmDb  *self,
     matrix_bind_int (stmt, 6, room_id, "binding when adding session");
   /* Save time in milliseconds */
   matrix_bind_int (stmt, 7, time (NULL) * 1000, "binding when adding session");
+  matrix_bind_int (stmt, 8, state, "binding when adding session");
+
+  if (!g_object_get_data (G_OBJECT (session), "-cm-db-id"))
+  {
+    g_autofree char *json_str = NULL;
+    JsonObject *json, *child;
+
+    g_object_set_data (G_OBJECT (session), "-cm-db-id",
+                       GINT_TO_POINTER (sqlite3_last_insert_rowid (self->db)));
+    json = json_object_new ();
+    json_object_set_object_member (json, "local", json_object_new ());
+    child = cm_utils_json_object_get_object (json, "local");
+    json_object_set_string_member (child, "first_pickle", pickle);
+    json_str = cm_utils_json_object_to_string (json, FALSE);
+
+    matrix_bind_text (stmt, 10, json_str, "binding when adding session");
+  }
 
   status = sqlite3_step (stmt);
   sqlite3_finalize (stmt);
-  g_task_return_boolean (task, status == SQLITE_DONE);
+
+  if (status != SQLITE_DONE)
+    g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED,
+                             "%s", sqlite3_errmsg (self->db));
+  else
+    g_task_return_boolean (task, TRUE);
 }
 
 static void
@@ -1984,7 +2013,7 @@ db_lookup_session (CmDb  *self,
     }
 
   sqlite3_prepare_v2 (self->db,
-                      "SELECT pickle FROM sessions "
+                      "SELECT id,pickle FROM sessions "
                       "WHERE account_id=? AND sender_key=? AND session_id=? AND type=?",
                       -1, &stmt, NULL);
 
@@ -1996,7 +2025,13 @@ db_lookup_session (CmDb  *self,
   status = sqlite3_step (stmt);
 
   if (status == SQLITE_ROW)
-    pickle = g_strdup ((char *)sqlite3_column_text (stmt, 0));
+    {
+      int id;
+
+      pickle = g_strdup ((char *)sqlite3_column_text (stmt, 1));
+      id = sqlite3_column_int (stmt, 0);
+      g_object_set_data (G_OBJECT (task), "-cm-db-id", GINT_TO_POINTER (id));
+    }
 
   sqlite3_finalize (stmt);
   g_task_return_pointer (task, pickle, g_free);
@@ -2791,6 +2826,7 @@ cm_db_add_session (CmDb     *self,
 
   g_object_set_data_full (object, "session", g_object_ref (session), g_object_unref);
   g_object_set_data_full (object, "pickle", pickle, g_free);
+  g_object_set_data (object, "state", GINT_TO_POINTER (cm_olm_get_state (session)));
   if (cm_olm_get_session_type (session) == SESSION_MEGOLM_V1_OUT)
     g_object_set_data (object, "chain-index", GINT_TO_POINTER (cm_olm_get_message_index (session)));
 
@@ -2802,8 +2838,8 @@ cm_db_add_session (CmDb     *self,
   success = g_task_propagate_boolean (task, &error);
 
   if (error)
-    g_warning ("Failed to save olm session with id: %s",
-               cm_olm_get_session_id (session));
+    g_warning ("Failed to save olm session with id: %s, error: %s",
+               cm_olm_get_session_id (session), error->message);
 
   return success;
 }
@@ -2877,7 +2913,8 @@ cm_db_lookup_session (CmDb          *self,
                       const char    *account_device,
                       const char    *session_id,
                       const char    *sender_key,
-                      CmSessionType  type)
+                      CmSessionType  type,
+                      int           *out_db_id)
 {
   g_autoptr(GTask) task = NULL;
   g_autoptr(GError) error = NULL;
@@ -2889,6 +2926,7 @@ cm_db_lookup_session (CmDb          *self,
   g_return_val_if_fail (account_device && *account_device, NULL);
   g_return_val_if_fail (session_id && *session_id, NULL);
   g_return_val_if_fail (sender_key && *sender_key, NULL);
+  g_return_val_if_fail (out_db_id, NULL);
 
   task = g_task_new (self, NULL, NULL, NULL);
   g_object_ref (task);
@@ -2909,6 +2947,7 @@ cm_db_lookup_session (CmDb          *self,
   while (!g_task_get_completed (task))
     g_main_context_iteration (NULL, TRUE);
 
+  *out_db_id = GPOINTER_TO_INT (g_object_get_data (object, "-cm-db-id"));
   pickle = g_task_propagate_pointer (task, &error);
 
   if (error)

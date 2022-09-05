@@ -1062,11 +1062,12 @@ cm_enc_handle_join_room_encrypted (CmEnc      *self,
   if (!session)
     {
       char *pickle = NULL;
+      int db_id = 0;
 
       if (self->cm_db)
         pickle = cm_db_lookup_session (self->cm_db, self->user_id,
                                        self->device_id, session_id,
-                                       sender_key, SESSION_MEGOLM_V1_IN);
+                                       sender_key, SESSION_MEGOLM_V1_IN, &db_id);
       if (pickle)
         {
           session = cm_olm_new_from_pickle (pickle, self->pickle_key,
@@ -1074,6 +1075,7 @@ cm_enc_handle_join_room_encrypted (CmEnc      *self,
 
           if (session)
             {
+              g_object_set_data (G_OBJECT (session), "-cm-db-id", GINT_TO_POINTER (db_id));
               g_hash_table_insert (self->in_group_sessions, g_strdup (session_id), session);
               g_debug ("Got session from matrix db");
             }
