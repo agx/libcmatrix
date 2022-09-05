@@ -27,6 +27,9 @@ typedef struct
   GPtrArray     *users;
   JsonObject    *json;
   CmStatus       member_status;
+
+  guint          enc_rotation_count;
+  guint          enc_rotation_time;
 } CmRoomEventPrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (CmRoomEvent, cm_room_event, CM_TYPE_EVENT)
@@ -129,6 +132,15 @@ cm_room_event_new_from_json (gpointer    room,
     {
       value = cm_utils_json_object_get_string (child, "algorithm");
       priv->encryption = g_strdup (value);
+      priv->enc_rotation_count = cm_utils_json_object_get_int (child, "rotation_period_msgs");
+      priv->enc_rotation_time = cm_utils_json_object_get_int (child, "rotation_period_ms");
+
+      /* Set recommended defaults if not set */
+      if (!priv->enc_rotation_count)
+        priv->enc_rotation_count = 100;
+
+      if (!priv->enc_rotation_time)
+        priv->enc_rotation_time = 60 * 60 * 24 * 7; /* One week */
     }
   else if (type == CM_M_ROOM_MEMBER)
     {
@@ -437,4 +449,26 @@ cm_room_event_get_replacement_room_id (CmRoomEvent *self)
   ret_val_if_fail (self, CM_M_ROOM_TOMBSTONE, 0, NULL);
 
   return priv->replacement_room_id;
+}
+
+guint
+cm_room_event_get_rotation_count (CmRoomEvent *self)
+{
+  CmRoomEventPrivate *priv = cm_room_event_get_instance_private (self);
+
+  g_return_val_if_fail (CM_IS_ROOM_EVENT (self), 100);
+  ret_val_if_fail (self, CM_M_ROOM_ENCRYPTION, 0, 100);
+
+  return priv->enc_rotation_count;
+}
+
+gint64
+cm_room_event_get_rotation_time (CmRoomEvent *self)
+{
+  CmRoomEventPrivate *priv = cm_room_event_get_instance_private (self);
+
+  g_return_val_if_fail (CM_IS_ROOM_EVENT (self), 100);
+  ret_val_if_fail (self, CM_M_ROOM_ENCRYPTION, 0, 100);
+
+  return priv->enc_rotation_time;
 }
