@@ -18,6 +18,7 @@
 #include <glib-object.h>
 #include <gio/gio.h>
 
+#include "cm-types.h"
 #include "cm-enums.h"
 
 G_BEGIN_DECLS
