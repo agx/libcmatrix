@@ -38,7 +38,7 @@ void          cm_room_add_events                   (CmRoom              *self,
                                                     GPtrArray           *events,
                                                     gboolean             append);
 void          cm_room_user_changed                 (CmRoom              *self,
-                                                    GRefString          *user_id);
+                                                    GPtrArray           *changed_users);
 const char   *cm_room_get_prev_batch               (CmRoom              *self);
 void          cm_room_set_prev_batch               (CmRoom              *self,
                                                     const char          *prev_batch);
@@ -56,13 +56,6 @@ void          cm_room_set_is_direct                (CmRoom              *self,
                                                     gboolean             is_direct);
 void          cm_room_set_is_encrypted             (CmRoom              *self,
                                                     gboolean             encrypted);
-void          cm_room_query_keys_async             (CmRoom              *self,
-                                                    GCancellable        *cancellable,
-                                                    GAsyncReadyCallback  callback,
-                                                    gpointer             user_data);
-gboolean      cm_room_query_keys_finish            (CmRoom              *self,
-                                                    GAsyncResult        *result,
-                                                    GError             **error);
 void          cm_room_get_name_async               (CmRoom              *self,
                                                     GCancellable        *cancellable,
                                                     GAsyncReadyCallback  callback,

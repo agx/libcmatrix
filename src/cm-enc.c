@@ -19,7 +19,9 @@
 
 #include "cm-utils-private.h"
 #include "users/cm-user-private.h"
+#include "users/cm-user-list-private.h"
 #include "users/cm-room-member-private.h"
+#include "cm-room-private.h"
 #include "cm-device.h"
 #include "cm-device-private.h"
 #include "cm-db-private.h"
@@ -279,8 +281,8 @@ cm_enc_init (CmEnc *self)
                                                    g_free, g_object_unref);
   self->out_group_sessions = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                     g_free, g_object_unref);
-  self->out_group_room_session = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                                        g_free, g_free);
+  self->out_group_room_session = g_hash_table_new_full (g_direct_hash, g_direct_equal,
+                                                        g_object_unref, g_free);
 }
 
 /**
@@ -1034,7 +1036,7 @@ cm_enc_save_file_enc (CmEnc      *self,
 
 char *
 cm_enc_handle_join_room_encrypted (CmEnc      *self,
-                                   const char *room_id,
+                                   CmRoom     *room,
                                    JsonObject *object)
 {
   CmOlm *session = NULL;
@@ -1097,7 +1099,7 @@ cm_enc_handle_join_room_encrypted (CmEnc      *self,
 
 JsonObject *
 cm_enc_encrypt_for_chat (CmEnc      *self,
-                         const char *room_id,
+                         CmRoom     *room,
                          const char *message)
 {
   CmOlm *session;
@@ -1107,13 +1109,19 @@ cm_enc_encrypt_for_chat (CmEnc      *self,
   JsonObject *root;
 
   g_return_val_if_fail (CM_IS_ENC (self), NULL);
+  g_return_val_if_fail (CM_IS_ROOM (room), NULL);
   g_return_val_if_fail (message && *message, NULL);
 
-  old_session_id = g_hash_table_lookup (self->out_group_room_session, room_id);
+  old_session_id = g_hash_table_lookup (self->out_group_room_session, room);
   session = g_hash_table_lookup (self->out_group_sessions, old_session_id);
   g_return_val_if_fail (session, NULL);
 
   encrypted = cm_olm_encrypt (session, message);
+
+  cm_olm_update_validity (session,
+                          cm_room_get_encryption_msg_count (room),
+                          cm_room_get_encryption_rotation_time (room));
+  cm_olm_save (session);
   session_id = cm_olm_get_session_id (session);
 
   root = json_object_new ();
@@ -1128,64 +1136,68 @@ cm_enc_encrypt_for_chat (CmEnc      *self,
 
 JsonObject *
 cm_enc_create_out_group_keys (CmEnc      *self,
-                              const char *room_id,
-                              GListModel *members_list)
+                              CmRoom     *room,
+                              GPtrArray  *one_time_keys,
+                              gpointer   *out_session)
 {
-  g_autoptr(CmOlm) out_session = NULL;
-  g_autoptr(CmOlm) in_session = NULL;
+  CmOlm *session;
   const char *session_key, *session_id;
   char *old_session_id;
   JsonObject *root, *child;
 
   g_return_val_if_fail (CM_IS_ENC (self), FALSE);
+  g_return_val_if_fail (CM_IS_ROOM (room), FALSE);
+  g_return_val_if_fail (one_time_keys && one_time_keys->len, NULL);
+  g_return_val_if_fail (out_session, NULL);
 
   /* Return early if the chat has an existing outbound group session */
-  old_session_id = g_hash_table_lookup (self->out_group_room_session, room_id);
+  old_session_id = g_hash_table_lookup (self->out_group_room_session, room);
   if (old_session_id &&
       g_hash_table_contains (self->out_group_sessions, old_session_id))
     return NULL;
 
-  out_session = cm_olm_out_group_new ();
+  session = cm_olm_out_group_new (self->curve_key);
 
-  if (out_session)
-    in_session = cm_olm_in_group_new_from_out (out_session, self->curve_key);
-
-  if (!out_session || !in_session)
+  if (!session)
     g_return_val_if_reached (NULL);
 
-  session_id = cm_olm_get_session_id (out_session);
-  session_key = cm_olm_get_session_key (out_session);
+  cm_olm_set_account_details (session, self->user_id, self->device_id);
+  cm_olm_set_sender_details (session, cm_room_get_id (room), self->user_id);
+  cm_olm_set_key (session, self->pickle_key);
+  cm_olm_set_db (session, self->cm_db);
+  session_id = cm_olm_get_session_id (session);
+  session_key = cm_olm_get_session_key (session);
+  *out_session = session;
 
   root = json_object_new ();
 
   /* https://matrix.org/docs/spec/client_server/r0.6.1#m-room-key */
-  for (guint i = 0; i < g_list_model_get_n_items (members_list); i++)
+  for (guint i = 0; i < one_time_keys->len; i++)
     {
-      g_autoptr(CmRoomMember) member = NULL;
-      GListModel *devices;
+      CmUser *member;
       const char *curve_key;
       JsonObject *user;
-      guint n_items;
+      CmUserKey *key;
 
-      member = g_list_model_get_item (members_list, i);
-      devices = cm_user_get_devices (CM_USER (member));
-      n_items = g_list_model_get_n_items (devices);
+      key = one_time_keys->pdata[i];
+      member = key->user;
 
       user = json_object_new ();
-      json_object_set_object_member (root, cm_user_get_id (CM_USER (member)), user);
+      json_object_set_object_member (root, cm_user_get_id (member), user);
 
-      for (guint j = 0; j < n_items; j++)
+      for (guint j = 0; j < key->devices->len; j++)
         {
-          g_autoptr(CmDevice) device = NULL;
+          CmDevice *device;
           CmOlm *olm_session = NULL;
-          g_autofree char *one_time_key = NULL;
+          char *one_time_key = NULL;
           JsonObject *content;
 
-          device = g_list_model_get_item (devices, j);
+          device = key->devices->pdata[j];
           curve_key = cm_device_get_curve_key (device);
 
-          one_time_key = cm_device_steal_one_time_key (device, room_id);
-          olm_session = ma_create_olm_out_session (self, curve_key, one_time_key, room_id);
+          one_time_key = key->keys->pdata[j];
+          olm_session = ma_create_olm_out_session (self, curve_key, one_time_key,
+                                                   cm_room_get_id (room));
 
           if (!one_time_key || !curve_key || !olm_session)
             continue;
@@ -1224,14 +1236,14 @@ cm_enc_create_out_group_keys (CmEnc      *self,
 
             child = json_object_new ();
             json_object_set_string_member (child, "algorithm", "m.megolm.v1.aes-sha2");
-            json_object_set_string_member (child, "room_id", room_id);
+            json_object_set_string_member (child, "room_id", cm_room_get_id (room));
             json_object_set_string_member (child, "session_id", session_id);
             json_object_set_string_member (child, "session_key", session_key);
-            json_object_set_int_member (child, "chain_index", cm_olm_get_message_index (out_session));
+            json_object_set_int_member (child, "chain_index", cm_olm_get_message_index (session));
             json_object_set_object_member (object, "content", child);
 
             /* User specific data */
-            json_object_set_string_member (object, "recipient", cm_user_get_id (CM_USER (member)));
+            json_object_set_string_member (object, "recipient", cm_user_get_id (member));
 
             /* Device specific data */
             child = json_object_new ();
@@ -1249,15 +1261,114 @@ cm_enc_create_out_group_keys (CmEnc      *self,
         }
     }
 
-  g_hash_table_insert (self->in_group_sessions,
-                       g_strdup (session_id), g_steal_pointer (&in_session));
-  g_hash_table_insert (self->out_group_room_session,
-                       g_strdup (room_id), g_strdup (session_id));
-  /* todo */
-  g_hash_table_insert (self->out_group_sessions,
-                       g_strdup (session_id), g_steal_pointer (&out_session));
-
   return root;
+}
+
+/**
+ * cm_enc_has_room_group_key:
+ * @self: A #CmEnc
+ * @room_id: A matrix room id
+ *
+ * Check if any valid outgoing session is present
+ * for the given room @room_id.  This should be
+ * checked before sending each message as @self
+ * may rotate the key after certain count or time
+ *
+ * Returns: %TRUE if a valid group session is
+ * present.  %FALSE otherwise.
+ */
+gboolean
+cm_enc_has_room_group_key (CmEnc  *self,
+                           CmRoom *room)
+{
+  const char *session_id;
+
+  g_return_val_if_fail (CM_IS_ENC (self), FALSE);
+  g_return_val_if_fail (CM_IS_ROOM (room), FALSE);
+
+  session_id = g_hash_table_lookup (self->out_group_room_session, room);
+
+  if (!session_id)
+    return FALSE;
+
+  return g_hash_table_contains (self->out_group_sessions, session_id);
+}
+
+/**
+ * cm_enc_set_room_group_key:
+ * @self: A #CmEnc
+ * @room_id: The room id the session should be added to
+ * @out_session: A megolm #CmOlm
+ *
+ * Set the outgoing group encryption session for the room
+ * @room_id.  All future messages shall be encrypted with
+ * @out_session for the given room until it's invalidated
+ */
+void
+cm_enc_set_room_group_key (CmEnc    *self,
+                           CmRoom   *room,
+                           gpointer  out_session)
+{
+  CmOlm *in_session = NULL;
+  const char *session_id;
+
+  g_return_if_fail (CM_IS_ENC (self));
+  g_return_if_fail (CM_IS_ROOM (room));
+  g_return_if_fail (CM_IS_OLM (out_session));
+  g_return_if_fail (cm_olm_get_session_type (out_session) == SESSION_MEGOLM_V1_OUT);
+
+  session_id = cm_olm_get_session_id (out_session);
+  if (out_session == g_hash_table_lookup (self->out_group_sessions, session_id))
+    return;
+
+  g_warn_if_fail (!g_hash_table_contains (self->out_group_room_session, room));
+
+  in_session = cm_olm_in_group_new_from_out (out_session, self->curve_key);
+  g_hash_table_insert (self->out_group_room_session,
+                       g_object_ref (room), g_strdup (session_id));
+  g_hash_table_insert (self->out_group_sessions,
+                       g_strdup (session_id), g_object_ref (out_session));
+  g_hash_table_insert (self->in_group_sessions,
+                       g_strdup (session_id), in_session);
+  cm_olm_save (out_session);
+  cm_olm_save (in_session);
+}
+
+/**
+ * cm_enc_rm_room_group_key:
+ * @self: A #CmEnc
+ * @room_id: The room id for which the session should be removed
+ *
+ * Invalidate any out group session for the given room.
+ * The in session pair of the same is not removed as it
+ * may be useful to decrypt yet to receive messages.
+ */
+void
+cm_enc_rm_room_group_key (CmEnc  *self,
+                          CmRoom *room)
+{
+  g_autoptr(CmOlm) session = NULL;
+  const char *session_id;
+
+  g_return_if_fail (CM_IS_ENC (self));
+  g_return_if_fail (CM_IS_ROOM (room));
+
+  session_id = g_hash_table_lookup (self->out_group_room_session, room);
+
+  if (!session_id)
+    return;
+
+  session = g_hash_table_lookup (self->out_group_sessions, session_id);
+
+  if (session)
+    {
+      g_object_ref (session);
+      cm_olm_set_state (session, OLM_STATE_INVALIDATED);
+      g_hash_table_remove (self->out_group_sessions, session_id);
+      cm_olm_save (session);
+    }
+
+  g_hash_table_remove (self->out_group_room_session, room);
 }
 
 static void

@@ -2213,34 +2213,22 @@ static void
 handle_device_list (CmClient   *self,
                     JsonObject *root)
 {
-  JsonArray *users;
-  guint length = 0;
+  g_autoptr(GPtrArray) users = NULL;
   guint n_items;
 
   if (!root)
     return;
 
-  users = cm_utils_json_object_get_array (root, "changed");
+  users = g_ptr_array_new_with_free_func (g_object_unref);
+  n_items = g_list_model_get_n_items (G_LIST_MODEL (self->joined_rooms));
+  cm_user_list_device_changed (self->user_list, root, users);
 
-  if (users)
-    length = json_array_get_length (users);
-
-  for (guint i = 0; i < length; i++)
+  for (guint i = 0; i < n_items; i++)
     {
-      g_autoptr(GRefString) matrix_id = NULL;
-      const char *user_id;
+      g_autoptr(CmRoom) room = NULL;
 
-      user_id = json_array_get_string_element (users, i);
-      matrix_id = g_ref_string_new_intern (user_id);
-      n_items = g_list_model_get_n_items (G_LIST_MODEL (self->joined_rooms));
-
-      for (guint j = 0; j < n_items; j++)
-        {
-          g_autoptr(CmRoom) room = NULL;
-
-          room = g_list_model_get_item (G_LIST_MODEL (self->joined_rooms), j);
-          cm_room_user_changed (room, matrix_id);
-        }
+      room = g_list_model_get_item (G_LIST_MODEL (self->joined_rooms), i);
+      cm_room_user_changed (room, users);
     }
 }
 
@@ -2256,6 +2244,7 @@ handle_red_pill (CmClient   *self,
     return;
 
   handle_account_data (self, cm_utils_json_object_get_object (root, "account_data"));
+  handle_device_list (self, cm_utils_json_object_get_object (root, "device_lists"));
   /* to_device should be handled first as it might contain keys to be used
    * to decrypt following events */
   handle_to_device (self, cm_utils_json_object_get_object (root, "to_device"));
@@ -2263,7 +2252,6 @@ handle_red_pill (CmClient   *self,
   object = cm_utils_json_object_get_object (root, "rooms");
   handle_room_join (self, cm_utils_json_object_get_object (object, "join"));
   handle_room_leave (self, cm_utils_json_object_get_object (object, "leave"));
-  handle_device_list (self, cm_utils_json_object_get_object (root, "device_lists"));
 }
 
 static void

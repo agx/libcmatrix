@@ -318,7 +318,7 @@ cm_olm_in_group_new_from_out (CmOlm      *out_group,
 }
 
 CmOlm *
-cm_olm_out_group_new (void)
+cm_olm_out_group_new (const char *sender_identity_key)
 {
   CmOlm *self;
   g_autofree OlmOutboundGroupSession *session = NULL;

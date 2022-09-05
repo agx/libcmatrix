@@ -16,6 +16,8 @@
 #include <json-glib/json-glib.h>
 #include <glib-object.h>
 
+#include "cm-types.h"
+
 G_BEGIN_DECLS
 
 typedef struct _CmEncFileInfo CmEncFileInfo;
@@ -71,14 +73,22 @@ char          *cm_enc_get_device_keys_json       (CmEnc               *self);
 void           cm_enc_handle_room_encrypted      (CmEnc               *self,
                                                   JsonObject          *object);
 char          *cm_enc_handle_join_room_encrypted (CmEnc               *self,
-                                                  const char          *room_id,
+                                                  CmRoom              *room,
                                                   JsonObject          *object);
 JsonObject    *cm_enc_encrypt_for_chat           (CmEnc               *self,
-                                                  const char          *room_id,
+                                                  CmRoom              *room,
                                                   const char          *message);
 JsonObject    *cm_enc_create_out_group_keys      (CmEnc               *self,
-                                                  const char          *room_id,
-                                                  GListModel          *members_list);
+                                                  CmRoom              *room,
+                                                  GPtrArray           *one_time_keys,
+                                                  gpointer            *out_session);
+gboolean       cm_enc_has_room_group_key         (CmEnc               *self,
+                                                  CmRoom              *room);
+void           cm_enc_set_room_group_key         (CmEnc               *self,
+                                                  CmRoom              *room,
+                                                  gpointer             out_session);
+void           cm_enc_rm_room_group_key          (CmEnc               *self,
+                                                  CmRoom              *room);
 void           cm_enc_find_file_enc_async        (CmEnc               *self,
                                                   const char          *uri,
                                                   GAsyncReadyCallback  callback,

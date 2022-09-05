@@ -106,7 +106,7 @@ room_message_generate_json (CmRoomMessageEvent *self,
       text = cm_utils_json_object_to_string (object, FALSE);
       json_object_unref (object);
       object = cm_enc_encrypt_for_chat (cm_client_get_enc (client),
-                                        room_id, text);
+                                        room, text);
       return object;
     }
   else

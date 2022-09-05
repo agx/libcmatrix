@@ -37,6 +37,15 @@ struct _CmRoom
   GHashTable *joined_members_table;
   GListStore *invited_members;
   GHashTable *invited_members_table;
+
+  /* key: GRefString (user_id), value: #GPtrArray of #CmDevice */
+  /* Shall store only devices that are added */
+  /* Reset if any device/user is removed/left */
+  GHashTable   *changed_devices;
+  /* array of #CmUser */
+  GPtrArray    *changed_users;
+  /* array of #CmUserKey */
+  GPtrArray    *one_time_keys;
   GCancellable *enc_cancellable;
   JsonObject *local_json;
   CmClient   *client;
@@ -55,6 +64,7 @@ struct _CmRoom
   CmEvent     *canonical_alias_event;
   CmEvent     *room_topic_event;
   CmEvent     *power_level_event;
+  CmEvent     *encryption_event;
   CmEvent     *guest_access_event;
   CmEvent     *join_rules_event;
   CmEvent     *history_visibility_event;
@@ -237,28 +247,6 @@ cm_room_generate_name (CmRoom *self)
 }
 
 static void
-keys_claim_cb (GObject      *obj,
-               GAsyncResult *result,
-               gpointer      user_data)
-{
-  g_autoptr(GTask) task = user_data;
-  JsonObject *object = NULL;
-  GError *error = NULL;
-
-  object = g_task_propagate_pointer (G_TASK (result), &error);
-
-  if (error)
-    {
-      g_debug ("Error key query: %s", error->message);
-      g_task_return_error (task, error);
-    }
-  else
-    {
-      g_task_return_pointer (task, object, (GDestroyNotify)json_object_unref);
-    }
-}
-
-static void
 room_add_event_to_db (CmRoom  *self,
                       CmEvent *event)
 {
@@ -273,205 +261,73 @@ room_add_event_to_db (CmRoom  *self,
                          self, events, FALSE);
 }
 
-/*
- * cm_room_claim_keys_async:
- * @self: A #CmRoom
- * @callback: A #GAsyncReadyCallback
- * @user_data: user data passed to @callback
- *
- * Claim an one time key for all devices in room
- */
 static void
-cm_room_claim_keys_async (CmRoom              *self,
-                          GAsyncReadyCallback  callback,
-                          gpointer             user_data)
+room_load_device_keys_cb (GObject      *object,
+                          GAsyncResult *result,
+                          gpointer      user_data)
 {
-  JsonObject *object, *child;
-  GListModel *members;
-  GTask *task;
+  g_autoptr(CmRoom) self = user_data;
+  g_autoptr(GPtrArray) users = NULL;
+  g_autoptr(GError) error = NULL;
 
-  g_return_if_fail (CM_IS_ROOM (self));
+  users = cm_user_list_load_devices_finish (CM_USER_LIST (object), result, &error);
+  self->querying_keys = FALSE;
 
-  task = g_task_new (self, self->enc_cancellable, callback, user_data);
-
-  if (self->joined_members_loading || self->querying_keys ||
-      self->claiming_keys || self->uploading_keys)
+  if (error)
     {
-      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED,
-                               "Claiming keys already in progress");
-      return;
+      g_debug ("Error loading devices: %s", error->message);
     }
-
-  self->claiming_keys = TRUE;
-
-  /* https://matrix.org/docs/spec/client_server/r0.6.1#post-matrix-client-r0-keys-claim */
-  object = json_object_new ();
-  json_object_set_int_member (object, "timeout", KEY_TIMEOUT);
-  members = G_LIST_MODEL (self->joined_members);
-
-  child = json_object_new ();
-
-  for (guint i = 0; i < g_list_model_get_n_items (members); i++)
+  else
     {
-      g_autoptr(CmUser) user = NULL;
-      JsonObject *key_json;
-
-      user = g_list_model_get_item (members, i);
-      key_json = cm_user_get_device_key_json (user, self->room_id, TRUE);
-
-      if (key_json)
-        json_object_set_object_member (child,
-                                       cm_user_get_id (user),
-                                       key_json);
+      self->keys_queried = TRUE;
+      room_send_message_from_queue (self);
     }
-
-  json_object_set_object_member (object, "one_time_keys", child);
-
-  cm_net_send_json_async (cm_client_get_net (self->client), 0, object,
-                          "/_matrix/client/r0/keys/claim", SOUP_METHOD_POST,
-                          NULL, self->enc_cancellable, keys_claim_cb, task);
 }
 
-static JsonObject *
-cm_room_claim_keys_finish (CmRoom          *self,
-                           GAsyncResult  *result,
-                           GError       **error)
+static void
+room_claim_keys_cb (GObject      *object,
+                    GAsyncResult *result,
+                    gpointer      user_data)
 {
-  g_return_val_if_fail (CM_IS_ROOM (self), NULL);
-  g_return_val_if_fail (G_IS_TASK (result), NULL);
-  g_return_val_if_fail (!error || !*error, NULL);
+  g_autoptr(CmRoom) self = user_data;
+  g_autoptr(GError) error = NULL;
+  GPtrArray *keys;
 
-  return g_task_propagate_pointer (G_TASK (result), error);
+  g_clear_pointer (&self->one_time_keys, g_ptr_array_unref);
+  keys = cm_user_list_claim_keys_finish (CM_USER_LIST (object), result, &error);
+  self->one_time_keys = keys;
+  self->claiming_keys = FALSE;
+
+  if (error)
+    {
+      g_debug ("Error claiming keys: %s", error->message);
+    }
+  else
+    {
+      self->keys_claimed = TRUE;
+      room_send_message_from_queue (self);
+    }
 }
 
-
 static void
-room_upload_group_keys_cb (GObject      *obj,
-                           GAsyncResult *result,
-                           gpointer      user_data)
+room_upload_keys_cb (GObject      *object,
+                     GAsyncResult *result,
+                     gpointer      user_data)
 {
-  CmRoom *self;
-  g_autoptr(GTask) task = user_data;
-  g_autoptr(JsonObject) object = NULL;
-  GError *error = NULL;
+  g_autoptr(CmRoom) self = user_data;
+  g_autoptr(GError) error = NULL;
 
-  self = g_task_get_source_object (task);
-  g_assert (CM_IS_ROOM (self));
-
-  object = g_task_propagate_pointer (G_TASK (result), &error);
+  cm_user_list_upload_keys_finish (CM_USER_LIST (object), result, &error);
   self->uploading_keys = FALSE;
 
   if (error)
     {
       g_debug ("Error uploading group keys: %s", error->message);
-      g_task_return_error (task, error);
     }
   else
     {
       self->keys_uploaded = TRUE;
-      room_send_message_from_queue (self);
-      g_task_return_boolean (task, TRUE);
-    }
-}
-
-static void
-cm_room_upload_group_keys_async (CmRoom              *self,
-                                 GAsyncReadyCallback  callback,
-                                 gpointer             user_data)
-{
-  g_autoptr(CmEvent) event = NULL;
-  g_autofree char *uri = NULL;
-  JsonObject *root, *object;
-  GListModel *members;
-  GTask *task;
-
-  g_return_if_fail (CM_IS_ROOM (self));
-
-  task = g_task_new (self, self->enc_cancellable, callback, user_data);
-
-  if (self->joined_members_loading || self->querying_keys ||
-      self->claiming_keys || self->uploading_keys)
-    {
-      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED,
-                               "Uploading keys already in progres");
-      return;
-    }
-
-  self->uploading_keys = TRUE;
-  members = G_LIST_MODEL (self->joined_members);
-  root = json_object_new ();
-  object = cm_enc_create_out_group_keys (cm_client_get_enc (self->client),
-                                         cm_room_get_id (self),
-                                         members);
-  json_object_set_object_member (root, "messages", object);
-
-  /* Create an event only to create event id */
-  event = cm_event_new (CM_M_UNKNOWN);
-  cm_event_create_txn_id (event, cm_client_pop_event_id (self->client));
-
-  uri = g_strdup_printf ("/_matrix/client/r0/sendToDevice/m.room.encrypted/%s",
-                         cm_event_get_txn_id (event));
-  cm_net_send_json_async (cm_client_get_net (self->client),
-                          0, root, uri, SOUP_METHOD_PUT,
-                          NULL, self->enc_cancellable,
-                          room_upload_group_keys_cb, task);
-}
-
-static void
-claim_key_cb (GObject      *obj,
-              GAsyncResult *result,
-              gpointer      user_data)
-{
-  CmRoom *self = user_data;
-  g_autoptr(GError) error = NULL;
-  g_autoptr(JsonObject) root = NULL;
-  JsonObject *object;
-
-  g_assert (CM_IS_ROOM (self));
-
-  root = cm_room_claim_keys_finish (self, result, &error);
-
-  if (root)
-    {
-      g_autoptr(GList) members = NULL;
-
-      object = cm_utils_json_object_get_object (root, "one_time_keys");
-      if (object)
-        members = json_object_get_members (object);
-
-      for (GList *member = members; member; member = member->next)
-        {
-          g_autoptr(GRefString) user_id = NULL;
-          CmUser *user;
-          JsonObject *keys;
-
-          user_id = g_ref_string_new_intern (member->data);
-          user = g_hash_table_lookup (self->joined_members_table, user_id);
-
-          if (!user)
-            {
-              g_warning ("‘%s’ not found in buddy list", (char *)member->data);
-              continue;
-            }
-
-          keys = cm_utils_json_object_get_object (object, member->data);
-          cm_user_add_one_time_keys (user, self->room_id, keys);
-        }
-    }
-
-  if (root)
-    self->keys_claimed = TRUE;
-  self->claiming_keys = FALSE;
-
-  if (error)
-    {
-      if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
-        g_warning ("error claiming keys: %s", error->message);
-      return;
-    }
-  else
-    {
-      /* TODO: Handle error */
+      g_ptr_array_set_size (self->one_time_keys, 0);
       room_send_message_from_queue (self);
     }
 }
@@ -479,6 +335,8 @@ claim_key_cb (GObject      *obj,
 static void
 ensure_encryption_keys (CmRoom *self)
 {
+  CmUserList *user_list;
+
   g_return_if_fail (self->encryption);
 
   if (self->enc_cancellable &&
@@ -492,14 +350,65 @@ ensure_encryption_keys (CmRoom *self)
       self->claiming_keys || self->uploading_keys)
     return;
 
+  user_list = cm_client_get_user_list (self->client);
+
   if (!self->joined_members_loaded)
     cm_room_load_joined_members_async (self, self->enc_cancellable, NULL, NULL);
   else if (!self->keys_queried)
-    cm_room_query_keys_async (self, self->enc_cancellable, NULL, NULL);
+    {
+      self->querying_keys = TRUE;
+      cm_user_list_load_devices_async (user_list, self->changed_users,
+                                       room_load_device_keys_cb,
+                                       g_object_ref (self));
+    }
   else if (!self->keys_claimed)
-    cm_room_claim_keys_async (self, claim_key_cb, self);
+    {
+      g_autoptr(GHashTable) users = NULL;
+      GListModel *members;
+
+      self->claiming_keys = TRUE;
+      members = G_LIST_MODEL (self->joined_members);
+      users = g_hash_table_new_full (g_direct_hash,
+                                     g_direct_equal,
+                                     (GDestroyNotify)g_ref_string_release,
+                                     (GDestroyNotify)g_ptr_array_unref);
+
+      for (guint i = 0; i < g_list_model_get_n_items (members); i++)
+        {
+          g_autoptr(CmUser) user = NULL;
+          GListModel *device_list;
+          GRefString *user_id;
+          GPtrArray *devices;
+
+          user = g_list_model_get_item (members, i);
+          devices = g_ptr_array_new_full (32, g_object_unref);
+          device_list = cm_user_get_devices (user);
+
+          for (guint j = 0; j < g_list_model_get_n_items (device_list); j++)
+            g_ptr_array_add (devices, g_list_model_get_item (device_list, j));
+
+          user_id = g_ref_string_acquire (cm_user_get_id (user));
+          g_hash_table_insert (users, user_id, devices);
+        }
+
+      cm_user_list_claim_keys_async (user_list, self, users,
+                                     room_claim_keys_cb,
+                                     g_object_ref (self));
+    }
   else if (!self->keys_uploaded)
-    cm_room_upload_group_keys_async (self, NULL, self);
+    {
+      if (!self->one_time_keys || !self->one_time_keys->len)
+        {
+          g_warning ("no keys uploaded, and no keys left to upload");
+          return;
+        }
+
+      self->uploading_keys = TRUE;
+      cm_user_list_upload_keys_async (user_list, self,
+                                      self->one_time_keys,
+                                      room_upload_keys_cb,
+                                      g_object_ref (self));
+    }
   else
     g_return_if_reached ();
 }
@@ -566,6 +475,7 @@ cm_room_finalize (GObject *object)
   g_hash_table_unref (self->invited_members_table);
   g_clear_object (&self->invited_members);
 
+  g_clear_pointer (&self->one_time_keys, g_ptr_array_unref);
   g_clear_object (&self->events_list);
   g_clear_object (&self->last_event);
   g_clear_object (&self->room_create_event);
@@ -625,7 +535,13 @@ static void
 cm_room_init (CmRoom *self)
 {
   self->events_list = g_list_store_new (CM_TYPE_EVENT);
+  self->one_time_keys = g_ptr_array_new_full (32, g_free);
+  self->changed_users = g_ptr_array_new_full (32, g_object_unref);
   self->joined_members = g_list_store_new (CM_TYPE_ROOM_MEMBER);
+  self->changed_devices = g_hash_table_new_full (g_direct_hash,
+                                                 g_direct_equal,
+                                                 (GDestroyNotify)g_ref_string_release,
+                                                 (GDestroyNotify)g_ptr_array_unref);
   self->joined_members_table = g_hash_table_new_full (g_direct_hash,
                                                       g_direct_equal,
                                                       (GDestroyNotify)g_ref_string_release,
@@ -698,6 +614,10 @@ cm_room_new_from_json (const char *room_id,
       if (child)
         self->room_topic_event = (CmEvent *)cm_room_event_new_from_json (self, child, NULL);
 
+      child = cm_utils_json_object_get_object (local, cm_utils_get_event_type_str (CM_M_ROOM_ENCRYPTION));
+      if (child)
+        self->encryption_event = (CmEvent *)cm_room_event_new_from_json (self, child, NULL);
+
       child = cm_utils_json_object_get_object (local, cm_utils_get_event_type_str (CM_M_ROOM_POWER_LEVELS));
       if (child)
         self->power_level_event = (CmEvent *)cm_room_event_new_from_json (self, child, NULL);
@@ -766,6 +686,11 @@ room_generate_json (CmRoom *self)
     json_object_set_object_member (child,
                                    cm_utils_get_event_type_str (CM_M_ROOM_TOPIC),
                                    cm_event_get_json (self->room_topic_event));
+
+  if (self->encryption_event)
+    json_object_set_object_member (child,
+                                   cm_utils_get_event_type_str (CM_M_ROOM_ENCRYPTION),
+                                   cm_event_get_json (self->encryption_event));
 
   if (self->power_level_event)
     json_object_set_object_member (child,
@@ -850,16 +775,73 @@ cm_room_get_replacement_room (CmRoom *self)
   return NULL;
 }
 
+static void
+room_user_changed (CmRoom     *self,
+                   CmUser     *user,
+                   GPtrArray  *added,
+                   GPtrArray  *removed,
+                   CmUserList *user_list)
+{
+  GRefString *user_id;
+
+  g_assert (CM_IS_ROOM (self));
+  g_assert (CM_IS_USER (user));
+  g_assert (CM_IS_USER_LIST (user_list));
+
+  /* User changes has to be tracked only if the room is encrypted */
+  if (!cm_room_is_encrypted (self))
+    return;
+
+  user_id = cm_user_get_id (user);
+
+  if (!g_hash_table_contains (self->joined_members_table, user_id))
+    return;
+
+  /* If any device got removed, create a new key and invalidate old */
+  if (removed && removed->len)
+    {
+      g_hash_table_remove_all (self->changed_devices);
+      self->keys_queried = FALSE;
+      self->keys_claimed = FALSE;
+      self->keys_uploaded = FALSE;
+      return;
+    }
+
+  if (added && added->len)
+    {
+      GPtrArray *devices;
+
+      devices = g_hash_table_lookup (self->changed_devices, user);
+
+      if (devices)
+        {
+          g_ptr_array_extend (devices, added, (gpointer)g_object_ref, NULL);
+        }
+      else
+        {
+          g_ref_string_acquire (user_id);
+          devices = g_ptr_array_copy (added, (gpointer)g_object_ref, NULL);
+          g_hash_table_insert (self->changed_devices, user_id, devices);
+        }
+    }
+}
+
 void
 cm_room_set_client (CmRoom   *self,
                     CmClient *client)
 {
+  CmUserList *user_list;
   guint n_items;
 
   g_return_if_fail (CM_IS_CLIENT (client));
   g_return_if_fail (!self->client);
 
   self->client = g_object_ref (client);
+  user_list = cm_client_get_user_list (client);
+
+  g_signal_connect_object (user_list, "user-changed",
+                           G_CALLBACK (room_user_changed),
+                           self, G_CONNECT_SWAPPED);
 
   n_items = g_list_model_get_n_items (G_LIST_MODEL (self->events_list));
 
@@ -1064,7 +1046,7 @@ cm_room_decrypt (CmRoom     *self,
     return NULL;
 
   content = cm_utils_json_object_get_object (root, "content");
-  plain_text = cm_enc_handle_join_room_encrypted (enc, self->room_id, content);
+  plain_text = cm_enc_handle_join_room_encrypted (enc, self, content);
 
   return cm_utils_string_to_json_object (plain_text);
 }
@@ -1290,8 +1272,19 @@ cm_room_parse_events (CmRoom     *self,
 
       if (type == CM_M_ROOM_NAME)
         {
+          g_set_object (&self->room_name_event, CM_EVENT (event));
           value = cm_room_event_get_room_name (event);
           cm_room_set_name (self, value);
+
+          if (self->local_json)
+            {
+              JsonObject *local;
+
+              local = cm_utils_json_object_get_object (self->local_json, "local");
+              json_object_set_object_member (local,
+                                             cm_utils_get_event_type_str (CM_M_ROOM_NAME),
+                                             cm_event_get_json (CM_EVENT (event)));
+            }
         }
       else if (type == CM_M_ROOM_POWER_LEVELS)
         {
@@ -1319,29 +1312,20 @@ cm_room_parse_events (CmRoom     *self,
           if (!self->encryption)
             self->encryption = g_strdup (cm_room_event_get_encryption (event));
 
+          g_set_object (&self->encryption_event, CM_EVENT (event));
+
           if (self->local_json)
             {
               JsonObject *local;
 
               local = cm_utils_json_object_get_object (self->local_json, "local");
               json_object_set_string_member (local, "encryption", self->encryption);
+              json_object_set_object_member (local,
+                                             cm_utils_get_event_type_str (CM_M_ROOM_ENCRYPTION),
+                                             cm_event_get_json (self->encryption_event));
             }
 
           self->db_save_pending = TRUE;
-        }
-      else if (type == CM_M_ROOM_NAME)
-        {
-          g_set_object (&self->room_name_event, CM_EVENT (event));
-
-          if (self->local_json)
-            {
-              JsonObject *local;
-
-              local = cm_utils_json_object_get_object (self->local_json, "local");
-              json_object_set_object_member (local,
-                                             cm_utils_get_event_type_str (CM_M_ROOM_NAME),
-                                             cm_event_get_json (CM_EVENT (event)));
-            }
         }
       else if (type == CM_M_ROOM_CANONICAL_ALIAS)
         {
@@ -1368,20 +1352,6 @@ cm_room_parse_events (CmRoom     *self,
               local = cm_utils_json_object_get_object (self->local_json, "local");
               json_object_set_object_member (local,
                                              cm_utils_get_event_type_str (CM_M_ROOM_TOPIC),
-                                             cm_event_get_json (CM_EVENT (event)));
-            }
-        }
-      else if (type == CM_M_ROOM_POWER_LEVELS)
-        {
-          g_set_object (&self->power_level_event, CM_EVENT (event));
-
-          if (self->local_json)
-            {
-              JsonObject *local;
-
-              local = cm_utils_json_object_get_object (self->local_json, "local");
-              json_object_set_object_member (local,
-                                             cm_utils_get_event_type_str (CM_M_ROOM_POWER_LEVELS),
                                              cm_event_get_json (CM_EVENT (event)));
             }
         }
@@ -1475,17 +1445,6 @@ cm_room_set_data (CmRoom     *self,
     }
   self->db_save_pending = TRUE;
 
-  /* todo: Implement this in a better less costly way */
-  /* currently if a user changes the whole key list is reset */
-  array = cm_utils_json_object_get_array (object, "changed");
-
-  if (array && json_array_get_length (array) > 0)
-    {
-      self->keys_queried = FALSE;
-      self->keys_claimed = FALSE;
-      self->keys_uploaded = FALSE;
-    }
-
   length = 0;
   array = cm_utils_json_object_get_array (object, "left");
 
@@ -1512,8 +1471,8 @@ cm_room_set_data (CmRoom     *self,
         }
     }
 
-  cm_room_save (self);
   self->initial_sync_done = TRUE;
+  cm_room_save (self);
 
   return g_steal_pointer (&events);
 }
@@ -1521,11 +1480,11 @@ cm_room_set_data (CmRoom     *self,
 /*
  * cm_room_user_changed:
  * @self: A #CmRoom
- * @user_id: A fully qualified matrix user id
+ * @changed_users: An array of #CmUser
  *
- * Inform that the user devices for @user_id has
- * changed. The function simply returns if the
- * user @user_id is not in the room
+ * Inform that the user devices for @changed_users has
+ * has changed. The function simply returns if any of
+ * the user in @changed_users is not in the room
  *
  * This is useful for encrypted rooms where the user
  * devices has to be updated before sending anything
@@ -1533,21 +1492,27 @@ cm_room_set_data (CmRoom     *self,
  */
 void
 cm_room_user_changed (CmRoom     *self,
-                      GRefString *user_id)
+                      GPtrArray  *changed_users)
 {
-  CmRoomMember *member;
+  GRefString *user_id;
+  CmUser *user;
 
   g_return_if_fail (CM_IS_ROOM (self));
+  g_return_if_fail (changed_users);
 
   /* We need to track the user changes only if room is encrypted */
-  /* xxx: This will change once we expose list of user devices */
-  if (!user_id && !cm_room_is_encrypted (self))
+  if (!cm_room_is_encrypted (self))
     return;
 
-  member = g_hash_table_lookup (self->joined_members_table, user_id);
+  for (guint i = 0; i < changed_users->len; i++)
+    {
+      user = changed_users->pdata[i];
+      user_id = cm_user_get_id (user);
 
-  if (member)
-    cm_user_set_device_changed (CM_USER (member));
+      if (g_hash_table_contains (self->joined_members_table, user_id) &&
+          !g_ptr_array_find (self->changed_users, user, NULL))
+        g_ptr_array_add (self->changed_users, g_object_ref (user));
+    }
 }
 
 const char *
@@ -1630,10 +1595,12 @@ cm_room_set_generated_name (CmRoom     *self,
 gint64
 cm_room_get_encryption_rotation_time (CmRoom *self)
 {
-  g_return_val_if_fail (CM_IS_ROOM (self), 0);
+  g_return_val_if_fail (CM_IS_ROOM (self), 60 * 60 * 24 * 7);
 
-  return 0;
-  /* return self->encryption_rotation_time; */
+  if (self->encryption_event)
+    return cm_room_event_get_rotation_time ((gpointer)self->encryption_event);
+
+  return 60 * 60 * 24 * 7;
 }
 
 /* cm_room_get_encryption_msg_count:
@@ -1644,6 +1611,10 @@ cm_room_get_encryption_rotation_time (CmRoom *self)
 guint
 cm_room_get_encryption_msg_count (CmRoom *self)
 {
+  g_return_val_if_fail (CM_IS_ROOM (self), 100);
+
+  if (self->encryption_event)
+    return cm_room_event_get_rotation_count ((gpointer)self->encryption_event);
 
   return 100;
 }
@@ -2568,6 +2539,7 @@ get_joined_members_cb (GObject      *obj,
 
               user_list = cm_client_get_user_list (self->client);
               user = cm_user_list_find_user (user_list, user_id, TRUE);
+              g_ptr_array_add (self->changed_users, g_object_ref (user));
               g_hash_table_insert (self->joined_members_table,
                                    g_ref_string_acquire (user_id),
                                    g_object_ref (user));
@@ -2624,141 +2596,6 @@ gboolean
 cm_room_load_joined_members_finish (CmRoom        *self,
                                     GAsyncResult  *result,
                                     GError       **error)
-{
-  g_return_val_if_fail (CM_IS_ROOM (self), FALSE);
-  g_return_val_if_fail (G_IS_TASK (result), FALSE);
-  g_return_val_if_fail (!error || !*error, FALSE);
-
-  return g_task_propagate_boolean (G_TASK (result), error);
-}
-
-static void
-keys_query_cb (GObject      *obj,
-               GAsyncResult *result,
-               gpointer      user_data)
-{
-  CmRoom *self;
-  g_autoptr(GTask) task = user_data;
-  g_autoptr(JsonObject) object = NULL;
-  GError *error = NULL;
-
-  self = g_task_get_source_object (task);
-  object = g_task_propagate_pointer (G_TASK (result), &error);
-
-  self->querying_keys = FALSE;
-  if (error)
-    {
-      g_debug ("Error key query: %s", error->message);
-      g_task_return_error (task, error);
-    }
-  else
-    {
-      g_autoptr(GPtrArray) room_members = NULL;
-      g_autoptr(GList) members = NULL;
-      JsonObject *keys;
-
-      keys = cm_utils_json_object_get_object (object, "device_keys");
-      if (object)
-        members = json_object_get_members (keys);
-
-      for (GList *member = members; member; member = member->next)
-        {
-          g_autoptr(GRefString) user_id = NULL;
-          CmUser *user;
-          JsonObject *key;
-
-          user_id = g_ref_string_new_intern (member->data);
-          user = g_hash_table_lookup (self->joined_members_table, user_id);
-
-          if (!user)
-            {
-              g_warning ("‘%s’ not found in member list", (char *)member->data);
-              continue;
-            }
-
-          key = cm_utils_json_object_get_object (keys, member->data);
-          cm_user_set_devices (user, key, TRUE, NULL, NULL);
-          self->keys_queried = TRUE;
-
-          if (!room_members)
-            room_members = g_ptr_array_new_full (100, g_object_unref);
-          g_ptr_array_add (room_members, g_object_ref (user));
-        }
-
-      cm_db_add_room_members (cm_client_get_db (self->client), self, room_members);
-      g_task_return_boolean (task, TRUE);
-
-      /* TODO: Handle errors */
-      room_send_message_from_queue (self);
-    }
-}
-
-/**
- * cm_room_query_keys_async:
- * @self: A #CmRoom
- * @callback: A #GAsyncReadyCallback
- * @user_data: user data passed to @callback
- *
- * Get identity keys of all devices in @self.
- *
- * Finish the call with cm_room_query_keys_finish()
- * to get the result.
- */
-void
-cm_room_query_keys_async (CmRoom              *self,
-                          GCancellable        *cancellable,
-                          GAsyncReadyCallback  callback,
-                          gpointer             user_data)
-{
-  GListModel *members;
-  JsonObject *object, *child;
-  GTask *task;
-  guint n_items;
-
-  g_return_if_fail (CM_IS_ROOM (self));
-  g_return_if_fail (!cancellable || G_IS_CANCELLABLE (cancellable));
-
-  task = g_task_new (self, cancellable, callback, user_data);
-
-  if (self->joined_members_loading || self->querying_keys ||
-      self->claiming_keys || self->uploading_keys)
-    {
-      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED,
-                               "Querying keys in progres");
-      return;
-    }
-
-  self->querying_keys = TRUE;
-  /* https://matrix.org/docs/spec/client_server/r0.6.1#post-matrix-client-r0-keys-query */
-  object = json_object_new ();
-  json_object_set_int_member (object, "timeout", KEY_TIMEOUT);
-
-  members = G_LIST_MODEL (self->joined_members);
-  n_items = g_list_model_get_n_items (members);
-  child = json_object_new ();
-
-  for (guint i = 0; i < n_items; i++)
-    {
-      g_autoptr(CmUser) user = NULL;
-
-      user = g_list_model_get_item (members, i);
-      /* TODO: Implement and handle device blocking */
-      json_object_set_array_member (child,
-                                    cm_user_get_id (user),
-                                    json_array_new ());
-    }
-
-  json_object_set_object_member (object, "device_keys", child);
-
-  cm_net_send_json_async (cm_client_get_net (self->client), 0, object,
-                          "/_matrix/client/r0/keys/query", SOUP_METHOD_POST,
-                          NULL, cancellable, keys_query_cb, task);
-}
-
-gboolean
-cm_room_query_keys_finish (CmRoom        *self,
-                           GAsyncResult  *result,
-                           GError       **error)
 {
   g_return_val_if_fail (CM_IS_ROOM (self), FALSE);
   g_return_val_if_fail (G_IS_TASK (result), FALSE);
