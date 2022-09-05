@@ -47,6 +47,7 @@ void           cm_user_set_devices          (CmUser         *self,
                                              int            *removed);
 void           cm_user_add_one_time_keys    (CmUser         *self,
                                              const char     *room_id,
-                                             JsonObject     *root);
+                                             JsonObject     *root,
+                                             GPtrArray      *out_keys);
 
 G_END_DECLS

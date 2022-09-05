@@ -550,16 +550,24 @@ cm_user_set_devices (CmUser     *self,
 void
 cm_user_add_one_time_keys (CmUser     *self,
                            const char *room_id,
-                           JsonObject *root)
+                           JsonObject *root,
+                           GPtrArray  *out_keys)
 {
   CmUserPrivate *priv = cm_user_get_instance_private (self);
+  g_autoptr(CmUserKey) key = NULL;
   JsonObject *object, *child;
   guint n_items;
 
   g_return_if_fail (CM_IS_USER (self));
   g_return_if_fail (root);
+  g_return_if_fail (out_keys);
 
   n_items = g_list_model_get_n_items (G_LIST_MODEL (priv->devices));
+
+  key = g_new (CmUserKey, 1);
+  key->user = g_object_ref (self);
+  key->devices = g_ptr_array_new_full (n_items, g_object_unref);
+  key->keys = g_ptr_array_new_full (n_items, g_free);
 
   for (guint i = 0; i < n_items; i++)
     {
@@ -573,7 +581,7 @@ cm_user_add_one_time_keys (CmUser     *self,
 
       if (!child)
         {
-          g_warning ("device '%s' not found", device_id);
+          g_debug ("device '%s' doesn't have any keys", device_id);
           continue;
         }
 
@@ -587,14 +595,12 @@ cm_user_add_one_time_keys (CmUser     *self,
                              cm_user_get_id (self), device_id,
                              cm_device_get_ed_key (device)))
             {
-              const char *key;
-
-              key = cm_utils_json_object_get_string (object, "key");
-              cm_device_set_one_time_key (device, room_id, key);
-              priv->device_changed = FALSE;
-              priv->device_removed = FALSE;
-              priv->device_added = FALSE;
+              g_ptr_array_add (key->devices, g_object_ref (device));
+              g_ptr_array_add (key->keys, cm_utils_json_object_dup_string (object, "key"));
             }
         }
     }
+
+  if (key->devices->len)
+    g_ptr_array_add (out_keys, g_steal_pointer (&key));
 }
