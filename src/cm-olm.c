@@ -41,7 +41,9 @@ struct _CmOlm
   OlmOutboundGroupSession *out_gp_session;
   OlmSession              *olm_session;
 
+  gint64                   created_time;
   CmSessionType            type;
+  CmOlmState               state;
 };
 
 G_DEFINE_TYPE (CmOlm, cm_olm, G_TYPE_OBJECT)
@@ -78,6 +80,14 @@ cm_olm_get_olm_session_pickle (CmOlm *self)
       olm_pickle_inbound_group_session (self->in_gp_session, self->pickle_key,
                                         strlen (self->pickle_key),
                                         pickle, len);
+    }
+  else if (self->out_gp_session)
+    {
+      len = olm_pickle_outbound_group_session_length (self->out_gp_session);
+      pickle = g_malloc (len + 1);
+      olm_pickle_outbound_group_session (self->out_gp_session, self->pickle_key,
+                                         strlen (self->pickle_key),
+                                         pickle, len);
     }
   else
     g_return_val_if_reached (NULL);
@@ -207,6 +217,8 @@ cm_olm_outbound_new (gpointer    olm_account,
   self->curve_key = g_strdup (curve_key);
   self->account = olm_account;
   self->type = SESSION_OLM_V1_OUT;
+  /* time in milliseconds */
+  self->created_time = time (NULL) * 1000;
 
   return self;
 }
@@ -287,12 +299,22 @@ CmOlm *
 cm_olm_in_group_new_from_out (CmOlm      *out_group,
                               const char *sender_identity_key)
 {
+  CmOlm *self;
+
   g_assert (CM_IS_OLM (out_group));
   g_assert (out_group->out_gp_session);
 
-  return cm_olm_in_group_new (out_group->session_key,
+  self = cm_olm_in_group_new (out_group->session_key,
                               sender_identity_key,
                               out_group->session_id);
+  cm_olm_set_account_details (self, out_group->account_user_id,
+                              out_group->account_device_id);
+  cm_olm_set_sender_details (self, out_group->room_id, out_group->sender_id);
+  cm_olm_set_key (self, out_group->pickle_key);
+  cm_olm_set_db (self, out_group->cm_db);
+  self->created_time = out_group->created_time;
+
+  return self;
 }
 
 CmOlm *
@@ -348,6 +370,7 @@ cm_olm_out_group_new (void)
   session_key[length] = '\0';
 
   self = g_object_new (CM_TYPE_OLM, NULL);
+  self->curve_key = g_strdup (sender_identity_key);
   self->out_gp_session = g_steal_pointer (&session);
   self->session_id = (char *)g_steal_pointer (&session_id);
   self->session_key = (char *)g_steal_pointer (&session_key);
@@ -371,6 +394,56 @@ cm_olm_get_message_index (CmOlm *self)
   g_return_val_if_fail (self->out_gp_session, 0);
 
   return olm_outbound_group_session_message_index (self->out_gp_session);
+}
+
+gint64
+cm_olm_get_created_time (CmOlm *self)
+{
+  g_return_val_if_fail (CM_IS_OLM (self), 0);
+
+  return self->created_time;
+}
+
+/**
+ * cm_olm_set_state:
+ * @self: A #CmOlm
+ * @state: A #CmOlmState
+ *
+ * Set the usability state of @self.
+ */
+void
+cm_olm_set_state (CmOlm      *self,
+                  CmOlmState  state)
+{
+  g_return_if_fail (CM_IS_OLM (self));
+
+  if (state == self->state)
+    return;
+
+  g_return_if_fail (self->state != OLM_STATE_USABLE);
+  self->state = state;
+}
+
+CmOlmState
+cm_olm_get_state (CmOlm *self)
+{
+  g_return_val_if_fail (CM_IS_OLM (self), OLM_STATE_NOT_SET);
+
+  return self->state;
+}
+
+void
+cm_olm_update_validity (CmOlm  *self,
+                        guint   count,
+                        gint64  duration)
+{
+  g_return_if_fail (CM_IS_OLM (self));
+  g_return_if_fail (count);
+  g_return_if_fail (duration > 0);
+
+  if (cm_olm_get_message_index (self) >= count ||
+      cm_olm_get_created_time (self) + duration <= time (NULL) * 1000)
+    cm_olm_set_state (self, OLM_STATE_ROTATED);
 }
 
 void

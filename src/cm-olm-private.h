@@ -17,6 +17,15 @@
 
 G_BEGIN_DECLS
 
+/* The value of the items shouldn't be changed as
+ * they are used in db */
+typedef enum {
+  OLM_STATE_USABLE       = 0,
+  OLM_STATE_ROTATED      = 1,
+  OLM_STATE_INVALIDATED  = 2,
+  OLM_STATE_NOT_SET      = 8,
+} CmOlmState;
+
 #define CM_TYPE_OLM (cm_olm_get_type ())
 
 G_DECLARE_FINAL_TYPE (CmOlm, cm_olm, CM, OLM, GObject)
@@ -41,6 +50,13 @@ CmOlm      *cm_olm_out_group_new       (void);
 
 CmSessionType cm_olm_get_session_type    (CmOlm          *self);
 size_t      cm_olm_get_message_index   (CmOlm          *self);
+gint64      cm_olm_get_created_time    (CmOlm          *self);
+void        cm_olm_set_state           (CmOlm          *self,
+                                        CmOlmState      state);
+void        cm_olm_update_validity     (CmOlm          *self,
+                                        guint           count,
+                                        gint64          duration);
+CmOlmState  cm_olm_get_state           (CmOlm          *self);
 
 void        cm_olm_set_sender_details  (CmOlm          *self,
                                         const char     *room_id,
