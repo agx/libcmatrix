@@ -310,6 +310,8 @@ cm_db_create_schema (CmDb  *self,
     /* Version 1: Unique */
     /* v2: Remove Unique */
     "username TEXT NOT NULL, "
+    /* v2 */
+    "tracking INTEGER NOT NULL DEFAULT 0, "
     /* Version 1 */
     "outdated INTEGER DEFAULT 1, "
     /* Version 1 */
@@ -758,6 +760,7 @@ cm_db_migrate_to_v2 (CmDb  *self,
                          "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
                          "account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE, "
                          "username TEXT NOT NULL, "
+                         "tracking INTEGER NOT NULL DEFAULT 0, "
                          "outdated INTEGER DEFAULT 1, "
                          "json_data TEXT, "
                          "UNIQUE (account_id, username));"

@@ -7,6 +7,7 @@ CREATE TABLE users(
   id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
   account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
   username TEXT NOT NULL,
+  tracking INTEGER NOT NULL DEFAULT 0,
   outdated INTEGER DEFAULT 1,
   json_data TEXT,
   UNIQUE (account_id, username)
@@ -136,9 +137,9 @@ BEGIN
   WHERE id=NEW.replaces_event_id AND (replaced_with_id IS NULL or replaced_with_id < NEW.id);
 END;
 
-INSERT INTO users VALUES(1,NULL,'@alice:example.com', 1, NULL);
-INSERT INTO users VALUES(2,NULL,'@alice:example.net', 1, NULL);
-INSERT INTO users VALUES(3,NULL,'@bob:example.com', 1, NULL);
+INSERT INTO users VALUES(1,NULL,'@alice:example.com', 0, 1, NULL);
+INSERT INTO users VALUES(2,NULL,'@alice:example.net', 0, 1, NULL);
+INSERT INTO users VALUES(3,NULL,'@bob:example.com', 0, 1, NULL);
 
 INSERT INTO user_devices VALUES(3, 1, 'ALICE EXAMPLE COM', NULL, NULL, 0, NULL);
 INSERT INTO user_devices VALUES(2, 2, 'ALICE EXAMPLE NET 3', NULL, NULL, 0, NULL);
