@@ -22,7 +22,7 @@ struct _CmDevice
 
   CmClient *client;
   JsonObject *json;
-  GRefString *user_id;
+  CmUser     *user;
   char     *device_id;
   char     *device_name;
   char     *ed_key;
@@ -44,7 +44,6 @@ cm_device_finalize (GObject *object)
 
   g_clear_object (&self->client);
   g_free (self->device_id);
-  g_clear_pointer (&self->user_id, g_ref_string_release);
   g_free (self->device_name);
   g_free (self->ed_key);
   g_free (self->curve_key);
@@ -69,7 +68,8 @@ cm_device_init (CmDevice *self)
 }
 
 CmDevice *
-cm_device_new (gpointer    client,
+cm_device_new (CmUser     *user,
+               CmClient   *client,
                JsonObject *root)
 {
   JsonObject *object;
@@ -78,20 +78,22 @@ cm_device_new (gpointer    client,
   const char *text;
   char *key_name;
 
+  g_return_val_if_fail (CM_IS_USER (user), NULL);
   g_return_val_if_fail (CM_IS_CLIENT (client), NULL);
   g_return_val_if_fail (root, NULL);
 
+  if (g_strcmp0 (cm_user_get_id (user),
+                 cm_utils_json_object_get_string (root, "user_id")) != 0)
+    g_return_val_if_reached (NULL);
+
   self = g_object_new (CM_TYPE_DEVICE, NULL);
   self->json = json_object_ref (root);
+  g_set_weak_pointer (&self->user, user);
   self->client = g_object_ref (client);
 
   text = cm_utils_json_object_get_string (root, "device_id");
   self->device_id = g_strdup (text);
   g_return_val_if_fail (text && *text, NULL);
-
-  text = cm_utils_json_object_get_string (root, "user_id");
-  if (text)
-    self->user_id = g_ref_string_new_intern (text);
 
   object = cm_utils_json_object_get_object (root, "unsigned");
   text = cm_utils_json_object_get_string (object, "device_display_name");
@@ -104,7 +106,8 @@ cm_device_new (gpointer    client,
   g_free (key_name);
 
   if (!cm_enc_verify (cm_client_get_enc (self->client), root,
-                      self->user_id, self->device_id, self->ed_key))
+                      cm_user_get_id (user),
+                      self->device_id, self->ed_key))
     {
       /* DEBUG */
       g_warning ("Signature failed");
@@ -174,6 +177,14 @@ cm_device_has_one_time_key (CmDevice   *self,
   g_return_val_if_fail (CM_IS_DEVICE (self), FALSE);
 
   return g_hash_table_contains (self->keys_table, room_id);
+}
+
+CmUser *
+cm_device_get_user (CmDevice *self)
+{
+  g_return_val_if_fail (CM_IS_DEVICE (self), NULL);
+
+  return self->user;
 }
 
 const char *

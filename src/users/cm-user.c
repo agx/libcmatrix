@@ -516,7 +516,7 @@ cm_user_set_devices (CmUser     *self,
 
       n_added++;
       priv->device_added = TRUE;
-      device = cm_device_new (priv->cm_client, child);
+      device = cm_device_new (self, priv->cm_client, child);
       g_hash_table_insert (devices_table, g_strdup (device_id), g_object_ref (device));
       g_list_store_append (priv->devices, device);
     }
