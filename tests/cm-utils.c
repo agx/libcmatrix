@@ -162,6 +162,37 @@ test_utils_valid_phone (void)
     }
 }
 
+static void
+test_utils_valid_home_server (void)
+{
+  struct Data
+  {
+    const char *uri;
+    gboolean valid;
+  } data[] = {
+    {"", FALSE},
+    {"http://", FALSE},
+    {"ftp://example.com", FALSE},
+    {"http://example.com", TRUE},
+    {"https://example.com", TRUE},
+    {"http://example.com/", TRUE},
+    {"http://example.com.", FALSE},
+    {"http://localhost:8008", TRUE},
+    {"http://localhost:8008/path", FALSE},
+  };
+
+  for (guint i = 0; i < G_N_ELEMENTS (data); i++)
+    {
+      const char *uri = data[i].uri;
+      gboolean valid = data[i].valid;
+
+      if (valid)
+        g_assert_true (cm_utils_home_server_valid (uri));
+      else
+        g_assert_false (cm_utils_home_server_valid (uri));
+    }
+}
+
 int
 main (int   argc,
       char *argv[])
@@ -172,6 +203,7 @@ main (int   argc,
   g_test_add_func ("/cm-utils/valid-user-name", test_utils_valid_user_name);
   g_test_add_func ("/cm-utils/valid-email", test_utils_valid_email);
   g_test_add_func ("/cm-utils/valid-phone", test_utils_valid_phone);
+  g_test_add_func ("/cm-utils/valid-home-server", test_utils_valid_home_server);
 
   return g_test_run ();
 }

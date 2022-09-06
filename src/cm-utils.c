@@ -559,15 +559,27 @@ cm_utils_home_server_valid (const char *homeserver)
     {
       g_autofree char *server = NULL;
       g_autoptr(GUri) uri = NULL;
+      const char *scheme = NULL;
+      const char *path = NULL;
+      const char *host = NULL;
 
       if (!strstr (homeserver, "//"))
         server = g_strconcat ("https://", homeserver, NULL);
 
-      uri = g_uri_parse (server ?: homeserver, SOUP_HTTP_URI_FLAGS, NULL);
+      uri = g_uri_parse (server ?: homeserver, G_URI_FLAGS_NONE, NULL);
 
-      valid = !!uri;
-      /* We need an absolute path URI */
-      valid = valid && *g_uri_get_host(uri) && g_str_equal (g_uri_get_path (uri), "/");
+      if (uri)
+        {
+          scheme = g_uri_get_scheme (uri);
+          path = g_uri_get_path (uri);
+          host = g_uri_get_host (uri);
+        }
+
+      valid = scheme && *scheme;
+      valid = valid && (g_str_equal (scheme, "http") || g_str_equal (scheme, "https"));
+      valid = valid && host && *host;
+      valid = valid && !g_str_has_suffix (host, ".");
+      valid = valid && (!path || !*path || g_str_equal (path, "/"));
     }
 
   return valid;
