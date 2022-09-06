@@ -108,15 +108,23 @@ configure_file(
 root_inc = include_directories('.')
 src_inc = include_directories('src')
 
-
 gio_dep = dependency('gio-2.0', version: '>= 2.66')
+
+# libsoup-3 requires glib 2.69.1+, so if we have an older
+# glib, assume libsoup-2.4
+if gio_dep.version().version_compare('<= 2.69') or get_option('soup2')
+  soup_dep = dependency('libsoup-2.4', required: true)
+else
+  soup_dep = dependency('libsoup-3.0', required: true)
+endif
+
 cmatrix_deps = [
   dependency('libgcrypt'),
   dependency('libsecret-1'),
-  dependency('libsoup-3.0'),
   dependency('json-glib-1.0'),
   dependency('sqlite3', version: '>=3.26.0'),
   libolm_dep,
+  soup_dep,
   gio_dep,
   cc.find_library('m', required: false),
 ]

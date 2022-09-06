@@ -897,8 +897,13 @@ uri_file_read_cb (GObject      *object,
     return;
   }
 
-  if (message &&
-      (err_flags = soup_message_get_tls_peer_certificate_errors (message)))
+#if SOUP_MAJOR_VERSION == 2
+  soup_message_get_https_status (message, NULL, &err_flags);
+#else
+  err_flags = soup_message_get_tls_peer_certificate_errors (message);
+#endif
+
+  if (message && err_flags)
 {
     guint timeout_id, timeout;
 
@@ -943,6 +948,7 @@ message_network_event_cb (SoupMessage        *msg,
   g_object_set_data_full (user_data, "address", address, g_object_unref);
 }
 
+#if SOUP_MAJOR_VERSION == 3
 static gboolean
 accept_certificate_callback (SoupMessage          *msg,
                              GTlsCertificate      *certificate,
@@ -952,6 +958,7 @@ accept_certificate_callback (SoupMessage          *msg,
     /* Returning TRUE trusts it anyway. */
     return TRUE;
 }
+#endif
 
 void
 cm_utils_read_uri_async (const char          *uri,
@@ -999,12 +1006,20 @@ cm_utils_read_uri_async (const char          *uri,
                            G_CALLBACK (message_network_event_cb), task,
                            G_CONNECT_AFTER);
   session = soup_session_new ();
+#if SOUP_MAJOR_VERSION == 2
+  g_object_set (G_OBJECT (session), SOUP_SESSION_SSL_STRICT, FALSE, NULL);
+
+  soup_session_send_async (session, message, cancel,
+                           uri_file_read_cb,
+                           g_steal_pointer (&task));
+#else
   /* Accept invalid certificates */
   g_signal_connect (message, "accept-certificate", G_CALLBACK (accept_certificate_callback), NULL);
 
   soup_session_send_async (session, message, 0, cancel,
                            uri_file_read_cb,
                            g_steal_pointer (&task));
+#endif
 }
 
 gpointer
