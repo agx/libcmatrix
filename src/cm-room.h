@@ -26,7 +26,7 @@ G_DECLARE_FINAL_TYPE (CmRoom, cm_room, CM, ROOM, GObject)
 
 const char   *cm_room_get_id                      (CmRoom                *self);
 gboolean      cm_room_self_has_power_for_event    (CmRoom                *self,
-                                                   CmEventType            event);
+                                                   CmEventType            type);
 const char   *cm_room_get_name                    (CmRoom                *self);
 const char   *cm_room_get_past_name               (CmRoom                *self);
 gboolean      cm_room_is_encrypted                (CmRoom                *self);

@@ -54,8 +54,6 @@ guint         cm_room_get_encryption_msg_count     (CmRoom              *self);
 gboolean      cm_room_is_direct                    (CmRoom              *self);
 void          cm_room_set_is_direct                (CmRoom              *self,
                                                     gboolean             is_direct);
-void          cm_room_set_is_encrypted             (CmRoom              *self,
-                                                    gboolean             encrypted);
 void          cm_room_get_name_async               (CmRoom              *self,
                                                     GCancellable        *cancellable,
                                                     GAsyncReadyCallback  callback,
@@ -92,4 +90,10 @@ void          cm_room_load_prev_batch_async        (CmRoom              *self,
 GPtrArray    *cm_room_load_prev_batch_finish       (CmRoom              *self,
                                                     GAsyncResult        *result,
                                                     GError             **error);
+CmUser       *cm_room_find_user                    (CmRoom              *self,
+                                                    GRefString          *matrix_id,
+                                                    gboolean             add_if_missing);
+void          cm_room_update_user                  (CmRoom              *self,
+                                                    CmEvent             *event);
+
 G_END_DECLS

@@ -16,6 +16,7 @@
 #include "cm-enc-private.h"
 #include "cm-common.h"
 #include "events/cm-event-private.h"
+#include "events/cm-room-event-list-private.h"
 #include "events/cm-room-message-event-private.h"
 #include "users/cm-room-member-private.h"
 #include "users/cm-room-member.h"
@@ -32,7 +33,7 @@ struct _CmRoom
 {
   GObject parent_instance;
 
-  GListStore *events_list;
+  CmRoomEventList *room_event;
   GListStore *joined_members;
   GHashTable *joined_members_table;
   GListStore *invited_members;
@@ -56,19 +57,6 @@ struct _CmRoom
   char       *replacement_room;
   char       *encryption;
   char       *prev_batch;
-
-  /* The last event in the room, if any */
-  CmEvent     *last_event;
-  CmEvent     *room_create_event;
-  CmEvent     *room_name_event;
-  CmEvent     *canonical_alias_event;
-  CmEvent     *room_topic_event;
-  CmEvent     *power_level_event;
-  CmEvent     *encryption_event;
-  CmEvent     *guest_access_event;
-  CmEvent     *join_rules_event;
-  CmEvent     *history_visibility_event;
-  CmEvent     *tombstone_event;
 
   GQueue     *message_queue;
   guint       retry_timeout_id;
@@ -142,42 +130,6 @@ room_find_user (CmRoom     *self,
     }
 
   return user;
-}
-
-static void
-room_remove_event_with_txn_id (CmRoom  *self,
-                               CmEvent *event)
-{
-  GListModel *events;
-  guint n_items;
-
-
-  g_assert (CM_IS_ROOM (self));
-  g_assert (CM_IS_EVENT (event));
-
-  if (!cm_event_get_txn_id (event))
-    return;
-
-  events = G_LIST_MODEL (self->events_list);
-  n_items = g_list_model_get_n_items (events);
-
-  /* i and n_items are unsigned */
-  for (guint i = n_items - 1; i + 1 > 0; i--)
-    {
-      g_autoptr(CmEvent) item = NULL;
-
-      item = g_list_model_get_item (events, i);
-
-      if (!cm_event_get_txn_id (item))
-        continue;
-
-      if (g_strcmp0 (cm_event_get_txn_id (event),
-                     cm_event_get_txn_id (item)) == 0)
-        {
-          cm_utils_remove_list_item (self->events_list, item);
-          break;
-        }
-    }
 }
 
 static char *
@@ -337,7 +289,7 @@ ensure_encryption_keys (CmRoom *self)
 {
   CmUserList *user_list;
 
-  g_return_if_fail (self->encryption);
+  g_return_if_fail (cm_room_is_encrypted (self));
 
   if (self->enc_cancellable &&
       g_cancellable_is_cancelled (self->enc_cancellable))
@@ -428,7 +380,7 @@ cm_room_get_property (GObject    *object,
       break;
 
     case PROP_ENCRYPTED:
-      g_value_set_boolean (value, !!self->encryption);
+      g_value_set_boolean (value, cm_room_is_encrypted (self));
       break;
 
     case PROP_NAME:
@@ -476,16 +428,6 @@ cm_room_finalize (GObject *object)
   g_clear_object (&self->invited_members);
 
   g_clear_pointer (&self->one_time_keys, g_ptr_array_unref);
-  g_clear_object (&self->events_list);
-  g_clear_object (&self->last_event);
-  g_clear_object (&self->room_create_event);
-  g_clear_object (&self->canonical_alias_event);
-  g_clear_object (&self->room_topic_event);
-  g_clear_object (&self->power_level_event);
-  g_clear_object (&self->guest_access_event);
-  g_clear_object (&self->join_rules_event);
-  g_clear_object (&self->history_visibility_event);
-  g_clear_object (&self->tombstone_event);
 
   g_clear_object (&self->client);
   g_free (self->room_id);
@@ -534,7 +476,7 @@ cm_room_class_init (CmRoomClass *klass)
 static void
 cm_room_init (CmRoom *self)
 {
-  self->events_list = g_list_store_new (CM_TYPE_EVENT);
+  self->room_event = cm_room_event_list_new (self);
   self->one_time_keys = g_ptr_array_new_full (32, g_free);
   self->changed_users = g_ptr_array_new_full (32, g_object_unref);
   self->joined_members = g_list_store_new (CM_TYPE_ROOM_MEMBER);
@@ -587,7 +529,7 @@ cm_room_new_from_json (const char *room_id,
 
   if (root)
     {
-      JsonObject *child, *local;
+      JsonObject *local;
 
       self->local_json = root;
       self->initial_sync_done = TRUE;
@@ -598,65 +540,22 @@ cm_room_new_from_json (const char *room_id,
       cm_room_set_is_direct (self, cm_utils_json_object_get_bool (local, "direct"));
       self->encryption = cm_utils_json_object_dup_string (local, "encryption");
 
-      child = cm_utils_json_object_get_object (local, cm_utils_get_event_type_str (CM_M_ROOM_CREATE));
-      if (child)
-        self->room_create_event = (CmEvent *)cm_room_event_new_from_json (self, child, NULL);
-
-      child = cm_utils_json_object_get_object (local, cm_utils_get_event_type_str (CM_M_ROOM_NAME));
-      if (child)
-        self->room_name_event = (CmEvent *)cm_room_event_new_from_json (self, child, NULL);
-
-      child = cm_utils_json_object_get_object (local, cm_utils_get_event_type_str (CM_M_ROOM_CANONICAL_ALIAS));
-      if (child)
-        self->canonical_alias_event = (CmEvent *)cm_room_event_new_from_json (self, child, NULL);
-
-      child = cm_utils_json_object_get_object (local, cm_utils_get_event_type_str (CM_M_ROOM_TOPIC));
-      if (child)
-        self->room_topic_event = (CmEvent *)cm_room_event_new_from_json (self, child, NULL);
-
-      child = cm_utils_json_object_get_object (local, cm_utils_get_event_type_str (CM_M_ROOM_ENCRYPTION));
-      if (child)
-        self->encryption_event = (CmEvent *)cm_room_event_new_from_json (self, child, NULL);
-
-      child = cm_utils_json_object_get_object (local, cm_utils_get_event_type_str (CM_M_ROOM_POWER_LEVELS));
-      if (child)
-        self->power_level_event = (CmEvent *)cm_room_event_new_from_json (self, child, NULL);
-
-      child = cm_utils_json_object_get_object (local, cm_utils_get_event_type_str (CM_M_ROOM_GUEST_ACCESS));
-      if (child)
-        self->guest_access_event = (CmEvent *)cm_room_event_new_from_json (self, child, NULL);
-
-      child = cm_utils_json_object_get_object (local, cm_utils_get_event_type_str (CM_M_ROOM_JOIN_RULES));
-      if (child)
-        self->join_rules_event = (CmEvent *)cm_room_event_new_from_json (self, child, NULL);
-
-      child = cm_utils_json_object_get_object (local, cm_utils_get_event_type_str (CM_M_ROOM_HISTORY_VISIBILITY));
-      if (child)
-        self->history_visibility_event = (CmEvent *)cm_room_event_new_from_json (self, child, NULL);
-
-      child = cm_utils_json_object_get_object (local, cm_utils_get_event_type_str (CM_M_ROOM_TOMBSTONE));
-      if (child)
-        self->tombstone_event = (CmEvent *)cm_room_event_new_from_json (self, child, NULL);
-
-      self->last_event = last_event;
+      cm_room_event_list_set_local_json (self->room_event, root, last_event);
     }
 
   return self;
 }
 
-static void
+static JsonObject *
 room_generate_json (CmRoom *self)
 {
   JsonObject *json, *child;
 
   g_assert (CM_IS_ROOM (self));
-  g_assert (!self->local_json);
 
-  json = json_object_new ();
-  child = json_object_new ();
-  self->local_json = json;
+  json = cm_room_event_list_get_local_json (self->room_event);
 
-  json_object_set_object_member (json, "local", child);
+  child = cm_utils_json_object_get_object (json, "local");
 
   json_object_set_string_member (child, "generated_alias", self->generated_name);
   if (self->past_name)
@@ -667,61 +566,7 @@ room_generate_json (CmRoom *self)
   json_object_set_boolean_member (child, "direct", cm_room_is_direct (self));
   json_object_set_int_member (child, "encryption", cm_room_is_encrypted (self));
 
-  if (self->room_create_event)
-    json_object_set_object_member (child,
-                                   cm_utils_get_event_type_str (CM_M_ROOM_CREATE),
-                                   cm_event_get_json (self->room_create_event));
-
-  if (self->room_name_event)
-    json_object_set_object_member (child,
-                                   cm_utils_get_event_type_str (CM_M_ROOM_NAME),
-                                   cm_event_get_json (self->room_name_event));
-
-  if (self->canonical_alias_event)
-    json_object_set_object_member (child,
-                                   cm_utils_get_event_type_str (CM_M_ROOM_CANONICAL_ALIAS),
-                                   cm_event_get_json (self->canonical_alias_event));
-
-  if (self->room_topic_event)
-    json_object_set_object_member (child,
-                                   cm_utils_get_event_type_str (CM_M_ROOM_TOPIC),
-                                   cm_event_get_json (self->room_topic_event));
-
-  if (self->encryption_event)
-    json_object_set_object_member (child,
-                                   cm_utils_get_event_type_str (CM_M_ROOM_ENCRYPTION),
-                                   cm_event_get_json (self->encryption_event));
-
-  if (self->power_level_event)
-    json_object_set_object_member (child,
-                                   cm_utils_get_event_type_str (CM_M_ROOM_POWER_LEVELS),
-                                   cm_event_get_json (self->power_level_event));
-
-  if (self->guest_access_event)
-    json_object_set_object_member (child,
-                                   cm_utils_get_event_type_str (CM_M_ROOM_GUEST_ACCESS),
-                                   cm_event_get_json (self->guest_access_event));
-
-  if (self->join_rules_event)
-    json_object_set_object_member (child,
-                                   cm_utils_get_event_type_str (CM_M_ROOM_JOIN_RULES),
-                                   cm_event_get_json (self->join_rules_event));
-
-  if (self->history_visibility_event)
-    json_object_set_object_member (child,
-                                   cm_utils_get_event_type_str (CM_M_ROOM_HISTORY_VISIBILITY),
-                                   cm_event_get_json (self->history_visibility_event));
-
-  if (self->tombstone_event)
-    json_object_set_object_member (child,
-                                   cm_utils_get_event_type_str (CM_M_ROOM_TOMBSTONE),
-                                   cm_event_get_json (self->tombstone_event));
-
-  /* todo */
-  /* Set only if there is only one member in the room */
-  /* json_object_set_string_member (child, "m.room.member", "bad"); */
-  /* json_object_set_object_member (child, "summary", "bad"); */
-  /* json_object_set_object_member (child, "unread_notifications", "bad"); */
+  return json;
 }
 
 /*
@@ -733,23 +578,13 @@ room_generate_json (CmRoom *self)
 char *
 cm_room_get_json (CmRoom *self)
 {
+  JsonObject *json;
+
   g_return_val_if_fail (CM_IS_ROOM (self), NULL);
 
-  if (!self->local_json)
-    {
-      room_generate_json (self);
-    }
-  else
-    {
-      JsonObject *child;
+  json = room_generate_json (self);
 
-      child = cm_utils_json_object_get_object (self->local_json, "local");
-      json_object_set_string_member (child, "generated_alias", self->generated_name);
-      if (self->past_name)
-        json_object_set_string_member (child, "past_alias", self->past_name);
-    }
-
-  return cm_utils_json_object_to_string (self->local_json, FALSE);
+  return cm_utils_json_object_to_string (json, FALSE);
 }
 
 /*
@@ -767,12 +602,15 @@ cm_room_get_json (CmRoom *self)
 const char *
 cm_room_get_replacement_room (CmRoom *self)
 {
+  CmEvent *event;
+
   g_return_val_if_fail (CM_IS_ROOM (self), FALSE);
 
-  if (self->tombstone_event)
-    return cm_room_event_get_replacement_room_id ((gpointer)self->tombstone_event);
+  event = cm_room_event_list_get_event (self->room_event, CM_M_ROOM_TOMBSTONE);
+  if (!event)
+    return NULL;
 
-  return NULL;
+  return cm_room_event_get_replacement_room_id ((gpointer)event);
 }
 
 static void
@@ -831,7 +669,6 @@ cm_room_set_client (CmRoom   *self,
                     CmClient *client)
 {
   CmUserList *user_list;
-  guint n_items;
 
   g_return_if_fail (CM_IS_CLIENT (client));
   g_return_if_fail (!self->client);
@@ -842,29 +679,7 @@ cm_room_set_client (CmRoom   *self,
   g_signal_connect_object (user_list, "user-changed",
                            G_CALLBACK (room_user_changed),
                            self, G_CONNECT_SWAPPED);
-
-  n_items = g_list_model_get_n_items (G_LIST_MODEL (self->events_list));
-
-  for (guint i = 0; i < n_items; i++)
-    {
-      g_autoptr(CmEvent) event = NULL;
-      CmUser *user;
-
-      event = g_list_model_get_item (G_LIST_MODEL (self->events_list), i);
-      user = cm_event_get_sender (event);
-
-      if (!user)
-        {
-          user = room_find_user (self, cm_event_get_sender_id (event), TRUE);
-          cm_event_set_sender (event, user);
-        }
-
-        cm_user_set_client (user, client);
-
-        if (cm_event_get_sender_id (event) ==
-            cm_client_get_user_id (self->client))
-        cm_event_sender_is_self (event);
-    }
+  cm_room_event_list_set_client (self->room_event, client);
 }
 
 CmClient *
@@ -901,16 +716,19 @@ cm_room_get_id (CmRoom *self)
 
 gboolean
 cm_room_self_has_power_for_event (CmRoom      *self,
-                                  CmEventType  event)
+                                  CmEventType  type)
 {
+  CmEvent *event;
+
   g_return_val_if_fail (CM_IS_ROOM (self), FALSE);
 
-  if (!self->power_level_event)
+  event = cm_room_event_list_get_event (self->room_event, CM_M_ROOM_POWER_LEVELS);
+  if (!event)
     return FALSE;
 
-  return cm_room_event_user_has_power (CM_ROOM_EVENT (self->power_level_event),
+  return cm_room_event_user_has_power (CM_ROOM_EVENT (event),
                                        cm_client_get_user_id (self->client),
-                                       event);
+                                       type);
 }
 
 /**
@@ -980,9 +798,16 @@ cm_room_get_past_name (CmRoom *self)
 gboolean
 cm_room_is_encrypted (CmRoom *self)
 {
+  CmEvent *event;
+
   g_return_val_if_fail (CM_IS_ROOM (self), TRUE);
 
-  return !!self->encryption;
+  if (self->encryption)
+    return TRUE;
+
+  event = cm_room_event_list_get_event (self->room_event, CM_M_ROOM_ENCRYPTION);
+
+  return !!event;
 }
 
 GListModel *
@@ -998,7 +823,7 @@ cm_room_get_events_list (CmRoom *self)
 {
   g_return_val_if_fail (CM_IS_ROOM (self), NULL);
 
-  return G_LIST_MODEL (self->events_list);
+  return cm_room_event_list_get_events (self->room_event);
 }
 
 CmStatus
@@ -1056,365 +881,9 @@ cm_room_add_events (CmRoom    *self,
                     GPtrArray *events,
                     gboolean   append)
 {
-  guint position = 0;
+  g_return_if_fail (CM_IS_ROOM (self));
 
-  g_assert (CM_IS_ROOM (self));
-
-  if (!events || !events->len)
-    return;
-
-  for (guint i = 0; i < events->len; i++)
-    {
-      CmEvent *event = events->pdata[i];
-      CmUser *user;
-
-      if (cm_event_get_sender (event) || !self->client)
-        continue;
-
-      user = room_find_user (self, cm_event_get_sender_id (event), TRUE);
-      cm_event_set_sender (event, user);
-      if (cm_event_get_sender_id (event) ==
-          cm_client_get_user_id (self->client))
-        cm_event_sender_is_self (event);
-    }
-
-  if (append)
-    {
-      position = g_list_model_get_n_items (G_LIST_MODEL (self->events_list));
-      g_list_store_splice (self->events_list,
-                           position, 0, events->pdata, events->len);
-    }
-  else
-    {
-      g_autoptr(GPtrArray) reversed = NULL;
-
-      reversed = g_ptr_array_sized_new (events->len);
-
-      for (guint i = 0; i < events->len; i++)
-        g_ptr_array_insert (reversed, 0, events->pdata[i]);
-      g_list_store_splice (self->events_list,
-                           0, 0, reversed->pdata, reversed->len);
-    }
-}
-
-static void
-cm_room_parse_events (CmRoom     *self,
-                      JsonObject *root,
-                      GPtrArray  *events,
-                      gboolean    state_events,
-                      gboolean    past,
-                      gboolean    add)
-{
-  JsonObject *child;
-  JsonArray *array;
-  guint length = 0;
-
-  array = cm_utils_json_object_get_array (root, "events");
-
-  if (!array)
-    array = cm_utils_json_object_get_array (root, "chunk");
-
-  if (array)
-    length = json_array_get_length (array);
-
-  for (guint i = 0; i < length; i++)
-    {
-      g_autoptr(CmRoomEvent) event = NULL;
-      JsonObject *decrypted = NULL;
-      CmUser *user;
-      const char *value;
-      CmEventType type;
-      gboolean encrypted = FALSE;
-
-      child = json_array_get_object_element (array, i);
-
-      if (g_strcmp0 (cm_utils_json_object_get_string (child, "type"),
-                     "m.room.encrypted") == 0)
-        {
-          decrypted = cm_room_decrypt (self, child);
-          encrypted = TRUE;
-        }
-
-      event = cm_room_event_new_from_json (self, encrypted ? decrypted : child,
-                                           encrypted ? child : NULL);
-      if (!event)
-        continue;
-
-      value = cm_event_get_sender_id (CM_EVENT (event));
-      user = room_find_user (self, cm_event_get_sender_id (CM_EVENT (event)), TRUE);
-      cm_event_set_sender (CM_EVENT (event), user);
-      if (cm_event_get_sender_id (CM_EVENT (event)) ==
-          cm_client_get_user_id (self->client))
-        cm_event_sender_is_self (CM_EVENT (event));
-
-      if (!state_events)
-        {
-          if (CM_IS_ROOM_MESSAGE_EVENT (event) &&
-              cm_event_get_txn_id (CM_EVENT (event)))
-            room_remove_event_with_txn_id (self, CM_EVENT (event));
-
-          g_ptr_array_add (events, g_object_ref (event));
-        }
-
-      type = cm_event_get_m_type (CM_EVENT (event));
-
-      if (type == CM_M_ROOM_MEMBER)
-        {
-          CmUserList *user_list;
-          CmUser *member = NULL;
-          GRefString *user_id;
-          CmStatus member_status;
-
-          member_status = cm_room_event_get_status (event);
-
-          if (member_status == CM_STATUS_JOIN &&
-              cm_event_get_sender_id (CM_EVENT (event)) ==
-              cm_client_get_user_id (self->client))
-            continue;
-
-          user_id = cm_room_event_get_room_member_id (event);
-          user_list = cm_client_get_user_list (self->client);
-          member = cm_user_list_find_user (user_list, user_id, TRUE);
-          cm_room_member_set_json_data (CM_ROOM_MEMBER (member), child);
-
-          if (member_status == CM_STATUS_JOIN)
-            {
-              CmRoomMember *invite;
-
-              invite = g_hash_table_lookup (self->invited_members_table, user_id);
-              if (!past && invite)
-                {
-                  g_hash_table_remove (self->invited_members_table, user_id);
-                  cm_utils_remove_list_item (self->invited_members, invite);
-                }
-
-              if (!past &&
-                  g_hash_table_contains (self->joined_members_table, user_id))
-                {
-                  CmRoomMember *cm_member;
-
-                  cm_member = g_hash_table_lookup (self->joined_members_table, user_id);
-                  cm_room_member_set_json_data (cm_member, child);
-
-                  g_free (self->past_name);
-                  self->past_name = g_steal_pointer (&self->generated_name);
-                  g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
-                  continue;
-                }
-
-              g_list_store_append (self->joined_members, user);
-              g_hash_table_insert (self->joined_members_table,
-                                   g_ref_string_acquire (user_id),
-                                   g_object_ref (user));
-
-              /* Clear the name so that it will be regenerated when name is requested */
-              g_free (self->past_name);
-              self->past_name = g_steal_pointer (&self->generated_name);
-              g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
-            }
-          else if (member_status == CM_STATUS_INVITE)
-            {
-              if (!past &&
-                  g_hash_table_contains (self->invited_members_table, user_id))
-                {
-                  CmRoomMember *cm_member;
-
-                  cm_member = g_hash_table_lookup (self->invited_members_table, user_id);
-                  cm_room_member_set_json_data (cm_member, child);
-
-                  /* Clear the name so that it will be regenerated when name is requested */
-                  g_free (self->past_name);
-                  self->past_name = g_steal_pointer (&self->generated_name);
-                  g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
-                  continue;
-                }
-
-              g_list_store_append (self->invited_members, user);
-              g_hash_table_insert (self->invited_members_table,
-                                   g_ref_string_acquire (user_id),
-                                   g_object_ref (user));
-              self->db_save_pending = TRUE;
-
-              /* Clear the name so that it will be regenerated when name is requested */
-              g_free (self->past_name);
-              self->past_name = g_steal_pointer (&self->generated_name);
-              g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
-            }
-          else if (member_status == CM_STATUS_LEAVE)
-            {
-              CmRoomMember *join;
-
-              /* Generate a name if it doesn't exist so that we can
-               * use it as the past name if the new name is empty
-               */
-              if (!self->name && !self->generated_name)
-                self->generated_name = cm_room_generate_name (self);
-
-              join = g_hash_table_lookup (self->joined_members_table, user_id);
-
-              if (join)
-                {
-                  g_hash_table_remove (self->joined_members_table, user_id);
-                  cm_utils_remove_list_item (self->joined_members, join);
-                }
-
-              /* Clear the name so that it will be regenerated when name is requested */
-              g_free (self->past_name);
-              self->past_name = g_steal_pointer (&self->generated_name);
-              g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
-              self->db_save_pending = TRUE;
-            }
-        }
-
-      /* past events shouldn't alter room state, as they may be obsolete */
-      if (past)
-        continue;
-
-      if (type == CM_M_ROOM_NAME)
-        {
-          g_set_object (&self->room_name_event, CM_EVENT (event));
-          value = cm_room_event_get_room_name (event);
-          cm_room_set_name (self, value);
-
-          if (self->local_json)
-            {
-              JsonObject *local;
-
-              local = cm_utils_json_object_get_object (self->local_json, "local");
-              json_object_set_object_member (local,
-                                             cm_utils_get_event_type_str (CM_M_ROOM_NAME),
-                                             cm_event_get_json (CM_EVENT (event)));
-            }
-        }
-      else if (type == CM_M_ROOM_POWER_LEVELS)
-        {
-          g_autoptr(JsonObject) power = NULL;
-          JsonObject *local;
-
-          power = cm_event_get_json (CM_EVENT (event));
-
-          if (!power)
-            continue;
-
-          g_set_object (&self->power_level_event, CM_EVENT (event));
-          if (self->local_json)
-            {
-              local = cm_utils_json_object_get_object (self->local_json, "local");
-              json_object_set_object_member (local,
-                                             cm_utils_get_event_type_str (CM_M_ROOM_POWER_LEVELS),
-                                             g_steal_pointer (&power));
-            }
-
-          self->db_save_pending = TRUE;
-        }
-      else if (type == CM_M_ROOM_ENCRYPTION)
-        {
-          if (!self->encryption)
-            self->encryption = g_strdup (cm_room_event_get_encryption (event));
-
-          g_set_object (&self->encryption_event, CM_EVENT (event));
-
-          if (self->local_json)
-            {
-              JsonObject *local;
-
-              local = cm_utils_json_object_get_object (self->local_json, "local");
-              json_object_set_string_member (local, "encryption", self->encryption);
-              json_object_set_object_member (local,
-                                             cm_utils_get_event_type_str (CM_M_ROOM_ENCRYPTION),
-                                             cm_event_get_json (self->encryption_event));
-            }
-
-          self->db_save_pending = TRUE;
-        }
-      else if (type == CM_M_ROOM_CANONICAL_ALIAS)
-        {
-          g_set_object (&self->canonical_alias_event, CM_EVENT (event));
-
-          if (self->local_json)
-            {
-              JsonObject *local;
-
-              local = cm_utils_json_object_get_object (self->local_json, "local");
-              json_object_set_object_member (local,
-                                             cm_utils_get_event_type_str (CM_M_ROOM_CANONICAL_ALIAS),
-                                             cm_event_get_json (CM_EVENT (event)));
-            }
-        }
-      else if (type == CM_M_ROOM_TOPIC)
-        {
-          g_set_object (&self->room_topic_event, CM_EVENT (event));
-
-          if (self->local_json)
-            {
-              JsonObject *local;
-
-              local = cm_utils_json_object_get_object (self->local_json, "local");
-              json_object_set_object_member (local,
-                                             cm_utils_get_event_type_str (CM_M_ROOM_TOPIC),
-                                             cm_event_get_json (CM_EVENT (event)));
-            }
-        }
-      else if (type == CM_M_ROOM_GUEST_ACCESS)
-        {
-          g_set_object (&self->guest_access_event, CM_EVENT (event));
-
-          if (self->local_json)
-            {
-              JsonObject *local;
-
-              local = cm_utils_json_object_get_object (self->local_json, "local");
-              json_object_set_object_member (local,
-                                             cm_utils_get_event_type_str (CM_M_ROOM_GUEST_ACCESS),
-                                             cm_event_get_json (CM_EVENT (event)));
-            }
-        }
-      else if (type == CM_M_ROOM_JOIN_RULES)
-        {
-          g_set_object (&self->join_rules_event, CM_EVENT (event));
-
-          if (self->local_json)
-            {
-              JsonObject *local;
-
-              local = cm_utils_json_object_get_object (self->local_json, "local");
-              json_object_set_object_member (local,
-                                             cm_utils_get_event_type_str (CM_M_ROOM_JOIN_RULES),
-                                             cm_event_get_json (CM_EVENT (event)));
-            }
-        }
-      else if (type == CM_M_ROOM_HISTORY_VISIBILITY)
-        {
-          g_set_object (&self->history_visibility_event, CM_EVENT (event));
-
-          if (self->local_json)
-            {
-              JsonObject *local;
-
-              local = cm_utils_json_object_get_object (self->local_json, "local");
-              json_object_set_object_member (local,
-                                             cm_utils_get_event_type_str (CM_M_ROOM_HISTORY_VISIBILITY),
-                                             cm_event_get_json (CM_EVENT (event)));
-            }
-        }
-      else if (type == CM_M_ROOM_TOMBSTONE)
-        {
-          g_set_object (&self->tombstone_event, CM_EVENT (event));
-
-          if (self->local_json)
-            {
-              JsonObject *local;
-
-              local = cm_utils_json_object_get_object (self->local_json, "local");
-              json_object_set_object_member (local,
-                                             cm_utils_get_event_type_str (CM_M_ROOM_TOMBSTONE),
-                                             cm_event_get_json (CM_EVENT (event)));
-            }
-        }
-    }
-
-  if (add && !state_events && events && events->len)
-    cm_room_add_events (self, events, !past);
+  cm_room_event_list_add_events (self->room_event, events, append);
 }
 
 GPtrArray *
@@ -1431,10 +900,10 @@ cm_room_set_data (CmRoom     *self,
 
   events = g_ptr_array_new_full (100, g_object_unref);
   child = cm_utils_json_object_get_object (object, "state");
-  cm_room_parse_events (self, child, events, TRUE, FALSE, FALSE);
+  cm_room_event_list_parse_events (self->room_event, child, NULL, FALSE);
 
   child = cm_utils_json_object_get_object (object, "timeline");
-  cm_room_parse_events (self, child, events, FALSE, FALSE, TRUE);
+  cm_room_event_list_parse_events (self->room_event, child, events, FALSE);
 
   if (cm_utils_json_object_get_bool (child, "limited"))
     {
@@ -1537,7 +1006,7 @@ void
 cm_room_set_name (CmRoom     *self,
                   const char *name)
 {
-  JsonObject *child;
+  JsonObject *json, *child;
 
   g_return_if_fail (CM_IS_ROOM (self));
 
@@ -1547,11 +1016,13 @@ cm_room_set_name (CmRoom     *self,
   g_free (self->name);
   self->name = g_strdup (name);
 
-  if (!self->local_json)
-    room_generate_json (self);
+  json = room_generate_json (self);
+  child = cm_utils_json_object_get_object (json, "local");
 
-  child = cm_utils_json_object_get_object (self->local_json, "local");
-  json_object_set_string_member (child, "alias", name);
+  if (name)
+    json_object_set_string_member (child, "alias", name);
+  else
+    json_object_remove_member (child, "alias");
 
   self->db_save_pending = TRUE;
 
@@ -1595,12 +1066,15 @@ cm_room_set_generated_name (CmRoom     *self,
 gint64
 cm_room_get_encryption_rotation_time (CmRoom *self)
 {
+  CmEvent *event;
+
   g_return_val_if_fail (CM_IS_ROOM (self), 60 * 60 * 24 * 7);
 
-  if (self->encryption_event)
-    return cm_room_event_get_rotation_time ((gpointer)self->encryption_event);
+  event = cm_room_event_list_get_event (self->room_event, CM_M_ROOM_ENCRYPTION);
+  if (!event)
+    return 60 * 60 * 24 * 7;
 
-  return 60 * 60 * 24 * 7;
+  return cm_room_event_get_rotation_time ((gpointer)event);
 }
 
 /* cm_room_get_encryption_msg_count:
@@ -1611,12 +1085,15 @@ cm_room_get_encryption_rotation_time (CmRoom *self)
 guint
 cm_room_get_encryption_msg_count (CmRoom *self)
 {
+  CmEvent *event;
+
   g_return_val_if_fail (CM_IS_ROOM (self), 100);
 
-  if (self->encryption_event)
-    return cm_room_event_get_rotation_count ((gpointer)self->encryption_event);
+  event = cm_room_event_list_get_event (self->room_event, CM_M_ROOM_ENCRYPTION);
+  if (!event)
+    return 100;
 
-  return 100;
+  return cm_room_event_get_rotation_count ((gpointer)event);
 }
 
 gboolean
@@ -1634,20 +1111,6 @@ cm_room_set_is_direct (CmRoom   *self,
   g_return_if_fail (CM_IS_ROOM (self));
 
   self->is_direct = !!is_direct;
-}
-
-void
-cm_room_set_is_encrypted (CmRoom   *self,
-                          gboolean  encrypted)
-{
-  g_return_if_fail (CM_IS_ROOM (self));
-
-  /* If encryption is already set, don't change */
-  if (self->encryption)
-    return;
-
-  if (encrypted)
-    self->encryption = g_strdup ("encrypted");
 }
 
 static void
@@ -1770,7 +1233,7 @@ room_send_message_from_queue (CmRoom *self)
   if (self->is_sending_message || self->retry_timeout_id)
     return;
 
-  if (self->encryption && !self->keys_uploaded)
+  if (cm_room_is_encrypted (self) && !self->keys_uploaded)
     {
       ensure_encryption_keys (self);
       return;
@@ -1794,7 +1257,7 @@ room_send_message_from_queue (CmRoom *self)
       g_task_set_task_data (task, g_object_ref (message_task), g_object_unref);
       cm_net_put_file_async (cm_client_get_net (self->client),
                              cm_room_message_event_get_file (message),
-                             !!self->encryption,
+                             cm_room_is_encrypted (self),
                              progress_cb, progress_user_data,
                              g_task_get_cancellable (message_task),
                              room_send_file_cb, task);
@@ -1866,7 +1329,7 @@ cm_room_send_text_async (CmRoom              *self,
   user = room_find_user (self, cm_client_get_user_id (self->client), TRUE);
   cm_event_set_sender (CM_EVENT (message), user);
 
-  g_list_store_append (self->events_list, message);
+  cm_room_event_list_append_event (self->room_event, CM_EVENT (message));
   room_add_event_to_db (self, CM_EVENT (message));
 
   g_queue_push_tail (self->message_queue, task);
@@ -1931,7 +1394,7 @@ cm_room_send_file_async (CmRoom                *self,
 
   user = room_find_user (self, cm_client_get_user_id (self->client), TRUE);
   cm_event_set_sender (CM_EVENT (message), user);
-  g_list_store_append (self->events_list, message);
+  cm_room_event_list_append_event (self->room_event, CM_EVENT (message));
 
   g_queue_push_tail (self->message_queue, task);
 
@@ -2297,7 +1760,7 @@ room_load_prev_batch_cb (GObject      *obj,
   cm_room_save (self);
 
   events = g_ptr_array_new_full (64, g_object_unref);
-  cm_room_parse_events (self, object, events, FALSE, TRUE, TRUE);
+  cm_room_event_list_parse_events (self->room_event, object, events, TRUE);
   cm_db_add_room_events (cm_client_get_db (self->client), self, events, TRUE);
 
   g_task_return_pointer (task, events, (GDestroyNotify)g_ptr_array_unref);
@@ -2449,6 +1912,7 @@ cm_room_load_past_events_async (CmRoom              *self,
 {
   g_autoptr(CmEvent) from = NULL;
   g_autoptr(GTask) task = NULL;
+  GListModel *events;
 
   g_return_if_fail (CM_IS_ROOM (self));
   g_return_if_fail (!from || CM_IS_ROOM_EVENT (from));
@@ -2475,7 +1939,8 @@ cm_room_load_past_events_async (CmRoom              *self,
 
   self->loading_past_events = TRUE;
 
-  from = g_list_model_get_item (G_LIST_MODEL (self->events_list), 0);
+  events = cm_room_event_list_get_events (self->room_event);
+  from = g_list_model_get_item (events, 0);
   cm_db_get_past_events_async (cm_client_get_db (self->client),
                                self, from,
                                room_get_past_db_events_cb,
@@ -2632,7 +2097,7 @@ get_room_state_cb (GObject      *object,
 
   root = json_object_new ();
   json_object_set_array_member (root, "events", array);
-  cm_room_parse_events (self, root, NULL, TRUE, FALSE, FALSE);
+  cm_room_event_list_parse_events (self->room_event, root, NULL, FALSE);
   self->initial_sync_done = TRUE;
 
   self->db_save_pending = TRUE;
@@ -2696,6 +2161,7 @@ save_room_cb (GObject      *object,
 
   if (!cm_db_save_room_finish (CM_DB (object), result, &error))
     {
+      cm_room_event_list_set_save_pending (self->room_event, TRUE);
       self->db_save_pending = TRUE;
       g_warning ("Error saving room details: %s", error->message);
     }
@@ -2710,7 +2176,135 @@ cm_room_save (CmRoom *self)
     return;
 
   self->db_save_pending = FALSE;
+  cm_room_event_list_set_save_pending (self->room_event, FALSE);
   cm_db_save_room_async (cm_client_get_db (self->client), self->client, self,
                          save_room_cb,
                          g_object_ref (self));
+}
+
+CmUser *
+cm_room_find_user (CmRoom     *self,
+                   GRefString *matrix_id,
+                   gboolean    add_if_missing)
+{
+  return room_find_user (self, matrix_id, add_if_missing);
+}
+
+void
+cm_room_update_user (CmRoom  *self,
+                     CmEvent *event)
+{
+  g_autoptr(JsonObject) child = NULL;
+  CmUserList *user_list;
+  CmUser *member = NULL;
+  GRefString *user_id;
+  CmStatus member_status;
+
+  g_return_if_fail (CM_IS_ROOM (self));
+  g_return_if_fail (CM_IS_EVENT (event));
+  g_return_if_fail (cm_event_get_m_type (event) == CM_M_ROOM_MEMBER);
+
+  member_status = cm_room_event_get_status (CM_ROOM_EVENT (event));
+
+  if (member_status == CM_STATUS_JOIN &&
+      cm_event_get_sender_id (event) ==
+      cm_client_get_user_id (self->client))
+    return;
+
+  child = cm_event_get_json (event);
+  g_return_if_fail (child);
+
+  user_id = cm_room_event_get_room_member_id (CM_ROOM_EVENT (event));
+  user_list = cm_client_get_user_list (self->client);
+  member = cm_user_list_find_user (user_list, user_id, TRUE);
+  cm_room_member_set_json_data (CM_ROOM_MEMBER (member), child);
+
+  g_debug ("(%p) Updating user member status, user: %p, %s, status: %d",
+           self, member, user_id, member_status);
+
+  if (member_status == CM_STATUS_JOIN)
+    {
+      CmRoomMember *invite;
+
+      invite = g_hash_table_lookup (self->invited_members_table, user_id);
+      if (invite)
+        {
+          g_hash_table_remove (self->invited_members_table, user_id);
+          cm_utils_remove_list_item (self->invited_members, invite);
+        }
+
+      if (g_hash_table_contains (self->joined_members_table, user_id))
+        {
+          CmRoomMember *cm_member;
+
+          cm_member = g_hash_table_lookup (self->joined_members_table, user_id);
+          cm_room_member_set_json_data (cm_member, child);
+
+          g_free (self->past_name);
+          self->past_name = g_steal_pointer (&self->generated_name);
+          g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
+          return;
+        }
+
+      g_list_store_append (self->joined_members, member);
+      g_hash_table_insert (self->joined_members_table,
+                           g_ref_string_acquire (user_id),
+                           g_object_ref (member));
+
+      /* Clear the name so that it will be regenerated when name is requested */
+      g_free (self->past_name);
+      self->past_name = g_steal_pointer (&self->generated_name);
+      g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
+    }
+  else if (member_status == CM_STATUS_INVITE)
+    {
+      if (g_hash_table_contains (self->invited_members_table, user_id))
+        {
+          CmRoomMember *cm_member;
+
+          cm_member = g_hash_table_lookup (self->invited_members_table, user_id);
+          cm_room_member_set_json_data (cm_member, child);
+
+          /* Clear the name so that it will be regenerated when name is requested */
+          g_free (self->past_name);
+          self->past_name = g_steal_pointer (&self->generated_name);
+          g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
+          return;
+        }
+
+      g_list_store_append (self->invited_members, member);
+      g_hash_table_insert (self->invited_members_table,
+                           g_ref_string_acquire (user_id),
+                           g_object_ref (member));
+      self->db_save_pending = TRUE;
+
+      /* Clear the name so that it will be regenerated when name is requested */
+      g_free (self->past_name);
+      self->past_name = g_steal_pointer (&self->generated_name);
+      g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
+    }
+  else if (member_status == CM_STATUS_LEAVE)
+    {
+      CmRoomMember *join;
+
+      /* Generate a name if it doesn't exist so that we can
+       * use it as the past name if the new name is empty
+       */
+      if (!self->name && !self->generated_name)
+        self->generated_name = cm_room_generate_name (self);
+
+      join = g_hash_table_lookup (self->joined_members_table, user_id);
+
+      if (join)
+        {
+          g_hash_table_remove (self->joined_members_table, user_id);
+          cm_utils_remove_list_item (self->joined_members, join);
+        }
+
+      /* Clear the name so that it will be regenerated when name is requested */
+      g_free (self->past_name);
+      self->past_name = g_steal_pointer (&self->generated_name);
+      g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
+      self->db_save_pending = TRUE;
+    }
 }
