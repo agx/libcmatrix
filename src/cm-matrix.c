@@ -394,7 +394,7 @@ db_open_cb (GObject      *obj,
 
   self->db_loaded = cm_db_open_finish (self->cm_db, result, &error);
   self->is_opening = FALSE;
-  g_debug ("(%p) Load secrets %s", self, CM_LOG_SUCCESS (self->db_loaded));
+  g_debug ("(%p) Open DB %s", self, CM_LOG_SUCCESS (self->db_loaded));
 
   if (!self->db_loaded)
     {
