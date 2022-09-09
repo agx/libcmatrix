@@ -321,6 +321,8 @@ cm_matrix_new (const char *data_dir,
   g_mkdir_with_parents (dir, S_IRWXU);
   g_free (dir);
 
+  g_debug ("(%p) New matrix, data: %s, cache: %s", self, self->data_dir, self->cache_dir);
+
   return self;
 }
 
@@ -361,6 +363,8 @@ load_accounts_from_secrets (CmMatrix  *self,
   if (!accounts || !accounts->len)
     return;
 
+  g_debug ("(%p) Load %u account secrets", self, accounts->len);
+
   g_assert (SECRET_IS_RETRIEVABLE (accounts->pdata[0]));
 
   for (guint i = 0; i < accounts->len; i++)
@@ -390,12 +394,12 @@ db_open_cb (GObject      *obj,
 
   self->db_loaded = cm_db_open_finish (self->cm_db, result, &error);
   self->is_opening = FALSE;
+  g_debug ("(%p) Load secrets %s", self, CM_LOG_SUCCESS (self->db_loaded));
 
   if (!self->db_loaded)
     {
       g_clear_object (&self->cm_db);
-      g_warning ("Error opening Matrix client database: %s",
-                 error ? error->message : "");
+      g_warning ("(%p) Open DB error: %s", self, error ? error->message : "");
       g_task_return_error (task, error);
       return;
     }
@@ -430,8 +434,11 @@ matrix_store_load_cb (GObject      *object,
   if (!error)
     self->secrets_loaded = TRUE;
 
+  g_debug ("(%p) Load secrets %s", self, CM_LOG_SUCCESS (!error));
+
   if (error)
     {
+      g_warning ("(%p) Load secrets error: %s", self, error->message);
       g_task_return_error (task, error);
       return;
     }
@@ -450,6 +457,8 @@ matrix_store_load_cb (GObject      *object,
                               (GDestroyNotify)g_ptr_array_unref);
 
       self->cm_db = cm_db_new ();
+
+      g_debug ("(%p) Open DB", self);
       cm_db_open_async (self->cm_db,
                         g_strdup (self->db_path), self->db_name,
                         db_open_cb, g_steal_pointer (&task));
@@ -489,6 +498,7 @@ cm_matrix_open_async (CmMatrix            *self,
 
   if (self->is_opening)
     {
+      g_debug ("(%p) Open matrix already in progress", self);
       g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED,
                                "Opening db in progress");
       return;
@@ -496,6 +506,7 @@ cm_matrix_open_async (CmMatrix            *self,
 
   if (cm_matrix_is_ready (self))
     {
+      g_debug ("(%p) Open matrix already succeeded", self);
       g_task_return_boolean (task, TRUE);
       return;
     }
@@ -514,6 +525,7 @@ cm_matrix_open_async (CmMatrix            *self,
 
   if (!self->secrets_loaded)
     {
+      g_debug ("(%p) Load secrets", self);
       cm_secret_store_load_async (cancellable,
                                   matrix_store_load_cb,
                                   g_steal_pointer (&task));
@@ -521,6 +533,8 @@ cm_matrix_open_async (CmMatrix            *self,
   else if (!self->db_loaded)
     {
       self->cm_db = cm_db_new ();
+
+      g_debug ("(%p) Open DB", self);
       cm_db_open_async (self->cm_db, g_strdup (db_path), db_name,
                         db_open_cb,
                         g_steal_pointer (&task));
@@ -604,7 +618,7 @@ cm_matrix_client_new (CmMatrix *self)
   g_return_val_if_fail (CM_IS_MATRIX (self), NULL);
 
   if (!cm_matrix_is_ready (self))
-    g_error ("Database not open, See cm_matrix_open_async()");
+    g_error ("(%p) DB not open, See cm_matrix_open_async()", self);
 
   client = g_object_new (CM_TYPE_CLIENT, NULL);
   /* Mark the client as not to save automatically unless asked explicitly
@@ -612,6 +626,8 @@ cm_matrix_client_new (CmMatrix *self)
    */
   g_object_set_data (G_OBJECT (client), "no-save", GINT_TO_POINTER (TRUE));
   cm_client_set_db (client, self->cm_db);
+
+  g_debug ("(%p) New client %p created", self, client);
 
   return client;
 }
@@ -632,9 +648,11 @@ matrix_save_client_cb (GObject      *object,
   g_assert (CM_IS_MATRIX (self));
 
   ret = cm_client_save_secrets_finish (CM_CLIENT (object), result, &error);
+  g_debug ("(%p) Save client %p %s", self, object, CM_LOG_SUCCESS (self->db_loaded));
 
   if (error)
     {
+      g_warning ("(%p) Save client %p error: %s", self, object, error->message);
       g_task_return_error (task, error);
     }
   else
@@ -666,9 +684,11 @@ cm_matrix_save_client_async (CmMatrix            *self,
 
   task = g_task_new (self, NULL, callback, user_data);
   g_object_set_data (G_OBJECT (client), "no-save", GINT_TO_POINTER (FALSE));
+  g_debug ("(%p) Save client %p", self, client);
 
   if (matrix_has_client (self, client, TRUE))
     {
+      g_debug ("(%p) Save client %p error, user exists", self, client);
       g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_EXISTS,
                                "User already exists");
       return;
@@ -709,9 +729,11 @@ matrix_delete_client_cb (GObject      *object,
   g_assert (CM_IS_MATRIX (self));
 
   ret = cm_client_delete_secrets_finish (CM_CLIENT (object), result, &error);
+  g_debug ("(%p) Delete client %p %s", self, object, CM_LOG_SUCCESS (!error));
 
   if (error)
     {
+      g_warning ("(%p) Delete client %p error: %s", self, object, error->message);
       g_task_return_error (task, error);
     }
   else
@@ -735,6 +757,7 @@ cm_matrix_delete_client_async (CmMatrix            *self,
   g_return_if_fail (CM_IS_MATRIX (self));
   g_return_if_fail (CM_IS_CLIENT (client));
 
+  g_debug ("(%p) Delete client %p", self, client);
   task = g_task_new (self, NULL, callback, user_data);
   g_task_set_task_data (task, g_object_ref (client), g_object_unref);
 
@@ -795,6 +818,7 @@ matrix_save_client (GObject      *object,
   if (client &&
       cm_client_save_secrets_finish (client, result, NULL))
     {
+      g_debug ("(%p) Save client %p done", self, CM_LOG_SUCCESS (TRUE));
       g_list_store_append (self->clients_list, CM_CLIENT (object));
       cm_client_enable_as_in_store (client);
     }
@@ -808,6 +832,7 @@ matrix_save_client (GObject      *object,
   client = g_ptr_array_steal_index (clients, 0);
   g_object_set_data_full (user_data, "client", client, g_object_unref);
 
+  g_debug ("(%p) Save client %p, %u left to save", self, client, clients->len);
   cm_client_save_secrets_async (client,
                                 matrix_save_client,
                                 g_steal_pointer (&task));
@@ -840,9 +865,10 @@ cm_matrix_add_clients_async (CmMatrix            *self,
       if (client)
         g_ptr_array_add (clients, client);
       else
-        g_warning ("failed to create client from secret");
+        g_warning ("(%p) Failed to create client from secret", self);
     }
 
+  g_debug ("(%p) Save clients, count: %u", self, secrets->len);
   matrix_save_client (NULL, NULL, task);
 }
 
