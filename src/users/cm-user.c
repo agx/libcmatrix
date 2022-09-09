@@ -216,13 +216,17 @@ user_get_avatar_cb (GObject      *object,
                     GAsyncResult *result,
                     gpointer      user_data)
 {
+  CmUser *self;
   g_autoptr(GTask) task = user_data;
   GInputStream *stream;
   GError *error = NULL;
 
   g_assert (G_IS_TASK (task));
 
+  self = g_task_get_source_object (task);
+
   stream = cm_client_get_file_finish (CM_CLIENT (object), result, &error);
+  g_debug ("(%p) Get avatar %s", self, CM_LOG_SUCCESS (!error));
 
   if (error)
     g_task_return_error (task, error);
@@ -241,6 +245,8 @@ cm_user_get_avatar_async (CmUser              *self,
 
   task = g_task_new (self, cancellable, callback, user_data);
   g_task_set_source_tag (task, cm_user_get_avatar_async);
+
+  g_debug ("(%p) Get avatar", self);
 
   if ((!priv->display_name && !priv->avatar_url) || !priv->info_loaded)
     cm_user_load_info_async (self, cancellable,
@@ -284,6 +290,7 @@ user_get_user_info_cb (GObject      *obj,
   g_assert (CM_IS_USER (self));
 
   object = g_task_propagate_pointer (G_TASK (result), &error);
+  g_debug ("(%p) Load info %s", self,  CM_LOG_SUCCESS (!error));
 
   if (error)
     {
@@ -334,6 +341,7 @@ cm_user_load_info_async (CmUser              *self,
   g_return_if_fail (!cancellable || G_IS_CANCELLABLE (cancellable));
 
   task = g_task_new (self, cancellable, callback, user_data);
+  g_debug ("(%p) Load info", self);
 
   uri = g_strdup_printf ("/_matrix/client/r0/profile/%s", priv->user_id);
   cm_net_send_json_async (cm_client_get_net (priv->cm_client),
