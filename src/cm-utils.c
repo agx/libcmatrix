@@ -12,6 +12,7 @@
 #endif
 
 #define __STDC_WANT_LIB_EXT1__ 1
+#include <stdio.h>
 #include <string.h>
 #include <libsoup/soup.h>
 #include <json-glib/json-glib.h>
@@ -55,6 +56,35 @@ static const char *error_codes[] = {
   "M_RESOURCE_LIMIT_EXCEEDED",
   "M_CANNOT_LEAVE_SERVER_NOTICE_ROOM",
 };
+
+const char *
+cm_utils_log_bool_str (gboolean value,
+                       gboolean use_success)
+{
+  if (!g_log_writer_supports_color (fileno (stdout)) ||
+      g_log_writer_is_journald (fileno (stderr)))
+    {
+      if (value)
+        return use_success ? "success" : "true";
+      else
+        return use_success ? "fail" : "false";
+    }
+
+  if (value)
+    {
+      if (use_success)
+        return "\033[1;32m" "success" "\033[0m";
+      else
+        return "\033[1;32m" "true" "\033[0m";
+    }
+  else
+    {
+      if (use_success)
+        return "\033[1;31m" "fail" "\033[0m";
+      else
+        return "\033[1;31m" "false" "\033[0m";
+    }
+}
 
 GError *
 cm_utils_json_node_get_error (JsonNode *node)

@@ -15,6 +15,24 @@
 
 #include "cm-enums.h"
 
+/* Hack to check format specifier arguments match */
+static inline void check_format (const char *fmt, ...) G_GNUC_PRINTF (1, 2);
+static inline void check_format (const char *fmt, ...) {}
+
+#define CM_TRACE(fmt, ...) do {                                         \
+  check_format (fmt, ##__VA_ARGS__);                                    \
+  g_log_structured (G_LOG_DOMAIN,                                       \
+                    (1 << G_LOG_LEVEL_USER_SHIFT),                      \
+                    "CODE_FILE", __FILE__,                              \
+                    "CODE_LINE", G_STRINGIFY (__LINE__),                \
+                    "CODE_FUNC", G_STRFUNC,                             \
+                    "MESSAGE", fmt, ##__VA_ARGS__);                     \
+} while (0)
+#define CM_LOG_SUCCESS(_value) cm_utils_log_bool_str (_value, TRUE)
+#define CM_LOG_BOOL(_value) cm_utils_log_bool_str (_value, FALSE)
+
+const char   *cm_utils_log_bool_str             (gboolean             value,
+                                                 gboolean             use_success);
 GError       *cm_utils_json_node_get_error      (JsonNode            *node);
 gboolean      cm_utils_get_item_position        (GListModel          *list,
                                                  gpointer             item,
