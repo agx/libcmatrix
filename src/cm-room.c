@@ -227,9 +227,11 @@ room_load_device_keys_cb (GObject      *object,
   users = cm_user_list_load_devices_finish (CM_USER_LIST (object), result, &error);
   self->querying_keys = FALSE;
 
+  g_debug ("(%p) Load user devices %s", self, CM_LOG_SUCCESS (!error));
+
   if (error)
     {
-      g_debug ("Error loading devices: %s", error->message);
+      g_debug ("(%p) Load user devices error: %s", self, error->message);
     }
   else
     {
@@ -252,9 +254,11 @@ room_claim_keys_cb (GObject      *object,
   self->one_time_keys = keys;
   self->claiming_keys = FALSE;
 
+  g_debug ("(%p) Claim keys %s", self, CM_LOG_SUCCESS (!error));
+
   if (error)
     {
-      g_debug ("Error claiming keys: %s", error->message);
+      g_debug ("(%p) claim keys error: %s", self, error->message);
     }
   else
     {
@@ -273,10 +277,11 @@ room_upload_keys_cb (GObject      *object,
 
   cm_user_list_upload_keys_finish (CM_USER_LIST (object), result, &error);
   self->uploading_keys = FALSE;
+  g_debug ("(%p) Upload keys %s", self, CM_LOG_SUCCESS (!error));
 
   if (error)
     {
-      g_debug ("Error uploading group keys: %s", error->message);
+      g_debug ("(%p) Upload keys error: %s", self, error->message);
     }
   else
     {
@@ -311,6 +316,7 @@ ensure_encryption_keys (CmRoom *self)
   else if (!self->keys_queried)
     {
       self->querying_keys = TRUE;
+      g_debug ("(%p) Load user devices", self);
       cm_user_list_load_devices_async (user_list, self->changed_users,
                                        room_load_device_keys_cb,
                                        g_object_ref (self));
@@ -345,6 +351,7 @@ ensure_encryption_keys (CmRoom *self)
           g_hash_table_insert (users, user_id, devices);
         }
 
+      g_debug ("(%p) Claim keys for %u users", self, g_hash_table_size (users));
       cm_user_list_claim_keys_async (user_list, self, users,
                                      room_claim_keys_cb,
                                      g_object_ref (self));
@@ -353,11 +360,12 @@ ensure_encryption_keys (CmRoom *self)
     {
       if (!self->one_time_keys || !self->one_time_keys->len)
         {
-          g_warning ("no keys uploaded, and no keys left to upload");
+          g_warning ("(%p) no keys uploaded, and no keys left to upload", self);
           return;
         }
 
       self->uploading_keys = TRUE;
+      g_debug ("(%p) Upload keys", self);
       cm_user_list_upload_keys_async (user_list, self,
                                       self->one_time_keys,
                                       room_upload_keys_cb,
@@ -529,6 +537,8 @@ cm_room_new_from_json (const char *room_id,
 
   self = cm_room_new (room_id);
 
+  CM_TRACE ("(%p) new room '%s' from json", self, room_id);
+
   if (root)
     {
       JsonObject *local;
@@ -543,6 +553,9 @@ cm_room_new_from_json (const char *room_id,
       self->encryption = cm_utils_json_object_dup_string (local, "encryption");
 
       cm_room_event_list_set_local_json (self->room_event, root, last_event);
+
+      if (last_event)
+        g_debug ("(%p) Added 1 event from db", self);
     }
 
   return self;
@@ -636,6 +649,9 @@ room_user_changed (CmRoom     *self,
 
   if (!g_hash_table_contains (self->joined_members_table, user_id))
     return;
+
+  CM_TRACE ("(%p) user changed, added: %u, removed: %u", self,
+           added ? added->len : 0, removed ? removed->len : 0);
 
   /* If any device got removed, create a new key and invalidate old */
   if (removed && removed->len)
@@ -778,7 +794,6 @@ const char *
 cm_room_get_past_name (CmRoom *self)
 {
   g_return_val_if_fail (CM_IS_ROOM (self), NULL);
-  /* g_warning ("%s %s", self->past_name, self->name); */
 
   if (!self->name &&
       g_strcmp0 (self->generated_name, "Empty room") == 0)
@@ -906,6 +921,7 @@ cm_room_set_data (CmRoom     *self,
 
   child = cm_utils_json_object_get_object (object, "timeline");
   cm_room_event_list_parse_events (self->room_event, child, events, FALSE);
+  CM_TRACE ("(%p) New timeline events count: %u", self, events->len);
 
   if (cm_utils_json_object_get_bool (child, "limited"))
     {
@@ -921,6 +937,9 @@ cm_room_set_data (CmRoom     *self,
 
   if (array)
     length = json_array_get_length (array);
+
+  if (length)
+    CM_TRACE ("(%p) %u users left", self, length);
 
   for (guint i = 0; i < length; i++)
     {
@@ -1134,15 +1153,15 @@ send_cb (GObject      *obj,
   object = g_task_propagate_pointer (G_TASK (result), &error);
 
   event_id = cm_utils_json_object_get_string (object, "event_id");
-  g_debug ("Sending message, has-error: %d. event-id: %s",
-           !!error, event_id);
+  g_debug ("(%p) Send message %s. txn-id: '%s'", self,
+           CM_LOG_SUCCESS (!error), cm_event_get_txn_id (event));
 
   self->is_sending_message = FALSE;
 
   if (error)
     {
       cm_event_set_state (event, CM_EVENT_STATE_SENDING_FAILED);
-      g_debug ("Error sending message: %s", error->message);
+      g_debug ("(%p) Send message error: %s", self, error->message);
       g_task_return_error (message_task, error);
     }
   else
@@ -1183,7 +1202,14 @@ room_send_file_cb (GObject      *object,
   g_assert (CM_IS_ROOM (self));
   g_assert (G_TASK (message_task));
 
+  message = g_task_get_task_data (message_task);
+  g_assert (CM_IS_ROOM_MESSAGE_EVENT (message));
+
   mxc_uri = cm_net_put_file_finish (CM_NET (object), result, &error);
+
+  g_debug ("(%p) Upload file %s. txn-id: '%s'", self,
+           CM_LOG_SUCCESS (!error && mxc_uri),
+           cm_event_get_txn_id (CM_EVENT (message)));
 
   if (!mxc_uri)
     {
@@ -1199,9 +1225,6 @@ room_send_file_cb (GObject      *object,
   stream = g_object_get_data (G_OBJECT (result), "stream");
   g_assert (stream);
   g_object_ref (stream);
-
-  message = g_task_get_task_data (message_task);
-  g_assert (CM_IS_ROOM_MESSAGE_EVENT (message));
 
   message_file = cm_room_message_event_get_file (message);
   g_assert (G_IS_FILE (message_file));
@@ -1257,6 +1280,8 @@ room_send_message_from_queue (CmRoom *self)
 
       task = g_task_new (self, NULL, NULL, NULL);
       g_task_set_task_data (task, g_object_ref (message_task), g_object_unref);
+      g_debug ("(%p) Upload file, txn-id: '%s'",
+               self, cm_event_get_txn_id (CM_EVENT (message)));
       cm_net_put_file_async (cm_client_get_net (self->client),
                              cm_room_message_event_get_file (message),
                              cm_room_is_encrypted (self),
@@ -1268,6 +1293,8 @@ room_send_message_from_queue (CmRoom *self)
 
   uri = cm_event_get_api_url (CM_EVENT (message), self);
 
+  g_debug ("(%p) Send message, txn-id: '%s'",
+           self, cm_event_get_txn_id (CM_EVENT (message)));
   cm_event_set_state (CM_EVENT (message), CM_EVENT_STATE_SENDING);
   cm_net_send_json_async (cm_client_get_net (self->client), 0,
                           cm_event_generate_json (CM_EVENT (message), self),
@@ -1331,6 +1358,8 @@ cm_room_send_text_async (CmRoom              *self,
   user = room_find_user (self, cm_client_get_user_id (self->client), TRUE);
   cm_event_set_sender (CM_EVENT (message), user);
 
+  g_debug ("(%p) Queue send text message, txn-id: '%s'",
+           self, cm_event_get_txn_id (CM_EVENT (message)));
   cm_room_event_list_append_event (self->room_event, CM_EVENT (message));
   room_add_event_to_db (self, CM_EVENT (message));
 
@@ -1396,6 +1425,9 @@ cm_room_send_file_async (CmRoom                *self,
 
   user = room_find_user (self, cm_client_get_user_id (self->client), TRUE);
   cm_event_set_sender (CM_EVENT (message), user);
+
+  g_debug ("(%p) Queue send file message, txn-id: '%s'",
+           self, cm_event_get_txn_id (CM_EVENT (message)));
   cm_room_event_list_append_event (self->room_event, CM_EVENT (message));
 
   g_queue_push_tail (self->message_queue, task);
@@ -1432,11 +1464,14 @@ send_typing_cb (GObject      *obj,
 
   object = g_task_propagate_pointer (G_TASK (result), &error);
 
+  CM_TRACE ("(%p) Set typing to '%s' %s", self,
+            CM_LOG_BOOL (self->typing), CM_LOG_SUCCESS (!error));
+
   if (error)
     {
       self->typing = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (task), "was-typing"));
       self->typing_set_time = GPOINTER_TO_SIZE (g_object_get_data (G_OBJECT (task), "was-typing-time"));
-      g_warning ("Error set typing: %s", error->message);
+      g_debug ("(%p) Set typing error: %s", self, error->message);
     }
 }
 
@@ -1475,6 +1510,7 @@ cm_room_set_typing_notice_async (CmRoom              *self,
       return;
     }
 
+  CM_TRACE ("(%p) Set typing to '%s'", self, CM_LOG_BOOL (typing));
   self->typing_set_time = g_get_monotonic_time ();
   self->typing = !!typing;
 
@@ -1527,9 +1563,11 @@ room_set_encryption_cb (GObject      *obj,
 
   self = g_task_get_source_object (task);
   object = g_task_propagate_pointer (G_TASK (result), &error);
+  g_debug ("(%p) Enable encryption %s", self, CM_LOG_SUCCESS (!error));
 
   if (error)
     {
+      g_warning ("(%p) Enable encryption failed, error: %s", self, error->message);
       g_task_return_error (task, error);
     }
   else
@@ -1573,9 +1611,11 @@ cm_room_enable_encryption_async (CmRoom              *self,
     g_return_if_fail (CM_IS_ROOM (self));
 
     task = g_task_new (self, cancellable, callback, user_data);
+    g_debug ("(%p) Enable encryption", self);
 
     if (cm_room_is_encrypted (self))
       {
+        g_debug ("(%p) Enable encryption. Already encrypted, ignored", self);
         g_task_return_boolean (task, TRUE);
         return;
       }
@@ -1627,8 +1667,10 @@ room_leave_cb (GObject      *obj,
 
   object = g_task_propagate_pointer (G_TASK (result), &error);
 
+  g_debug ("(%p) Leave room %s", self, CM_LOG_SUCCESS (!error));
+
   if (error && !g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
-    g_debug ("Error leaving room: %s", error->message);
+    g_debug ("(%p) Leave room error: %s", self, error->message);
 
   if (error)
     g_task_return_error (task, error);
@@ -1647,6 +1689,7 @@ cm_room_leave_async (CmRoom              *self,
 
     g_return_if_fail (CM_IS_ROOM (self));
 
+    g_debug ("(%p) leave room", self);
     task = g_task_new (self, cancellable, callback, user_data);
     uri = g_strdup_printf ("/_matrix/client/r0/rooms/%s/leave", self->room_id);
     cm_net_send_json_async (cm_client_get_net (self->client), 1, NULL,
@@ -1671,11 +1714,15 @@ room_set_read_marker_cb (GObject      *obj,
                          GAsyncResult *result,
                          gpointer      user_data)
 {
+  CmRoom *self;
   g_autoptr(GTask) task = user_data;
   g_autoptr(JsonObject) object = NULL;
   GError *error = NULL;
 
+  self = g_task_get_source_object (task);
+
   object = g_task_propagate_pointer (G_TASK (result), &error);
+  CM_TRACE ("(%p) Set read marker %s", self, CM_LOG_SUCCESS (!error));
 
   if (error)
     g_task_return_error (task, error);
@@ -1708,6 +1755,7 @@ cm_room_set_read_marker_async (CmRoom              *self,
 
   task = g_task_new (self, NULL, callback, user_data);
 
+  CM_TRACE ("(%p) Set read marker", self);
   uri = g_strdup_printf ("/_matrix/client/r0/rooms/%s/read_markers", self->room_id);
   cm_net_send_json_async (cm_client_get_net (self->client), 0, root,
                           uri, SOUP_METHOD_POST,
@@ -1742,10 +1790,11 @@ room_load_prev_batch_cb (GObject      *obj,
   g_assert (CM_IS_ROOM (self));
 
   object = g_task_propagate_pointer (G_TASK (result), &error);
+  g_debug ("(%p) Load prev batch %s", self, CM_LOG_SUCCESS (!error));
 
   if (error)
     {
-      g_warning ("Error getting members: %s", error->message);
+      g_debug ("(%p) Load prev batch error: %s", self, error->message);
       g_task_return_error (task, error);
       return;
     }
@@ -1764,6 +1813,7 @@ room_load_prev_batch_cb (GObject      *obj,
   events = g_ptr_array_new_full (64, g_object_unref);
   cm_room_event_list_parse_events (self->room_event, object, events, TRUE);
   cm_db_add_room_events (cm_client_get_db (self->client), self, events, TRUE);
+  g_debug ("(%p) Load prev batch events: %u", self, events->len);
 
   g_task_return_pointer (task, events, (GDestroyNotify)g_ptr_array_unref);
 }
@@ -1783,9 +1833,11 @@ cm_room_load_prev_batch_async (CmRoom              *self,
 
   task = g_task_new (self, cancellable, callback, user_data);
   prev_batch = cm_room_get_prev_batch (self);
+  g_debug ("(%p) Load prev batch", self);
 
   if (!prev_batch)
     {
+      g_debug ("(%p) Load prev batch error: missing prev_batch", self);
       g_task_return_pointer (task, NULL, NULL);
       return;
     }
@@ -1835,6 +1887,8 @@ room_prev_batch_cb (GObject      *object,
 
   events = cm_room_load_prev_batch_finish (self, result, &error);
   self->loading_past_events = FALSE;
+  g_debug ("(%p) Load prev batch %s, events: %d", self,
+           CM_LOG_SUCCESS (!error), events ? events->len : 0);
 
   if (error)
     g_task_return_error (task, error);
@@ -1859,14 +1913,19 @@ room_get_past_db_events_cb (GObject      *object,
 
   events = cm_db_get_past_events_finish (CM_DB (object), result, &error);
   self->loading_past_events = FALSE;
+  g_debug ("(%p) Load db events %s, count: %d", self,
+           CM_LOG_SUCCESS (!error), events ? events->len : 0);
 
   if (events && events->len)
     {
+      g_debug ("(%p) Loaded %u db events", self, events->len);
+
       cm_room_add_events (self, events, FALSE);
       g_task_return_boolean (task, TRUE);
     }
   else if (self->prev_batch)
     {
+      g_debug ("(%p) Load prev batch", self);
       self->loading_past_events = TRUE;
       cm_room_load_prev_batch_async (self, NULL, room_prev_batch_cb,
                                      g_steal_pointer (&task));
@@ -1894,7 +1953,8 @@ room_load_sync_cb (GObject      *object,
   g_assert (CM_IS_ROOM (self));
 
   cm_room_load_finish (self, result, &error);
-  g_debug ("Loading room initial sync before past events done, has-error: %d", !!error);
+  g_debug ("(%p) Initial sync before past events %s",
+           self, CM_LOG_SUCCESS (!error));
 
   if (error)
     {
@@ -1922,9 +1982,11 @@ cm_room_load_past_events_async (CmRoom              *self,
   task = g_task_new (self, NULL, callback, user_data);
   g_object_set_data (G_OBJECT (task), "callback", callback);
   g_object_set_data (G_OBJECT (task), "cb-user-data", user_data);
+  g_debug ("(%p) Load db events", self);
 
   if (self->loading_initial_sync || self->loading_past_events)
     {
+      g_debug ("(%p) Load db events, loading already in progress", self);
       g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_PENDING,
                                "Past events are being already loaded");
       return;
@@ -1932,7 +1994,7 @@ cm_room_load_past_events_async (CmRoom              *self,
 
   if (!self->initial_sync_done)
     {
-      g_debug ("Loading room initial sync before loading past events");
+      g_debug ("(%p) Initial sync before loading past events", self);
       cm_room_load_async (self, NULL,
                           room_load_sync_cb,
                           g_steal_pointer (&task));
@@ -1975,6 +2037,7 @@ get_joined_members_cb (GObject      *obj,
 
   self = g_task_get_source_object (task);
   object = g_task_propagate_pointer (G_TASK (result), &error);
+  g_debug ("(%p) Room load joined members %s", self, CM_LOG_SUCCESS (!error));
 
   if (error)
     {
@@ -2017,6 +2080,8 @@ get_joined_members_cb (GObject      *obj,
           cm_room_member_set_json_data (CM_ROOM_MEMBER (user), data);
         }
 
+      g_debug ("(%p) Load joined members, count; %u", self,
+               g_list_model_get_n_items (G_LIST_MODEL (self->joined_members)));
       self->joined_members_loaded = TRUE;
       self->joined_members_loading = FALSE;
       g_task_return_pointer (task, self->joined_members, NULL);
@@ -2038,15 +2103,18 @@ cm_room_load_joined_members_async (CmRoom              *self,
   g_return_if_fail (CM_IS_ROOM (self));
 
   task = g_task_new (self, cancellable, callback, user_data);
+  g_debug ("(%p) Load joined members", self);
 
   if (self->joined_members_loaded)
     {
+      g_debug ("(%p) Load joined members, members already loaded", self);
       g_task_return_boolean (task, TRUE);
       return;
     }
 
   if (self->joined_members_loading)
     {
+      g_debug ("(%p) Load joined members, members already being loaded", self);
       g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED,
                                "Members list are already loading");
       return;
@@ -2088,7 +2156,7 @@ get_room_state_cb (GObject      *object,
   g_assert (CM_IS_ROOM (self));
 
   array = g_task_propagate_pointer (G_TASK (result), &error);
-  g_debug ("Loading room initial sync done, has-error: %d", !!error);
+  g_debug ("(%p) Load room initial sync %s", self, CM_LOG_SUCCESS (!error));
   self->loading_initial_sync = FALSE;
 
   if (error)
@@ -2117,21 +2185,22 @@ cm_room_load_async (CmRoom              *self,
   g_autofree char *uri = NULL;
 
   task = g_task_new (self, cancellable, callback, user_data);
+  g_debug ("(%p) Load room initial sync", self);
 
   if (self->initial_sync_done)
     {
+      g_debug ("(%p) Load room initial sync already done", self);
       g_task_return_boolean (task, TRUE);
       return;
     }
 
   if (self->loading_initial_sync)
     {
+      g_debug ("(%p) Load room initial sync already being loaded", self);
       g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_PENDING,
                                "room initial sync is already in progress");
       return;
     }
-
-  g_debug ("Loading room initial sync");
 
   self->loading_initial_sync = TRUE;
   uri = g_strconcat ("/_matrix/client/r0/rooms/", self->room_id, "/state", NULL);
@@ -2165,7 +2234,7 @@ save_room_cb (GObject      *object,
     {
       cm_room_event_list_set_save_pending (self->room_event, TRUE);
       self->db_save_pending = TRUE;
-      g_warning ("Error saving room details: %s", error->message);
+      g_warning ("(%p) Saving room details error: %s", self, error->message);
     }
 }
 
@@ -2221,8 +2290,7 @@ cm_room_update_user (CmRoom  *self,
   member = cm_user_list_find_user (user_list, user_id, TRUE);
   cm_room_member_set_json_data (CM_ROOM_MEMBER (member), child);
 
-  g_debug ("(%p) Updating user member status, user: %p, %s, status: %d",
-           self, member, user_id, member_status);
+  g_debug ("(%p) Updating user %p, status: %d", self, member, member_status);
 
   if (member_status == CM_STATUS_JOIN)
     {
