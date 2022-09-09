@@ -276,6 +276,8 @@ handle_matrix_glitches (CmClient *self,
   if (g_error_matches (error, CM_ERROR, CM_ERROR_UNKNOWN_TOKEN) &&
       self->password)
     {
+      g_debug ("(%p) Handle glitch, unknown token", self);
+
       client_reset_state (self);
       cm_db_delete_client_async (self->cm_db, self, NULL, NULL);
       matrix_start_sync (self, NULL);
@@ -302,6 +304,7 @@ handle_matrix_glitches (CmClient *self,
 
       if (cm_client_can_connect (self))
         {
+          CM_TRACE ("(%p) Handle glitch, network error", self);
           g_clear_handle_id (&self->resync_id, g_source_remove);
 
           self->resync_id = g_timeout_add_seconds (URI_REQUEST_TIMEOUT,
@@ -375,6 +378,7 @@ cm_upload_filter_cb (GObject      *obj,
   g_assert (CM_IS_CLIENT (self));
 
   root = g_task_propagate_pointer (G_TASK (result), &error);
+  g_debug ("(%p) Upload filter %s", self, CM_LOG_SUCCESS (!error));
 
   if (error)
     {
@@ -387,7 +391,7 @@ cm_upload_filter_cb (GObject      *obj,
 
   g_task_return_pointer (task, NULL, NULL);
   self->filter_id = g_strdup (cm_utils_json_object_get_string (root, "filter_id"));
-  g_debug ("Uploaded filter, id: %s", self->filter_id);
+  g_debug ("(%p) Upload filter, id: %s", self, self->filter_id);
 
   client_set_login_state (self, FALSE, TRUE);
 
@@ -412,13 +416,13 @@ matrix_upload_filter (CmClient *self,
   JsonObject *filter = NULL;
   JsonNode *root = NULL;
 
-  g_debug ("Uploading filter, user: %s", self->user_id);
+  g_debug ("(%p) Upload filter", self);
 
   parser = json_parser_new ();
   json_parser_load_from_data (parser, filter_json_str, -1, &error);
 
   if (error)
-    g_warning ("Error parsing filter file: %s", error->message);
+    g_warning ("(%p) Error parsing filter file: %s", self, error->message);
 
   if (!error)
     root = json_parser_get_root (parser);
@@ -428,8 +432,7 @@ matrix_upload_filter (CmClient *self,
 
   if (error || !root || !filter)
     {
-      if (error)
-        g_warning ("Error getting filter file: %s", error->message);
+      g_warning ("(%p) Error getting filter file: %s", self, error ? error->message : "");
 
       self->filter_id = g_strdup ("");
       /* Even if we have error uploading filter, continue syncing */
@@ -835,6 +838,7 @@ db_load_client_cb (GObject      *obj,
   g_autoptr(GTask) task = user_data;
   g_autoptr(GError) error = NULL;
   CmClient *self;
+  gboolean success;
 
   g_assert (G_IS_TASK (task));
 
@@ -846,7 +850,11 @@ db_load_client_cb (GObject      *obj,
   self->db_loaded = TRUE;
   self->db_loading = FALSE;
 
-  if (!cm_db_load_client_finish (self->cm_db, result, &error))
+  success = cm_db_load_client_finish (self->cm_db, result, &error);
+  g_debug ("(%p) Load db %s", self,
+           CM_LOG_SUCCESS (!error || g_error_matches (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND)));
+
+  if (!success)
     {
       if (error && !g_error_matches (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
         g_warning ("Error loading client '%s': %s",
@@ -886,6 +894,7 @@ db_load_client_cb (GObject      *obj,
         }
 
       g_list_store_splice (self->joined_rooms, 0, 0, rooms->pdata, rooms->len);
+      g_debug ("(%p) Load db, added %u rooms from db", self, rooms->len);
     }
 
   self->db_migrated = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (result), "db-migrated"));
@@ -1025,6 +1034,8 @@ cm_client_set_enabled (CmClient *self,
   if (self->client_enabled == enable)
     return;
 
+  g_debug ("(%p) Set enable to %s", self, CM_LOG_BOOL (enable));
+
   self->client_enabled = enable;
   g_signal_emit (self, signals[STATUS_CHANGED], 0);
 
@@ -1052,6 +1063,8 @@ db_save_cb (GObject      *object,
 
   status = cm_db_save_client_finish (self->cm_db, result, &error);
   self->is_saving_client = FALSE;
+
+  CM_TRACE ("(%p) Save client %s", self, CM_LOG_SUCCESS (!error));
 
   if (error || !status)
     self->save_client_pending = TRUE;
@@ -1094,6 +1107,7 @@ cm_client_save (CmClient *self)
       if (self->cm_enc)
         pickle = cm_enc_get_pickle (self->cm_enc);
 
+      CM_TRACE ("(%p) Save client", self);
       cm_db_save_client_async (self->cm_db, self, pickle,
                                db_save_cb,
                                g_object_ref (self));
@@ -1180,12 +1194,17 @@ cm_client_set_user_id (CmClient   *self,
   g_return_val_if_fail (!self->login_success, FALSE);
 
   if (!cm_utils_user_name_valid (matrix_user_id))
-    return FALSE;
+    {
+      g_debug ("(%p) New user ID: '%s' %s. ID not valid", self,
+               matrix_user_id, CM_LOG_SUCCESS (FALSE));
+      return FALSE;
+    }
 
   old_user_id = self->user_id;
   user_id = g_ascii_strdown (matrix_user_id, -1);
   new_user_id = g_ref_string_new_intern (user_id);
   g_atomic_pointer_set (&self->user_id, new_user_id);
+  g_debug ("(%p) New user ID: '%s'", self, matrix_user_id);
 
   client_mark_for_save (self, TRUE, TRUE);
 
@@ -1237,6 +1256,7 @@ cm_client_set_login_id (CmClient   *self,
     {
       g_free (self->login_user_id);
       self->login_user_id = g_ascii_strdown (login_id, -1);
+      g_debug ("(%p) New login id: '%s'", self, login_id);
 
       return TRUE;
     }
@@ -1584,15 +1604,18 @@ cm_client_get_homeserver_async (CmClient            *self,
 
   task = g_task_new (self, cancellable, callback, user_data);
   g_task_set_source_tag (task, cm_client_get_homeserver_async);
+  g_debug ("(%p) Get homeserver", self);
 
   if (self->homeserver_verified && self->homeserver && *(self->homeserver))
     {
+      g_debug ("(%p) Get homeserver already loaded", self);
       g_task_return_pointer (task, self->homeserver, NULL);
       return;
     }
 
   if (!self->user_id && !self->homeserver)
     {
+      g_debug ("(%p) Get homeserver failed, no user id to guess", self);
       g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED,
                                "No user id present in client");
       return;
@@ -1628,10 +1651,12 @@ client_key_verification_cancel_cb (GObject      *obj,
   g_assert (CM_IS_CLIENT (self));
 
   object = g_task_propagate_pointer (G_TASK (result), &error);
+  g_debug ("(%p) Key verification %p cancel %s", self,
+           self->key_verification_event, CM_LOG_SUCCESS (!error));
 
   if (error)
     {
-      g_debug ("Error cancelling key verification: %s", error->message);
+      g_debug ("(%p) Key verification cancel error: %s", self, error->message);
       g_task_return_error (task, error);
     }
   else
@@ -1661,10 +1686,12 @@ cm_client_key_verification_cancel_async (CmClient            *self,
     cancellable = self->cancellable;
 
   task = g_task_new (self, cancellable, callback, user_data);
+  g_debug ("(%p) Key verification %p cancel", self, verification_event);
 
   if (verification_event != self->key_verification_event ||
       cm_event_get_m_type (verification_event) != CM_M_KEY_VERIFICATION_REQUEST)
     {
+      g_debug ("(%p) Key verification %p cancel fail, not in progress", self, verification_event);
       g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_NOT_INITIALIZED,
                                "Provided key verification request is not in progress");
       return;
@@ -1729,9 +1756,7 @@ client_verify_homeserver_cb (GObject      *obj,
   self->homeserver_verified = cm_utils_verify_homeserver_finish (result, &error);
   g_object_set_data (G_OBJECT (task), "action", "verify-homeserver");
 
-  g_debug ("Verifying home server, has error: %d, home server: %s",
-           error && !g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED),
-           self->homeserver);
+  g_debug ("(%p) Verify home server %s", self, CM_LOG_SUCCESS (!error));
 
   /* Since GTask can't have timeout, We cancel the cancellable to fake timeout */
   if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_TIMED_OUT))
@@ -1785,6 +1810,7 @@ client_password_login_cb (GObject      *obj,
   g_assert (CM_IS_CLIENT (self));
 
   root = g_task_propagate_pointer (G_TASK (result), &error);
+  g_debug ("(%p) Login with password %s", self, CM_LOG_SUCCESS (!error));
 
   if (error)
     {
@@ -1912,7 +1938,7 @@ handle_one_time_keys (CmClient   *self,
       /* If we got no keys, create new ones and get them */
       if (!self->key)
         {
-          g_debug ("generating %" G_GSIZE_FORMAT " onetime keys", limit - count);
+          g_debug ("(%p) Generating %" G_GSIZE_FORMAT " onetime keys", self, limit - count);
           cm_enc_create_one_time_keys (self->cm_enc, limit - count);
           self->key = cm_enc_get_one_time_keys_json (self->cm_enc);
         }
@@ -1939,6 +1965,7 @@ upload_key_cb (GObject      *obj,
   g_assert (G_IS_TASK (result));
 
   root = g_task_propagate_pointer (G_TASK (result), &error);
+  g_debug ("(%p) Upload key %s", self, CM_LOG_SUCCESS (!error));
 
   if (error)
     {
@@ -1967,6 +1994,7 @@ matrix_upload_key (CmClient *self)
 
   key = g_steal_pointer (&self->key);
 
+  g_debug ("(%p) Upload key", self);
   cm_net_send_data_async (self->cm_net, 2, key, strlen (key),
                           "/_matrix/client/r0/keys/upload", SOUP_METHOD_POST,
                           NULL, self->cancellable, upload_key_cb,
@@ -2358,6 +2386,7 @@ client_get_homeserver_cb (GObject      *obj,
 
   homeserver = cm_utils_get_homeserver_finish (result, &error);
   g_object_set_data (G_OBJECT (task), "action", "get-homeserver");
+  g_debug ("(%p) Get home server %s", self, CM_LOG_SUCCESS (!error));
 
   client_set_login_state (self, FALSE, FALSE);
 
@@ -2365,7 +2394,7 @@ client_get_homeserver_cb (GObject      *obj,
     {
       self->sync_failed = TRUE;
 
-      g_debug ("Get home server error: %s", error->message);
+      g_debug ("(%p) Get home server error: %s", self, error->message);
       if (g_task_get_source_tag (task) != cm_client_get_homeserver_async)
         handle_matrix_glitches (self, error);
       g_task_return_error (task, error);
@@ -2373,7 +2402,7 @@ client_get_homeserver_cb (GObject      *obj,
       return;
     }
 
-  g_debug ("Get home server: %s", homeserver);
+  g_debug ("(%p) Got home server: %s", self, homeserver);
   if (!homeserver)
     {
       self->sync_failed = TRUE;
@@ -2390,6 +2419,7 @@ client_get_homeserver_cb (GObject      *obj,
   if (!self->homeserver)
     {
       self->sync_failed = TRUE;
+      g_debug ("(%p) Get home server: '%s' is invalid uri", self, homeserver);
       g_task_return_new_error (task, CM_ERROR, CM_ERROR_BAD_HOME_SERVER,
                                "'%s' is not a valid URI", homeserver);
       return;
@@ -2429,6 +2459,8 @@ get_joined_rooms_cb (GObject      *obj,
   self->room_list_loading = FALSE;
   root = g_task_propagate_pointer (G_TASK (result), &error);
 
+  g_debug ("(%p) Get joined rooms %s", self, CM_LOG_SUCCESS (!error));
+
   if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
     return;
 
@@ -2443,6 +2475,8 @@ get_joined_rooms_cb (GObject      *obj,
 
     if (array)
       length = json_array_get_length (array);
+
+    g_debug ("(%p) Get joined rooms, count: %u", self, length);
 
     for (guint i = 0; i < length; i++)
       {
@@ -2495,6 +2529,7 @@ get_direct_rooms_cb (GObject      *obj,
 
   self->direct_room_list_loading = FALSE;
   root = g_task_propagate_pointer (G_TASK (result), &error);
+  g_debug ("(%p) Get direct rooms %s", self, CM_LOG_SUCCESS (!error));
 
   if (root)
     parse_direct_rooms (self, root);
@@ -2530,6 +2565,7 @@ matrix_start_sync (CmClient *self,
   if (!self->db_loaded)
     {
       self->db_loading = TRUE;
+      g_debug ("(%p) Load db", self);
       cm_db_load_client_async (self->cm_db, self,
                                cm_client_get_device_id (self),
                                db_load_client_cb,
@@ -2542,7 +2578,7 @@ matrix_start_sync (CmClient *self,
       if (!cm_utils_home_server_valid (self->homeserver) &&
           !cm_utils_user_name_valid (user_id))
         {
-          g_debug ("Error: No Homeserver provided");
+          g_warning ("(%p) Error: No Homeserver provided", self);
 
           g_task_return_new_error (task, CM_ERROR, CM_ERROR_NO_HOME_SERVER,
                                    "No Homeserver provided");
@@ -2550,7 +2586,7 @@ matrix_start_sync (CmClient *self,
         }
 
       client_set_login_state (self, TRUE, FALSE);
-      g_debug ("Getting homeserver, username: %s", self->user_id);
+      g_debug ("(%p) Getting homeserver", self);
       cm_utils_get_homeserver_async (user_id, 30, cancellable,
                                      client_get_homeserver_cb,
                                      g_steal_pointer (&task));
@@ -2558,8 +2594,7 @@ matrix_start_sync (CmClient *self,
   else if (!self->homeserver_verified)
     {
       client_set_login_state (self, TRUE, FALSE);
-      g_debug ("Verifying homeserver, homeserver: %s, username: %s",
-               self->homeserver, self->user_id);
+      g_debug ("(%p) Verify homeserver '%s'", self, self->homeserver);
       cm_utils_verify_homeserver_async (self->homeserver, 30, cancellable,
                                         client_verify_homeserver_cb,
                                         g_steal_pointer (&task));
@@ -2568,7 +2603,7 @@ matrix_start_sync (CmClient *self,
     {
       GError *error;
 
-      g_debug ("No password provided, nor access token");
+      g_warning ("(%p) No password provided, nor access token", self);
 
       error = g_error_new (CM_ERROR, CM_ERROR_BAD_PASSWORD, "No Password provided");
 
@@ -2582,6 +2617,7 @@ matrix_start_sync (CmClient *self,
       g_assert (self->cm_db);
       cm_net_set_access_token (self->cm_net, NULL);
       client_set_login_state (self, TRUE, FALSE);
+      g_debug ("(%p) Login with password", self);
       client_login_with_password_async (self, cancellable,
                                         client_password_login_cb,
                                         g_steal_pointer (&task));
@@ -2594,6 +2630,7 @@ matrix_start_sync (CmClient *self,
 
       uri = g_strconcat ("/_matrix/client/r0/user/", self->user_id,
                          "/account_data/m.direct", NULL);
+      g_debug ("(%p) Get direct rooms", self);
       cm_net_send_json_async (self->cm_net, 0, NULL, uri, SOUP_METHOD_GET,
                               NULL, NULL, get_direct_rooms_cb,
                               g_object_ref (self));
@@ -2601,6 +2638,7 @@ matrix_start_sync (CmClient *self,
   else if (self->db_migrated && !self->room_list_loaded)
     {
       self->room_list_loading = TRUE;
+      g_debug ("(%p) Get joined rooms", self);
       cm_net_send_json_async (self->cm_net, 0, NULL,
                               "/_matrix/client/r0/joined_rooms", SOUP_METHOD_GET,
                               NULL, NULL, get_joined_rooms_cb,
@@ -2681,6 +2719,7 @@ cm_client_start_sync (CmClient *self)
   if (self->is_sync || self->is_logging_in)
     return;
 
+  g_debug ("(%p) Start sync", self);
   g_clear_handle_id (&self->resync_id, g_source_remove);
   matrix_start_sync (self, NULL);
 }
@@ -2727,6 +2766,7 @@ cm_client_stop_sync (CmClient *self)
   g_clear_handle_id (&self->resync_id, g_source_remove);
   g_clear_object (&self->cancellable);
   self->cancellable = g_cancellable_new ();
+  g_debug ("(%p) Stop sync", self);
 
   g_signal_emit (self, signals[STATUS_CHANGED], 0);
 }
