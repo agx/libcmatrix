@@ -107,6 +107,8 @@ device_keys_query_cb (GObject      *obj,
   g_assert (CM_IS_USER_LIST (self));
   g_assert (users);
 
+  g_debug ("(%p) Load user devices %s", users, CM_LOG_SUCCESS (!error));
+
   if (error)
     {
       /* Re-add the users to changed_users */
@@ -254,7 +256,7 @@ request_device_keys_from_queue (CmUserList *self)
   /* If no users left to request, return */
   if (users->len == 0)
     {
-      g_debug ("(%p) Load user devices success", users);
+      g_debug ("(%p) Load user devices %s", users, CM_LOG_SUCCESS (TRUE));
       g_task_return_boolean (task, TRUE);
       self->is_requesting_device = FALSE;
       /* Repeat */
@@ -272,7 +274,7 @@ request_device_keys_from_queue (CmUserList *self)
                                   cm_user_get_id (users->pdata[i]),
                                   json_array_new ());
 
-  g_debug ("(%p) Load user devices %u user devices loading", users, users->len);
+  g_debug ("(%p) Load user devices, users count: %u", users, users->len);
   cm_net_send_json_async (cm_client_get_net (self->client), 0, object,
                           "/_matrix/client/r0/keys/query", SOUP_METHOD_POST,
                           NULL, cancellable, device_keys_query_cb, task);
@@ -356,6 +358,8 @@ cm_user_list_new (CmClient *client)
   self = g_object_new (CM_TYPE_USER_LIST, NULL);
   self->client = g_object_ref (client);
 
+  g_debug ("(%p) New user list with client %p created", self, client);
+
   return self;
 }
 
@@ -393,7 +397,7 @@ cm_user_list_device_changed (CmUserList *self,
       const char *user_id;
 
       user_id = json_array_get_string_element (users, i);
-      g_debug ("User '%s' device changed", user_id);
+      CM_TRACE ("(%p) User '%s' device changed", self->client, user_id);
       matrix_id = g_ref_string_new_intern (user_id);
       user = cm_user_list_find_user (self, matrix_id, TRUE);
       g_ptr_array_add (changed, g_object_ref (user));
@@ -446,7 +450,8 @@ cm_user_list_load_devices_async (CmUserList          *self,
   g_return_if_fail (CM_IS_USER_LIST (self));
   g_return_if_fail (users && users->len > 0);
 
-  g_debug ("(%p) Load user devices, users: %u", users, users->len);
+  g_debug ("(%p) Queue Load %p user devices, users count: %u",
+           self->client, users, users->len);
 
   task = g_task_new (self, NULL, callback, user_data);
   g_task_set_task_data (task, g_ptr_array_ref (users),
@@ -456,7 +461,7 @@ cm_user_list_load_devices_async (CmUserList          *self,
   /* If no users left to request, return */
   if (users->len == 0)
     {
-      g_debug ("(%p) Load user devices success", users);
+      g_debug ("(%p) Load %p user devices %s", self->client, users, CM_LOG_SUCCESS (TRUE));
       g_task_return_boolean (task, TRUE);
     }
   else
@@ -508,10 +513,11 @@ claim_keys_cb (GObject      *obj,
   g_assert (users);
 
   root = g_task_propagate_pointer (G_TASK (result), &error);
+  g_debug ("(%p) Claim %p user keys %s", room, users, CM_LOG_SUCCESS (!error));
 
   if (error)
     {
-      g_debug ("(%p) Claiming user keys, error: %s", users, error->message);
+      g_debug ("(%p) Claim %p user keys, error: %s", room, users, error->message);
       g_task_return_error (task, error);
     }
   else
@@ -540,8 +546,8 @@ claim_keys_cb (GObject      *obj,
           cm_user_add_one_time_keys (user, room_id, keys, one_time_keys);
         }
 
-      g_debug ("(%p) Claiming user keys success, keys: %u",
-               users, one_time_keys->len);
+      g_debug ("(%p) Claim %p user keys success, keys: %u",
+               room, users, one_time_keys->len);
 
       g_task_return_pointer (task,
                              g_steal_pointer (&one_time_keys),
@@ -591,8 +597,8 @@ cm_user_list_claim_keys_async (CmUserList          *self,
                           "cm-room", g_object_ref (room),
                           g_object_unref);
 
-  g_debug ("(%p) Claiming user keys, users: %u",
-           users, g_hash_table_size (users));
+  g_debug ("(%p) Claim %p user keys, users: %u",
+           room, users, g_hash_table_size (users));
 
   keys = g_hash_table_get_keys (users);
 
@@ -608,8 +614,8 @@ cm_user_list_claim_keys_async (CmUserList          *self,
   /* ... if so, return an error as the caller should update user devices. */
   if (changed_count)
     {
-      g_debug ("(%p) Claiming user keys, %u users pending update",
-               users, changed_count);
+      g_debug ("(%p) Claim %p user keys error, %u users pending update",
+               room, users, changed_count);
       g_task_return_new_error (task, CM_ERROR, CM_ERROR_USER_DEVICE_CHANGED,
                                "%u users have their devices changed", changed_count);
       return;
@@ -678,10 +684,11 @@ upload_group_keys_cb (GObject      *obj,
   g_assert (CM_IS_ROOM (room));
 
   object = g_task_propagate_pointer (G_TASK (result), &error);
+  g_debug ("(%p) Upload group keys %s", room, CM_LOG_SUCCESS (!error));
 
   if (error)
     {
-      g_debug ("(%p) Uploading group keys: %s", room, error->message);
+      g_debug ("(%p) Upload group keys error: %s", room, error->message);
       g_task_return_error (task, error);
     }
   else
@@ -691,7 +698,6 @@ upload_group_keys_cb (GObject      *obj,
       session = g_object_get_data (G_OBJECT (task), "session");
       cm_enc_set_room_group_key (cm_client_get_enc (self->client),
                                  room, session);
-      g_debug ("(%p) Uploading group keys success", room);
       g_task_return_boolean (task, TRUE);
     }
 }
@@ -707,15 +713,14 @@ cm_user_list_upload_keys_async (CmUserList          *self,
   g_autoptr(GTask) task = NULL;
   g_autofree char *uri = NULL;
   JsonObject *root, *object;
-  GListModel *members;
   gpointer olm_session = NULL;
 
   g_return_if_fail (CM_IS_USER_LIST (self));
   g_return_if_fail (CM_IS_ROOM (room));
+  g_return_if_fail (one_time_keys && one_time_keys->len);
 
-  members = cm_room_get_joined_members (room);
-  g_debug ("(%p) Uploading group keys, users: %u", room,
-           g_list_model_get_n_items (members));
+  g_debug ("(%p) Upload group keys, keys count: %u",
+           room, one_time_keys->len);
 
   task = g_task_new (self, NULL, callback, user_data);
   g_task_set_task_data (task, g_object_ref (room), g_object_unref);
