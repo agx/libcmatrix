@@ -173,7 +173,7 @@ create_new_details (CmEnc *self)
 
   g_assert (CM_ENC (self));
 
-  g_debug ("Creating new encryption keys");
+  g_debug ("(%p) Creating new encryption keys", self);
 
   free_all_details (self);
 
@@ -323,6 +323,7 @@ cm_enc_new (gpointer    matrix_db,
       g_autofree char *duped = NULL;
       size_t err;
 
+      g_debug ("(%p) Create from pickle", self);
       self->pickle_key = gcry_malloc_secure (strlen (pickle) + 1);
       strcpy (self->pickle_key, key);
       self->account = g_malloc (olm_account_size ());
@@ -844,6 +845,7 @@ handle_m_room_key (CmEnc      *self,
     return;
 
   session = cm_olm_in_group_new (session_key, sender_key, session_id);
+  g_debug ("(%p) Create new in group olm session %p", self, session);
   cm_olm_set_sender_details (session, room_id, self->user_id);
   cm_olm_set_account_details (session, self->user_id, self->device_id);
   cm_olm_set_key (session, self->pickle_key);
@@ -903,11 +905,12 @@ cm_enc_handle_room_encrypted (CmEnc      *self,
       in_olm_sessions = g_hash_table_lookup (self->in_olm_sessions, sender_key);
       if (in_olm_sessions)
         session = g_hash_table_find (in_olm_sessions, in_olm_matches, body);
-      g_debug ("message with pre key received, session exits: %d", !!session);
+      g_debug ("(%p) Message with pre-key received, has session: %p", self, CM_LOG_BOOL (!!session));
 
       if (!session)
         {
           session = cm_olm_inbound_new (self->account, sender_key, body);
+          g_debug ("(%p) New inbound session created %p", self, session);
           cm_olm_set_db (session, self->cm_db);
           cm_olm_set_key (session, self->pickle_key);
 
@@ -929,11 +932,11 @@ cm_enc_handle_room_encrypted (CmEnc      *self,
     content = cm_utils_string_to_json_object (plaintext);
     message_type = cm_utils_json_object_get_string (content, "type");
 
-    g_debug ("message decrypted. type: %s", message_type);
+    g_debug ("(%p) Message decrypted. type: %s", self, message_type);
 
     if (g_strcmp0 (sender, cm_utils_json_object_get_string (content, "sender")) != 0)
       {
-        g_warning ("Sender mismatch in encrypted content");
+        g_warning ("(%p) Sender mismatch in encrypted content", self);
         return;
       }
 
@@ -944,7 +947,7 @@ cm_enc_handle_room_encrypted (CmEnc      *self,
     data = cm_utils_json_object_get_object (content, "recipient_keys");
     if (g_strcmp0 (self->ed_key, cm_utils_json_object_get_string (data, "ed25519")) != 0)
       {
-        g_warning ("ed25519 in content doesn't match to ours");
+        g_warning ("(%p) ed25519 in content doesn't match to ours", self);
         return;
       }
 
@@ -964,6 +967,8 @@ cm_enc_handle_room_encrypted (CmEnc      *self,
             g_hash_table_insert (self->in_olm_sessions, g_strdup (sender_key),
                                  in_olm_sessions);
           }
+
+        g_debug ("(%p) Save in olm session %p", self, session);
 
         id = cm_olm_get_session_id (session);
         g_hash_table_insert (in_olm_sessions, g_strdup (id), session);
@@ -1029,6 +1034,7 @@ cm_enc_save_file_enc (CmEnc      *self,
   if (file_info && file_info->mxc_uri &&
       !g_hash_table_contains (self->enc_files, file_info->mxc_uri))
     {
+      g_debug ("(%p) Save file keys", self);
       g_hash_table_insert (self->enc_files, g_strdup (file_info->mxc_uri), file_info);
       cm_db_save_file_enc_async (self->cm_db, file_info, NULL, NULL);
     }
@@ -1061,7 +1067,7 @@ cm_enc_handle_join_room_encrypted (CmEnc      *self,
   if (session_id)
     session = g_hash_table_lookup (self->in_group_sessions, session_id);
 
-  g_debug ("Got room encrypted. session exits: %d", !!session);
+  g_debug ("(%p) Got room encrypted, room: %p. session: %p", self, room, session);
 
   if (!session)
     {
@@ -1081,7 +1087,7 @@ cm_enc_handle_join_room_encrypted (CmEnc      *self,
             {
               g_object_set_data (G_OBJECT (session), "-cm-db-id", GINT_TO_POINTER (db_id));
               g_hash_table_insert (self->in_group_sessions, g_strdup (session_id), session);
-              g_debug ("Got session from matrix db");
+              g_debug ("(%p) Got session %p from matrix db", self, session);
             }
         }
     }
@@ -1119,6 +1125,9 @@ cm_enc_encrypt_for_chat (CmEnc      *self,
   g_return_val_if_fail (session, NULL);
 
   encrypted = cm_olm_encrypt (session, message);
+  g_debug ("(%p) Enrypt for room %p, session: %p, chain-index: %u",
+           self, room, session,
+           cm_room_get_encryption_msg_count (room));
 
   cm_olm_update_validity (session,
                           cm_room_get_encryption_msg_count (room),
@@ -1162,6 +1171,8 @@ cm_enc_create_out_group_keys (CmEnc      *self,
 
   if (!session)
     g_return_val_if_reached (NULL);
+
+  g_debug ("(%p) Create out group keys, room: %p, session: %p", self, room, out_session);
 
   cm_olm_set_account_details (session, self->user_id, self->device_id);
   cm_olm_set_sender_details (session, cm_room_get_id (room), self->user_id);
@@ -1325,6 +1336,8 @@ cm_enc_set_room_group_key (CmEnc    *self,
 
   g_warn_if_fail (!g_hash_table_contains (self->out_group_room_session, room));
 
+  g_debug ("(%p) Set out group key, room: %p, session: %p", self, room, out_session);
+
   in_session = cm_olm_in_group_new_from_out (out_session, self->curve_key);
   g_hash_table_insert (self->out_group_room_session,
                        g_object_ref (room), g_strdup (session_id));
@@ -1362,6 +1375,8 @@ cm_enc_rm_room_group_key (CmEnc  *self,
 
   session = g_hash_table_lookup (self->out_group_sessions, session_id);
 
+  g_debug ("(%p) Remove out group key, room: %p, session: %p", self, room, session);
+
   if (session)
     {
       g_object_ref (session);
@@ -1378,12 +1393,16 @@ enc_find_file_enc_cb (GObject      *obj,
                       GAsyncResult *result,
                       gpointer      user_data)
 {
+  CmEnc *self;
   g_autoptr(GTask) task = user_data;
   CmEncFileInfo *file;
 
   g_assert (G_IS_TASK (task));
 
+  self = g_task_get_source_object (task);
+
   file = cm_db_find_file_enc_finish (CM_DB (obj), result, NULL);
+  g_debug ("(%p) Find file key done, has key: %s", self, CM_LOG_SUCCESS (!!file));
 
   g_task_return_pointer (task, file, cm_enc_file_info_free);
 }
@@ -1401,9 +1420,11 @@ cm_enc_find_file_enc_async (CmEnc               *self,
 
   task = g_task_new (self, NULL, callback, user_data);
   file = g_hash_table_lookup (self->enc_files, uri);
+  g_debug ("(%p) Find file key", self);
 
   if (file)
     {
+      g_debug ("(%p) Find file key %s from cache", self, CM_LOG_SUCCESS (TRUE));
       g_task_return_pointer (task, file, NULL);
       return;
     }
