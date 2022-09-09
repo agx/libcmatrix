@@ -9,6 +9,8 @@
  * SPDX-License-Identifier: LGPL-2.0-or-later
  */
 
+#define G_LOG_DOMAIN "cm-secret-store"
+
 #include <libsecret/secret.h>
 #include <glib/gi18n.h>
 

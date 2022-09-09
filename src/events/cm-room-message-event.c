@@ -8,6 +8,8 @@
  * SPDX-License-Identifier: LGPL-2.1-or-later
  */
 
+#define G_LOG_DOMAIN "cm-room-message-event"
+
 #ifdef HAVE_CONFIG_H
 # include "config.h"
 #endif

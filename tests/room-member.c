@@ -16,6 +16,8 @@
 #undef G_LOG_DOMAIN
 
 #include "cm-room-private.h"
+
+#undef G_LOG_DOMAIN
 #include "users/cm-room-member.c"
 
 static void

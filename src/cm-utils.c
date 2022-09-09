@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LGPL-2.1-or-later
  */
 
+#define G_LOG_DOMAIN "cm-utils"
 #define BUFFER_SIZE 256
 
 #ifdef HAVE_CONFIG_H

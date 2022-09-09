@@ -34,15 +34,10 @@ libcmatrix_headers = [
   'users/cm-room-member.h',
 ]
 
-cmatrix_c_args = [
-  '-DG_LOG_DOMAIN="cmatrix"',
-]
-
 # Currently we do only have static library and should be
 # used only as a subproject
 cmatrix_lib = static_library('libcmatrix',
                              [libcmatrix_headers, libcmatrix_sources],
-                             c_args: cmatrix_c_args,
                              include_directories: [ root_inc, src_inc ],
                              dependencies: cmatrix_deps
 )
