@@ -210,6 +210,8 @@ cm_room_event_list_new (CmRoom *room)
   self = g_object_new (CM_TYPE_ROOM_EVENT_LIST, NULL);
   g_set_weak_pointer (&self->room, room);
 
+  g_debug ("(%p) New event list for room %p", self, room);
+
   return self;
 }
 
@@ -465,8 +467,8 @@ cm_room_event_list_parse_events (CmRoomEventList *self,
   if (!events)
     g_return_if_fail (!past);
 
-  g_debug ("(%p), room: %p, Parsing events, is state event: %d, is past: %d",
-           root, self->room, events ? FALSE : TRUE, past);
+  g_debug ("(%p) Parsing events %p, state event: %s, past events: %s",
+           self->room, root, CM_LOG_BOOL (!events), CM_LOG_BOOL (past));
 
   client = cm_room_get_client (self->room);
   array = cm_utils_json_object_get_array (root, "events");
@@ -564,7 +566,6 @@ cm_room_event_list_parse_events (CmRoomEventList *self,
           self->save_pending = TRUE;
         }
 
-      g_warning ("%s", cm_utils_get_event_type_str (type));
       if (type == CM_M_ROOM_ENCRYPTION)
         g_object_notify (G_OBJECT (self->room), "encrypted");
     }
