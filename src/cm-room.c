@@ -94,7 +94,6 @@ G_DEFINE_TYPE (CmRoom, cm_room, G_TYPE_OBJECT)
 
 enum {
   PROP_0,
-  PROP_ROOM_ID,
   PROP_ENCRYPTED,
   PROP_NAME,
   N_PROPS
@@ -385,10 +384,6 @@ cm_room_get_property (GObject    *object,
 
   switch (prop_id)
     {
-    case PROP_ROOM_ID:
-      g_value_set_string (value, self->room_id);
-      break;
-
     case PROP_ENCRYPTED:
       g_value_set_boolean (value, cm_room_is_encrypted (self));
       break;
@@ -400,25 +395,6 @@ cm_room_get_property (GObject    *object,
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
-    }
-}
-
-static void
-cm_room_set_property (GObject      *object,
-                      guint         prop_id,
-                      const GValue *value,
-                      GParamSpec   *pspec)
-{
-  CmRoom *self = (CmRoom *)object;
-
-  switch (prop_id)
-    {
-    case PROP_ROOM_ID:
-      self->room_id = g_value_dup_string (value);
-      break;
-
-    default:
-      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
     }
 }
 
@@ -456,15 +432,7 @@ cm_room_class_init (CmRoomClass *klass)
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
   object_class->get_property = cm_room_get_property;
-  object_class->set_property = cm_room_set_property;
   object_class->finalize = cm_room_finalize;
-
-  properties[PROP_ROOM_ID] =
-    g_param_spec_string ("room-id",
-                         "room id",
-                         "The room id",
-                         NULL,
-                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY | G_PARAM_STATIC_STRINGS);
 
   properties[PROP_ENCRYPTED] =
     g_param_spec_string ("encrypted",
