@@ -118,7 +118,6 @@ G_DEFINE_TYPE (CmClient, cm_client, G_TYPE_OBJECT)
 enum {
   PROP_0,
   PROP_HOME_SERVER,
-  PROP_USER_ID,
   N_PROPS
 };
 
@@ -463,10 +462,6 @@ cm_client_set_property (GObject      *object,
       cm_client_set_homeserver (self, g_value_get_string (value));
       break;
 
-    case PROP_USER_ID:
-      cm_client_set_user_id (self, g_value_get_string (value));
-      break;
-
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
     }
@@ -514,13 +509,6 @@ cm_client_class_init (CmClientClass *klass)
     g_param_spec_string ("home-server",
                          "Home Server",
                          "Matrix Home Server",
-                         NULL,
-                         G_PARAM_WRITABLE | G_PARAM_CONSTRUCT | G_PARAM_STATIC_STRINGS);
-
-  properties[PROP_USER_ID] =
-    g_param_spec_string ("user-id",
-                         "User ID",
-                         "Matrix User ID",
                          NULL,
                          G_PARAM_WRITABLE | G_PARAM_CONSTRUCT | G_PARAM_STATIC_STRINGS);
 
