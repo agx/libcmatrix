@@ -2245,6 +2245,8 @@ handle_device_list (CmClient   *self,
       room = g_list_model_get_item (G_LIST_MODEL (self->joined_rooms), i);
       cm_room_user_changed (room, users);
     }
+
+  cm_db_mark_user_device_change (self->cm_db, self, users, TRUE, TRUE);
 }
 
 static void
