@@ -130,5 +130,10 @@ gpointer       cm_db_lookup_olm_session            (CmDb                *self,
                                                     CmSessionType        type,
                                                     size_t               message_type,
                                                     char               **out_plain_text);
+void           cm_db_mark_user_device_change       (CmDb                *self,
+                                                    CmClient            *client,
+                                                    GPtrArray           *users,
+                                                    gboolean             outdated,
+                                                    gboolean             is_tracking);
 
 G_END_DECLS

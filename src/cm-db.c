@@ -2112,6 +2112,71 @@ db_lookup_olm_session (CmDb  *self,
 }
 
 static void
+db_update_user_tracking (CmDb     *self,
+                         int       user_id,
+                         gboolean  outdated,
+                         gboolean  is_tracking)
+{
+  sqlite3_stmt *stmt;
+
+  g_assert (CM_IS_DB (self));
+  g_assert (g_thread_self () == self->worker_thread);
+  g_assert (user_id);
+
+  sqlite3_prepare_v2 (self->db,
+                      "UPDATE users SET tracking=?1, outdated=?2 "
+                      "WHERE id=?3",
+                      -1, &stmt, NULL);
+
+  matrix_bind_int (stmt, 1, is_tracking, "binding add user device");
+  matrix_bind_int (stmt, 2, outdated, "binding add user device");
+  matrix_bind_int (stmt, 3, user_id, "binding add user device");
+  sqlite3_step (stmt);
+  sqlite3_finalize (stmt);
+}
+
+static void
+db_mark_user_device_change (CmDb  *self,
+                            GTask *task)
+{
+  GPtrArray *users;
+  const char *username, *account_device;
+  gboolean outdated, is_tracking;
+  int account_id;
+
+  g_assert (CM_IS_DB (self));
+  g_assert (g_thread_self () == self->worker_thread);
+  g_assert (G_IS_TASK (task));
+
+  is_tracking = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (task), "tracking"));
+  outdated = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (task), "outdated"));
+  username = g_object_get_data (G_OBJECT (task), "account-id");
+  users = g_object_get_data (G_OBJECT (task), "users");
+  account_device = g_object_get_data (G_OBJECT (task), "account-device");
+  g_assert (users && users->len);
+
+  account_id = matrix_db_get_account_id (self, username, account_device, NULL, FALSE);
+
+  if (!account_id)
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR,
+                               "Error getting account id");
+      return;
+    }
+
+  for (guint i = 0; i < users->len; i++)
+    {
+      int user_id;
+
+      username = cm_user_get_id (users->pdata[i]);
+      user_id = matrix_db_get_user_id (self, account_id, username, TRUE);
+      db_update_user_tracking (self, user_id, outdated, is_tracking);
+    }
+
+  g_task_return_boolean (task, TRUE);
+}
+
+static void
 cm_db_delete_event_with_txn_id (CmDb       *self,
                                 int         room_id,
                                 const char *txnid)
@@ -3022,6 +3087,53 @@ cm_db_lookup_olm_session (CmDb           *self,
     g_debug ("Error getting session: %s", error->message);
 
   return pickle;
+}
+
+void
+cm_db_mark_user_device_change (CmDb      *self,
+                               CmClient  *client,
+                               GPtrArray *users,
+                               gboolean   outdated,
+                               gboolean   is_tracking)
+{
+  const char *account_id, *device;
+  g_autoptr(GTask) task = NULL;
+  g_autoptr(GError) error = NULL;
+  GObject *object;
+
+  g_return_if_fail (CM_IS_DB (self));
+  g_return_if_fail (CM_IS_CLIENT (client));
+  g_return_if_fail (users && users->len);
+
+  task = g_task_new (self, NULL, NULL, NULL);
+  g_object_ref (task);
+
+  g_task_set_source_tag (task, cm_db_mark_user_device_change);
+  g_task_set_task_data (task, db_mark_user_device_change, NULL);
+  account_id = cm_client_get_user_id (client);
+  device = cm_client_get_device_id (client);
+  object = G_OBJECT (task);
+
+  g_debug ("Saving user device change: %p", users);
+  g_object_set_data_full (object, "users", g_ptr_array_ref (users),
+                          (GDestroyNotify)g_ptr_array_unref);
+  g_object_set_data_full (object, "account-id", g_strdup (account_id), g_free);
+  g_object_set_data_full (object, "account-device", g_strdup (device), g_free);
+  g_object_set_data (object, "tracking", GINT_TO_POINTER (is_tracking));
+  g_object_set_data (object, "outdated", GINT_TO_POINTER (outdated));
+
+  g_async_queue_push (self->queue, task);
+  g_assert (task);
+
+  /* Wait until the task is completed */
+  while (!g_task_get_completed (task))
+    g_main_context_iteration (NULL, TRUE);
+
+  g_task_propagate_pointer (task, &error);
+  g_debug ("Saving user device change %s", CM_LOG_SUCCESS (!error));
+
+  if (error)
+    g_debug ("Error marking user device changed: %s", error->message);
 }
 
 void
