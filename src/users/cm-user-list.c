@@ -159,6 +159,8 @@ device_keys_query_cb (GObject      *obj,
           check_again = g_hash_table_contains (self->changed_users, user_id);
           key = cm_utils_json_object_get_object (keys, member->data);
           cm_user_set_devices (user, key, !check_again, added, removed);
+          cm_db_update_user_devices (cm_client_get_db (self->client), self->client,
+                                     user, added, removed, FALSE);
           g_signal_emit (self, signals[USER_CHANGED], 0, user, added, removed);
           g_ptr_array_remove (users, user);
 
