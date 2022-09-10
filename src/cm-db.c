@@ -2177,6 +2177,86 @@ db_mark_user_device_change (CmDb  *self,
 }
 
 static void
+db_update_user_devices (CmDb  *self,
+                        GTask *task)
+{
+  const char *account_username, *account_device, *username;
+  GPtrArray *added, *removed;
+  int account_id, user_id, force_add;
+
+  g_assert (CM_IS_DB (self));
+  g_assert (g_thread_self () == self->worker_thread);
+  g_assert (G_IS_TASK (task));
+
+  account_username = g_object_get_data (G_OBJECT (task), "account-id");
+  account_device = g_object_get_data (G_OBJECT (task), "account-device");
+  force_add = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (task), "force-add"));
+  username = g_object_get_data (G_OBJECT (task), "username");
+  removed = g_object_get_data (G_OBJECT (task), "removed");
+  added = g_object_get_data (G_OBJECT (task), "added");
+  g_assert (added || removed);
+
+  account_id = matrix_db_get_account_id (self, account_username, account_device, NULL, FALSE);
+
+  if (!account_id)
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR,
+                               "Error getting account id");
+      return;
+    }
+
+  user_id = matrix_db_get_user_id (self, account_id, username, force_add);
+
+  if (!user_id)
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
+                               "User not in db");
+    }
+
+  sqlite3_exec (self->db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+  for (guint i = 0; added &&  i < added->len; i++)
+    {
+      sqlite3_stmt *stmt;
+      CmDevice *device;
+
+      device = added->pdata[i];
+      sqlite3_prepare_v2 (self->db,
+                          "INSERT OR IGNORE INTO user_devices(user_id,device,curve25519_key,ed25519_key) "
+                          "VALUES(?1,?2,?3,?4)",
+                          -1, &stmt, NULL);
+
+      matrix_bind_int (stmt, 1, user_id, "binding add user device");
+      matrix_bind_text (stmt, 2, cm_device_get_id (device), "binding add user device");
+      matrix_bind_text (stmt, 3, cm_device_get_curve_key (device), "binding add user device");
+      matrix_bind_text (stmt, 4, cm_device_get_ed_key (device), "binding add user device");
+      sqlite3_step (stmt);
+      sqlite3_finalize (stmt);
+    }
+
+  for (guint i = 0; removed &&  i < removed->len; i++)
+    {
+      sqlite3_stmt *stmt;
+      CmDevice *device;
+
+      device = removed->pdata[i];
+      sqlite3_prepare_v2 (self->db,
+                          "DELETE FROM user_devices WHERE user_id=?1 AND device=?2",
+                          -1, &stmt, NULL);
+
+      matrix_bind_int (stmt, 1, user_id, "binding add user device");
+      matrix_bind_text (stmt, 2, cm_device_get_id (device), "binding add user device");
+      sqlite3_step (stmt);
+      sqlite3_finalize (stmt);
+    }
+
+  sqlite3_exec (self->db, "END TRANSACTION;", NULL, NULL, NULL);
+
+  db_update_user_tracking (self, user_id, FALSE, TRUE);
+
+  g_task_return_boolean (task, TRUE);
+}
+
+static void
 cm_db_delete_event_with_txn_id (CmDb       *self,
                                 int         room_id,
                                 const char *txnid)
@@ -3134,6 +3214,73 @@ cm_db_mark_user_device_change (CmDb      *self,
 
   if (error)
     g_debug ("Error marking user device changed: %s", error->message);
+}
+
+void
+cm_db_update_user_devices (CmDb       *self,
+                           CmClient   *client,
+                           CmUser     *user,
+                           GPtrArray  *added,
+                           GPtrArray  *removed,
+                           gboolean    force_add)
+{
+  const char *account_id, *device;
+  g_autoptr(GTask) task = NULL;
+  g_autoptr(GError) error = NULL;
+  GObject *object;
+
+  g_return_if_fail (CM_IS_DB (self));
+  g_return_if_fail (CM_IS_CLIENT (client));
+  g_return_if_fail (CM_IS_USER (user));
+  g_return_if_fail ((added && added->len) || (removed && removed->len));
+
+  task = g_task_new (self, NULL, NULL, NULL);
+  g_object_ref (task);
+
+  g_task_set_source_tag (task, cm_db_update_user_devices);
+  g_task_set_task_data (task, db_update_user_devices, NULL);
+  account_id = cm_client_get_user_id (client);
+  device = cm_client_get_device_id (client);
+  object = G_OBJECT (task);
+
+  if (g_application_get_default ())
+    g_application_hold (g_application_get_default ());
+
+  if (added)
+    g_ptr_array_ref (added);
+
+  if (removed)
+    g_ptr_array_ref (removed);
+
+  g_debug ("Updating user devices. user %p, added: %u, removed: %u",
+           user, added ? added->len : 0, removed ? removed->len : 0);
+  g_object_set_data_full (object, "client", g_object_ref (client), g_object_unref);
+  g_object_set_data_full (object, "user", g_object_ref (user), g_object_unref);
+  g_object_set_data_full (object, "added", added, (GDestroyNotify)g_ptr_array_unref);
+  g_object_set_data_full (object, "removed", removed, (GDestroyNotify)g_ptr_array_unref);
+  g_object_set_data_full (object, "account-id", g_strdup (account_id), g_free);
+  g_object_set_data_full (object, "username", g_strdup (cm_user_get_id (user)), g_free);
+  g_object_set_data_full (object, "account-device", g_strdup (device), g_free);
+  g_object_set_data (object, "force-add", GINT_TO_POINTER (force_add));
+
+  g_async_queue_push (self->queue, task);
+  g_assert (task);
+
+  /* Wait until the task is completed */
+  while (!g_task_get_completed (task))
+    g_main_context_iteration (NULL, TRUE);
+
+  if (g_application_get_default ())
+    g_application_release (g_application_get_default ());
+
+  g_task_propagate_boolean (task, &error);
+
+  g_debug ("Updating user devices. user %p %s", user, CM_LOG_SUCCESS (!error));
+
+  if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
+    g_debug ("Updating user devices. user %p skipped, we are not tracking the user", user);
+  else if (error)
+    g_warning ("Error updating user devices, user %p: %s", user, error->message);
 }
 
 void

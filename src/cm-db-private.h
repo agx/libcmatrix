@@ -135,5 +135,11 @@ void           cm_db_mark_user_device_change       (CmDb                *self,
                                                     GPtrArray           *users,
                                                     gboolean             outdated,
                                                     gboolean             is_tracking);
+void           cm_db_update_user_devices           (CmDb                *self,
+                                                    CmClient            *client,
+                                                    CmUser              *user,
+                                                    GPtrArray           *added,
+                                                    GPtrArray           *removed,
+                                                    gboolean             force_add);
 
 G_END_DECLS
