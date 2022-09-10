@@ -1052,8 +1052,6 @@ db_save_cb (GObject      *object,
   status = cm_db_save_client_finish (self->cm_db, result, &error);
   self->is_saving_client = FALSE;
 
-  CM_TRACE ("(%p) Save client %s", self, CM_LOG_SUCCESS (!error));
-
   if (error || !status)
     self->save_client_pending = TRUE;
 
@@ -1095,7 +1093,6 @@ cm_client_save (CmClient *self)
       if (self->cm_enc)
         pickle = cm_enc_get_pickle (self->cm_enc);
 
-      CM_TRACE ("(%p) Save client", self);
       cm_db_save_client_async (self->cm_db, self, pickle,
                                db_save_cb,
                                g_object_ref (self));
