@@ -1125,9 +1125,9 @@ cm_enc_encrypt_for_chat (CmEnc      *self,
   g_return_val_if_fail (session, NULL);
 
   encrypted = cm_olm_encrypt (session, message);
-  g_debug ("(%p) Enrypt for room %p, session: %p, chain-index: %u",
+  g_debug ("(%p) Enrypt for room %p, session: %p, chain-index: %lu",
            self, room, session,
-           cm_room_get_encryption_msg_count (room));
+           cm_olm_get_message_index (session));
 
   cm_olm_update_validity (session,
                           cm_room_get_encryption_msg_count (room),
