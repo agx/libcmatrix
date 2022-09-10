@@ -52,6 +52,7 @@ struct _CmDb
 #define VERIFICATION_VERIFIED    2
 #define VERIFICATION_BLACKLISTED 3
 #define VERIFICATION_IGNORED     4
+#define VERIFICATION_IS_SELF     5
 
 #define EVENT_NOT_ENCRYPTED       0
 #define EVENT_NOT_DECRYPTED       1
@@ -1102,7 +1103,8 @@ matrix_db_get_user_device_id (CmDb       *self,
                               const char *username,
                               const char *device,
                               int        *out_user_id,
-                              gboolean    insert_if_missing)
+                              gboolean    insert_if_missing,
+                              gboolean    is_self)
 {
   sqlite3_stmt *stmt;
   int user_id = 0, user_device_id = 0;
@@ -1146,10 +1148,14 @@ matrix_db_get_user_device_id (CmDb       *self,
     return user_device_id;
 
   sqlite3_prepare_v2 (self->db,
-                      "INSERT INTO user_devices(user_id, device) VALUES(?1, ?2)",
+                      "INSERT INTO user_devices(user_id, device, verification) "
+                      "VALUES(?1, ?2, ?3)",
                       -1, &stmt, NULL);
   matrix_bind_int (stmt, 1, user_id, "binding when adding user device");
   matrix_bind_text (stmt, 2, device, "binding when adding user device");
+  if (is_self)
+    matrix_bind_int (stmt, 3, VERIFICATION_IS_SELF, "binding when adding user device");
+
   sqlite3_step (stmt);
   sqlite3_finalize (stmt);
   user_device_id = sqlite3_last_insert_rowid (self->db);
@@ -1170,7 +1176,7 @@ matrix_db_get_account_id (CmDb       *self,
   if (!username || !*username || !device || !*device)
     return 0;
 
-  user_device_id = matrix_db_get_user_device_id (self, username, device, NULL, insert_if_missing);
+  user_device_id = matrix_db_get_user_device_id (self, username, device, NULL, insert_if_missing, TRUE);
 
   if (out_user_device_id)
     *out_user_device_id = user_device_id;
