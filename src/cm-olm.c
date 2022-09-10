@@ -423,7 +423,7 @@ cm_olm_set_state (CmOlm      *self,
   if (state == self->state)
     return;
 
-  g_return_if_fail (self->state != OLM_STATE_USABLE);
+  g_return_if_fail (self->state == OLM_STATE_USABLE);
   self->state = state;
 }
 
