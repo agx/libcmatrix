@@ -2037,7 +2037,8 @@ get_joined_members_cb (GObject      *obj,
 
               user_list = cm_client_get_user_list (self->client);
               user = cm_user_list_find_user (user_list, user_id, TRUE);
-              g_ptr_array_add (self->changed_users, g_object_ref (user));
+              if (cm_room_is_encrypted (self))
+                g_ptr_array_add (self->changed_users, g_object_ref (user));
               g_hash_table_insert (self->joined_members_table,
                                    g_ref_string_acquire (user_id),
                                    g_object_ref (user));
@@ -2046,6 +2047,15 @@ get_joined_members_cb (GObject      *obj,
 
           data = json_object_get_object_member (joined, member->data);
           cm_room_member_set_json_data (CM_ROOM_MEMBER (user), data);
+        }
+
+      /* We have to keep track of user changes only if the room is encrypted */
+      if (cm_room_is_encrypted (self))
+        {
+          CmDb *db;
+
+          db = cm_client_get_db (self->client);
+          cm_db_mark_user_device_change (db, self->client, self->changed_users, TRUE, TRUE);
         }
 
       g_debug ("(%p) Load joined members, count; %u", self,
