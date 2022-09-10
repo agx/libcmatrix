@@ -376,6 +376,7 @@ cm_olm_out_group_new (const char *sender_identity_key)
   self->out_gp_session = g_steal_pointer (&session);
   self->session_id = (char *)g_steal_pointer (&session_id);
   self->session_key = (char *)g_steal_pointer (&session_key);
+  self->created_time = time (NULL) * 1000;
   self->type = SESSION_MEGOLM_V1_OUT;
 
   return self;
