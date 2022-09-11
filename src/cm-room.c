@@ -320,34 +320,53 @@ ensure_encryption_keys (CmRoom *self)
                                        room_load_device_keys_cb,
                                        g_object_ref (self));
     }
-  else if (!self->keys_claimed)
+  else if (!self->keys_claimed ||
+           (self->changed_devices && g_hash_table_size (self->changed_devices)))
     {
       g_autoptr(GHashTable) users = NULL;
-      GListModel *members;
+      GHashTable *table;
 
       self->claiming_keys = TRUE;
-      members = G_LIST_MODEL (self->joined_members);
-      users = g_hash_table_new_full (g_direct_hash,
+
+      table = g_hash_table_new_full (g_direct_hash,
                                      g_direct_equal,
                                      (GDestroyNotify)g_ref_string_release,
                                      (GDestroyNotify)g_ptr_array_unref);
 
-      for (guint i = 0; i < g_list_model_get_n_items (members); i++)
+      if (g_hash_table_size (self->changed_devices))
         {
-          g_autoptr(CmUser) user = NULL;
-          GListModel *device_list;
-          GRefString *user_id;
-          GPtrArray *devices;
+          g_debug ("(%p) Has %u changed users for claiming keys",
+                   self, g_hash_table_size (self->changed_devices));
+          users = g_steal_pointer (&self->changed_devices);
+          self->changed_devices = table;
+          self->keys_uploaded = FALSE;
+        }
+      else
+        {
+          GListModel *members;
 
-          user = g_list_model_get_item (members, i);
-          devices = g_ptr_array_new_full (32, g_object_unref);
-          device_list = cm_user_get_devices (user);
+          members = G_LIST_MODEL (self->joined_members);
+          users = table;
 
-          for (guint j = 0; j < g_list_model_get_n_items (device_list); j++)
-            g_ptr_array_add (devices, g_list_model_get_item (device_list, j));
+          g_debug ("(%p) Has %u room users for claiming keys",
+                   self, g_list_model_get_n_items (members));
+          for (guint i = 0; i < g_list_model_get_n_items (members); i++)
+            {
+              g_autoptr(CmUser) user = NULL;
+              GListModel *device_list;
+              GRefString *user_id;
+              GPtrArray *devices;
 
-          user_id = g_ref_string_acquire (cm_user_get_id (user));
-          g_hash_table_insert (users, user_id, devices);
+              user = g_list_model_get_item (members, i);
+              devices = g_ptr_array_new_full (32, g_object_unref);
+              device_list = cm_user_get_devices (user);
+
+              for (guint j = 0; j < g_list_model_get_n_items (device_list); j++)
+                g_ptr_array_add (devices, g_list_model_get_item (device_list, j));
+
+              user_id = g_ref_string_acquire (cm_user_get_id (user));
+              g_hash_table_insert (users, user_id, devices);
+            }
         }
 
       g_debug ("(%p) Claim keys for %u users", self, g_hash_table_size (users));
