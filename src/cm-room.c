@@ -82,11 +82,9 @@ struct _CmRoom
   gboolean    joined_members_loading;
   gboolean    joined_members_loaded;
   gboolean    querying_keys;
-  gboolean    keys_queried;
   gboolean    claiming_keys;
   gboolean    keys_claimed;
   gboolean    uploading_keys;
-  gboolean    keys_uploaded;
   gboolean    initial_sync_done;
 };
 
@@ -237,7 +235,6 @@ room_load_device_keys_cb (GObject      *object,
     }
   else
     {
-      self->keys_queried = TRUE;
       room_send_message_from_queue (self);
     }
 }
@@ -287,7 +284,6 @@ room_upload_keys_cb (GObject      *object,
     }
   else
     {
-      self->keys_uploaded = TRUE;
       g_ptr_array_set_size (self->one_time_keys, 0);
       room_send_message_from_queue (self);
     }
@@ -315,7 +311,7 @@ ensure_encryption_keys (CmRoom *self)
 
   if (!self->joined_members_loaded)
     cm_room_load_joined_members_async (self, self->enc_cancellable, NULL, NULL);
-  else if (!self->keys_queried)
+  else if (self->changed_users->len)
     {
       self->querying_keys = TRUE;
       g_debug ("(%p) Load user devices", self);
@@ -342,7 +338,6 @@ ensure_encryption_keys (CmRoom *self)
                    self, g_hash_table_size (self->changed_devices));
           users = g_steal_pointer (&self->changed_devices);
           self->changed_devices = table;
-          self->keys_uploaded = FALSE;
         }
       else
         {
@@ -377,7 +372,7 @@ ensure_encryption_keys (CmRoom *self)
                                      room_claim_keys_cb,
                                      g_object_ref (self));
     }
-  else if (!self->keys_uploaded)
+  else
     {
       if (!self->one_time_keys || !self->one_time_keys->len)
         {
@@ -392,8 +387,6 @@ ensure_encryption_keys (CmRoom *self)
                                       room_upload_keys_cb,
                                       g_object_ref (self));
     }
-  else
-    g_return_if_reached ();
 }
 
 static void
@@ -646,10 +639,23 @@ room_user_changed (CmRoom     *self,
   /* If any device got removed, create a new key and invalidate old */
   if (removed && removed->len)
     {
-      g_hash_table_remove_all (self->changed_devices);
-      self->keys_queried = FALSE;
+      guint n_items;
+
+      cm_enc_rm_room_group_key (cm_client_get_enc (self->client), self);
+
       self->keys_claimed = FALSE;
-      self->keys_uploaded = FALSE;
+      g_ptr_array_set_size (self->changed_users, 0);
+      g_hash_table_remove_all (self->changed_devices);
+      n_items = g_list_model_get_n_items (G_LIST_MODEL (self->joined_members));
+
+      for (guint i = 0; i < n_items; i++)
+        {
+          CmUser *member;
+
+          member = g_list_model_get_item (G_LIST_MODEL (self->joined_members), i);
+          g_ptr_array_add (self->changed_users, member);
+        }
+
       return;
     }
 
@@ -929,7 +935,10 @@ cm_room_set_data (CmRoom     *self,
     length = json_array_get_length (array);
 
   if (length)
-    CM_TRACE ("(%p) %u users left", self, length);
+    {
+      CM_TRACE ("(%p) %u users left", self, length);
+      cm_enc_rm_room_group_key (cm_client_get_enc (self->client), self);
+    }
 
   for (guint i = 0; i < length; i++)
     {
@@ -945,9 +954,7 @@ cm_room_set_data (CmRoom     *self,
         {
           g_hash_table_remove (self->joined_members_table, user_id);
           cm_utils_remove_list_item (self->joined_members, member);
-          self->keys_queried = FALSE;
           self->keys_claimed = FALSE;
-          self->keys_uploaded = FALSE;
         }
     }
 
@@ -1248,7 +1255,8 @@ room_send_message_from_queue (CmRoom *self)
   if (self->is_sending_message || self->retry_timeout_id)
     return;
 
-  if (cm_room_is_encrypted (self) && !self->keys_uploaded)
+  if (cm_room_is_encrypted (self) &&
+      !cm_enc_has_room_group_key (cm_client_get_enc (self->client), self))
     {
       ensure_encryption_keys (self);
       return;
