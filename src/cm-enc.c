@@ -898,6 +898,11 @@ cm_enc_handle_room_encrypted (CmEnc      *self,
                                         sender_key, body, self->pickle_key,
                                         SESSION_OLM_V1_IN, type, &plaintext);
 
+  if (!session && type == OLM_MESSAGE_TYPE_MESSAGE)
+    session = cm_db_lookup_olm_session (self->cm_db, self->user_id, self->device_id,
+                                        sender_key, body, self->pickle_key,
+                                        SESSION_OLM_V1_OUT, type, &plaintext);
+
   if (!session && type == OLM_MESSAGE_TYPE_PRE_KEY)
     {
       GHashTable *in_olm_sessions;
@@ -917,6 +922,8 @@ cm_enc_handle_room_encrypted (CmEnc      *self,
           force_save = TRUE;
         }
     }
+
+  g_debug ("(%p) Handle decrypted, session: %p", self, session);
 
   if (!session)
     return;
