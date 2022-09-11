@@ -124,6 +124,9 @@ room_find_user (CmRoom     *self,
   if (user &&
       !cm_utils_get_item_position (model, user, NULL))
     {
+      if (cm_room_is_encrypted (self))
+        g_ptr_array_add (self->changed_users, g_object_ref (user));
+
       g_list_store_append (self->joined_members, user);
       g_hash_table_insert (self->joined_members_table,
                            g_ref_string_acquire (matrix_id),
@@ -2051,18 +2054,7 @@ get_joined_members_cb (GObject      *obj,
           user = g_hash_table_lookup (self->joined_members_table, user_id);
 
           if (!user)
-            {
-              CmUserList *user_list;
-
-              user_list = cm_client_get_user_list (self->client);
-              user = cm_user_list_find_user (user_list, user_id, TRUE);
-              if (cm_room_is_encrypted (self))
-                g_ptr_array_add (self->changed_users, g_object_ref (user));
-              g_hash_table_insert (self->joined_members_table,
-                                   g_ref_string_acquire (user_id),
-                                   g_object_ref (user));
-              g_list_store_append (self->joined_members, user);
-            }
+            room_find_user (self, user_id, TRUE);
 
           data = json_object_get_object_member (joined, member->data);
           cm_room_member_set_json_data (CM_ROOM_MEMBER (user), data);
