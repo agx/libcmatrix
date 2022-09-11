@@ -20,8 +20,6 @@ G_BEGIN_DECLS
 
 G_DECLARE_FINAL_TYPE (CmDevice, cm_device, CM, DEVICE, GObject)
 
-gboolean      cm_device_has_one_time_key        (CmDevice   *self,
-                                                 const char *room_id);
 const char   *cm_device_get_id                  (CmDevice *self);
 const char   *cm_device_get_ed_key              (CmDevice *self);
 const char   *cm_device_get_curve_key           (CmDevice *self);

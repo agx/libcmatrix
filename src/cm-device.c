@@ -29,8 +29,6 @@ struct _CmDevice
   char     *device_name;
   char     *ed_key;
   char     *curve_key;
-  char     *one_time_key;
-  GHashTable *keys_table;
 
   gboolean meagolm_v1;
   gboolean olm_v1;
@@ -50,7 +48,6 @@ cm_device_finalize (GObject *object)
   g_free (self->ed_key);
   g_free (self->curve_key);
   g_clear_pointer (&self->json, json_object_unref);
-  g_hash_table_unref (self->keys_table);
 
   G_OBJECT_CLASS (cm_device_parent_class)->finalize (object);
 }
@@ -66,7 +63,6 @@ cm_device_class_init (CmDeviceClass *klass)
 static void
 cm_device_init (CmDevice *self)
 {
-  self->keys_table = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
 }
 
 CmDevice *
@@ -143,42 +139,6 @@ cm_device_get_json (CmDevice *self)
   g_return_val_if_fail (CM_IS_DEVICE (self), NULL);
 
   return self->json;
-}
-
-void
-cm_device_set_one_time_key (CmDevice   *self,
-                            const char *room_id,
-                            const char *key)
-{
-  g_return_if_fail (CM_IS_DEVICE (self));
-
-  g_hash_table_insert (self->keys_table, g_strdup (room_id), g_strdup (key));
-  g_free (self->one_time_key);
-  self->one_time_key = g_strdup (key);
-}
-
-char *
-cm_device_steal_one_time_key (CmDevice   *self,
-                              const char *room_id)
-{
-  g_autofree char *value = NULL;
-  g_autofree char *key = NULL;
-
-  g_return_val_if_fail (CM_IS_DEVICE (self), NULL);
-
-  g_hash_table_steal_extended (self->keys_table, room_id,
-                               (gpointer *)&key, (gpointer *)&value);
-
-  return g_steal_pointer (&value);
-}
-
-gboolean
-cm_device_has_one_time_key (CmDevice   *self,
-                            const char *room_id)
-{
-  g_return_val_if_fail (CM_IS_DEVICE (self), FALSE);
-
-  return g_hash_table_contains (self->keys_table, room_id);
 }
 
 CmUser *
