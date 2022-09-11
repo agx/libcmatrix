@@ -408,6 +408,18 @@ cm_user_list_device_changed (CmUserList *self,
     }
 }
 
+/**
+ * cm_user_list_find_user:
+ * @self: A #CmUserList
+ * @user_id: A fully qualified matrix id
+ * @create_if_missing: Create if missing
+ *
+ * Find the #CmUser for the given @user_id.  If
+ * @create_if_missing is %FALSE and the user is not
+ * already in the cache, %NULL shall be returned.
+ *
+ * Returns: (nullable) (transfer none): A #CmUser
+ */
 CmUser *
 cm_user_list_find_user (CmUserList *self,
                         GRefString *user_id,
@@ -657,6 +669,16 @@ cm_user_list_claim_keys_async (CmUserList          *self,
                           g_steal_pointer (&task));
 }
 
+/**
+ * cm_user_list_claim_keys_finish:
+ * @self: A #CmUserList
+ * @result: A #GAsyncResult
+ * @error: A #GError
+ *
+ * Get the claimed one time keys
+ *
+ * Returns: (transfer full): A #GPtrArray of #CmUserKey
+ */
 GPtrArray *
 cm_user_list_claim_keys_finish (CmUserList    *self,
                                 GAsyncResult  *result,
@@ -704,6 +726,16 @@ upload_group_keys_cb (GObject      *obj,
     }
 }
 
+/**
+ * cm_user_list_upload_keys_async:
+ * @self: A #CmUserList
+ * @room: A #CmRoom
+ * @one_time_keys: A #GptrArray for #CmUserKey
+ * @callback: A callback to run when finished
+ * @user_data: The user data for @callback
+ *
+ * Upload the given @one_time_keys to server.
+ */
 void
 cm_user_list_upload_keys_async (CmUserList          *self,
                                 CmRoom              *room,
