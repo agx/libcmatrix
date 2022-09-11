@@ -1999,7 +1999,8 @@ db_lookup_session (CmDb  *self,
 {
   sqlite3_stmt *stmt;
   const char *username, *account_device, *session_id, *sender_key;
-  char *pickle = NULL;
+  char *pickle_key;
+  CmOlm *session;
   CmSessionType type;
   int status, account_id;
 
@@ -2012,6 +2013,7 @@ db_lookup_session (CmDb  *self,
   username = g_object_get_data (G_OBJECT (task), "account-id");
   session_id = g_object_get_data (G_OBJECT (task), "session-id");
   sender_key = g_object_get_data (G_OBJECT (task), "sender-key");
+  pickle_key = g_object_get_data (G_OBJECT (task), "pickle-key");
   account_device = g_object_get_data (G_OBJECT (task), "account-device");
 
   account_id = matrix_db_get_account_id (self, username, account_device, NULL, FALSE);
@@ -2037,15 +2039,19 @@ db_lookup_session (CmDb  *self,
 
   if (status == SQLITE_ROW)
     {
+      g_autofree char *pickle = NULL;
       int id;
 
-      pickle = g_strdup ((char *)sqlite3_column_text (stmt, 1));
+      pickle = g_strdup ((const char *)sqlite3_column_text (stmt, 1));
+      session = cm_olm_new_from_pickle (pickle, pickle_key, sender_key, type);
       id = sqlite3_column_int (stmt, 0);
-      g_object_set_data (G_OBJECT (task), "-cm-db-id", GINT_TO_POINTER (id));
+
+      if (session)
+        g_object_set_data (G_OBJECT (session), "-cm-db-id", GINT_TO_POINTER (id));
     }
 
   sqlite3_finalize (stmt);
-  g_task_return_pointer (task, pickle, g_free);
+  g_task_return_pointer (task, session, g_object_unref);
 }
 
 static void
@@ -3063,26 +3069,25 @@ cm_db_find_file_enc_finish (CmDb          *self,
   return g_task_propagate_pointer (G_TASK (result), error);
 }
 
-char *
+gpointer
 cm_db_lookup_session (CmDb          *self,
                       const char    *account_id,
                       const char    *account_device,
                       const char    *session_id,
                       const char    *sender_key,
-                      CmSessionType  type,
-                      int           *out_db_id)
+                      const char    *pickle_key,
+                      CmSessionType  type)
 {
   g_autoptr(GTask) task = NULL;
   g_autoptr(GError) error = NULL;
   GObject *object;
-  char *pickle;
+  gpointer session;
 
   g_return_val_if_fail (CM_IS_DB (self), NULL);
   g_return_val_if_fail (account_id && *account_id, NULL);
   g_return_val_if_fail (account_device && *account_device, NULL);
   g_return_val_if_fail (session_id && *session_id, NULL);
   g_return_val_if_fail (sender_key && *sender_key, NULL);
-  g_return_val_if_fail (out_db_id, NULL);
 
   task = g_task_new (self, NULL, NULL, NULL);
   g_object_ref (task);
@@ -3095,6 +3100,8 @@ cm_db_lookup_session (CmDb          *self,
   g_object_set_data_full (object, "account-device", g_strdup (account_device), g_free);
   g_object_set_data_full (object, "session-id", g_strdup (session_id), g_free);
   g_object_set_data_full (object, "sender-key", g_strdup (sender_key), g_free);
+  g_object_set_data_full (object, "pickle-key", g_strdup (pickle_key),
+                          (GDestroyNotify)cm_utils_free_buffer);
   g_object_set_data (object, "type", GINT_TO_POINTER (type));
   g_async_queue_push (self->queue, task);
   g_assert (task);
@@ -3103,13 +3110,12 @@ cm_db_lookup_session (CmDb          *self,
   while (!g_task_get_completed (task))
     g_main_context_iteration (NULL, TRUE);
 
-  *out_db_id = GPOINTER_TO_INT (g_object_get_data (object, "-cm-db-id"));
-  pickle = g_task_propagate_pointer (task, &error);
+  session = g_task_propagate_pointer (task, &error);
 
   if (error)
     g_debug ("Error getting session: %s", error->message);
 
-  return pickle;
+  return session;
 }
 
 gpointer

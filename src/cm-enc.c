@@ -1076,27 +1076,17 @@ cm_enc_handle_join_room_encrypted (CmEnc      *self,
 
   g_debug ("(%p) Got room encrypted, room: %p. session: %p", self, room, session);
 
-  if (!session)
+  if (!session && self->cm_db)
     {
-      char *pickle = NULL;
-      int db_id = 0;
+      session = cm_db_lookup_session (self->cm_db, self->user_id,
+                                      self->device_id, session_id,
+                                      sender_key, self->pickle_key,
+                                      SESSION_MEGOLM_V1_IN);
 
-      if (self->cm_db)
-        pickle = cm_db_lookup_session (self->cm_db, self->user_id,
-                                       self->device_id, session_id,
-                                       sender_key, SESSION_MEGOLM_V1_IN, &db_id);
-      if (pickle)
-        {
-          session = cm_olm_new_from_pickle (pickle, self->pickle_key,
-                                            session_id, SESSION_MEGOLM_V1_IN);
+      g_debug ("(%p) Got in group session %p from matrix db", self, session);
 
-          if (session)
-            {
-              g_object_set_data (G_OBJECT (session), "-cm-db-id", GINT_TO_POINTER (db_id));
-              g_hash_table_insert (self->in_group_sessions, g_strdup (session_id), session);
-              g_debug ("(%p) Got session %p from matrix db", self, session);
-            }
-        }
+      if (session)
+        g_hash_table_insert (self->in_group_sessions, g_strdup (session_id), session);
     }
 
   if (!session)

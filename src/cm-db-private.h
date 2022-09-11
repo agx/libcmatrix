@@ -99,13 +99,13 @@ CmEncFileInfo *cm_db_find_file_enc_finish          (CmDb                *self,
 gboolean       cm_db_add_session                   (CmDb                *self,
                                                     gpointer             session,
                                                     char                *pickle);
-char          *cm_db_lookup_session                (CmDb                *self,
+gpointer       cm_db_lookup_session                (CmDb                *self,
                                                     const char          *account_id,
                                                     const char          *account_device,
                                                     const char          *session_id,
                                                     const char          *sender_key,
-                                                    CmSessionType        type,
-                                                    int                 *out_db_id);
+                                                    const char          *pickle_key,
+                                                    CmSessionType        type);
 void           cm_db_add_room_members              (CmDb                *self,
                                                     CmRoom              *cm_room,
                                                     GPtrArray           *members);
