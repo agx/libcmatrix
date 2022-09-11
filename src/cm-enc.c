@@ -1119,6 +1119,7 @@ cm_enc_encrypt_for_chat (CmEnc      *self,
   g_return_val_if_fail (message && *message, NULL);
 
   old_session_id = g_hash_table_lookup (self->out_group_room_session, room);
+  g_return_val_if_fail (old_session_id, NULL);
   session = g_hash_table_lookup (self->out_group_sessions, old_session_id);
   g_return_val_if_fail (session, NULL);
 
