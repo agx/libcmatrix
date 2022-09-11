@@ -1081,6 +1081,7 @@ cm_enc_handle_join_room_encrypted (CmEnc      *self,
       session = cm_db_lookup_session (self->cm_db, self->user_id,
                                       self->device_id, session_id,
                                       sender_key, self->pickle_key,
+                                      cm_room_get_id (room),
                                       SESSION_MEGOLM_V1_IN);
 
       g_debug ("(%p) Got in group session %p from matrix db", self, session);
@@ -1297,6 +1298,41 @@ cm_enc_has_room_group_key (CmEnc  *self,
   g_return_val_if_fail (CM_IS_ROOM (room), FALSE);
 
   session_id = g_hash_table_lookup (self->out_group_room_session, room);
+
+    if (!session_id && self->cm_db &&
+        !g_object_get_data (G_OBJECT (room), "olm-checked"))
+      {
+        CmOlm *session;
+
+        session = cm_db_lookup_session (self->cm_db, self->user_id,
+                                        self->device_id, NULL,
+                                        self->curve_key, self->pickle_key,
+                                        cm_room_get_id (room),
+                                        SESSION_MEGOLM_V1_OUT);
+
+        g_object_set_data (G_OBJECT (room), "olm-checked", GINT_TO_POINTER (TRUE));
+        g_debug ("(%p) Got out group session %p from matrix db", self, session);
+
+        if (session)
+          {
+            CmOlm *in_session;
+
+            cm_olm_set_db (session, self->cm_db);
+            cm_olm_set_sender_details (session, cm_room_get_id (room), self->user_id);
+            cm_olm_set_account_details (session, self->user_id, self->device_id);
+
+            session_id = cm_olm_get_session_id (session);
+
+            g_hash_table_insert (self->out_group_room_session,
+                                 g_object_ref (room), g_strdup (session_id));
+            g_hash_table_insert (self->out_group_sessions,
+                                 g_strdup (session_id), g_object_ref (session));
+
+            in_session = cm_olm_in_group_new_from_out (session, self->curve_key);
+            g_hash_table_insert (self->in_group_sessions,
+                                 g_strdup (session_id), in_session);
+          }
+      }
 
   if (!session_id)
     return FALSE;

@@ -1999,10 +1999,10 @@ db_lookup_session (CmDb  *self,
 {
   sqlite3_stmt *stmt;
   const char *username, *account_device, *session_id, *sender_key;
-  char *pickle_key;
-  CmOlm *session;
+  char *pickle_key, *room;
+  CmOlm *session = NULL;
   CmSessionType type;
-  int status, account_id;
+  int status, account_id, room_id = 0;
 
   g_assert (CM_IS_DB (self));
   g_assert (g_thread_self () == self->worker_thread);
@@ -2010,6 +2010,7 @@ db_lookup_session (CmDb  *self,
 
   type = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (task), "type"));
 
+  room = g_object_get_data (G_OBJECT (task), "room-id");
   username = g_object_get_data (G_OBJECT (task), "account-id");
   session_id = g_object_get_data (G_OBJECT (task), "session-id");
   sender_key = g_object_get_data (G_OBJECT (task), "sender-key");
@@ -2025,15 +2026,39 @@ db_lookup_session (CmDb  *self,
       return;
     }
 
-  sqlite3_prepare_v2 (self->db,
-                      "SELECT id,pickle FROM sessions "
-                      "WHERE account_id=? AND sender_key=? AND session_id=? AND type=?",
-                      -1, &stmt, NULL);
+  /* If no session-id is given, only MegOlm out session can be requested */
+  if (!session_id && type != SESSION_MEGOLM_V1_OUT)
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR,
+                               "Requested session without session id");
+      return;
+    }
 
-  matrix_bind_int (stmt, 1, account_id, "binding when adding session");
+  if (room)
+    room_id =  matrix_db_get_room_id (self, account_id, room, FALSE);
+
+  if (session_id)
+    sqlite3_prepare_v2 (self->db,
+                        "SELECT id,pickle FROM sessions "
+                        "WHERE account_id=? AND sender_key=? AND type=? "
+                        "AND session_id=? AND session_state=0",
+                        -1, &stmt, NULL);
+  else
+    sqlite3_prepare_v2 (self->db,
+                        "SELECT id,pickle FROM sessions "
+                        "WHERE account_id=? AND sender_key=? AND type=?"
+                        "AND room_id=? AND session_state=0 "
+                        "ORDER BY id DESC LIMIT 1",
+                        -1, &stmt, NULL);
+
+
+  matrix_bind_int (stmt, 1, account_id, "binding when looking up session");
   matrix_bind_text (stmt, 2, sender_key, "binding when looking up session");
-  matrix_bind_text (stmt, 3, session_id, "binding when looking up session");
-  matrix_bind_int (stmt, 4, type, "binding when looking up session");
+  matrix_bind_int (stmt, 3, type, "binding when looking up session");
+  if (session_id)
+    matrix_bind_text (stmt, 4, session_id, "binding when looking up session");
+  else if (room_id)
+    matrix_bind_int (stmt, 4, room_id, "binding when looking up session");
 
   status = sqlite3_step (stmt);
 
@@ -3076,6 +3101,7 @@ cm_db_lookup_session (CmDb          *self,
                       const char    *session_id,
                       const char    *sender_key,
                       const char    *pickle_key,
+                      const char    *room_id,
                       CmSessionType  type)
 {
   g_autoptr(GTask) task = NULL;
@@ -3086,7 +3112,6 @@ cm_db_lookup_session (CmDb          *self,
   g_return_val_if_fail (CM_IS_DB (self), NULL);
   g_return_val_if_fail (account_id && *account_id, NULL);
   g_return_val_if_fail (account_device && *account_device, NULL);
-  g_return_val_if_fail (session_id && *session_id, NULL);
   g_return_val_if_fail (sender_key && *sender_key, NULL);
 
   task = g_task_new (self, NULL, NULL, NULL);
@@ -3100,6 +3125,7 @@ cm_db_lookup_session (CmDb          *self,
   g_object_set_data_full (object, "account-device", g_strdup (account_device), g_free);
   g_object_set_data_full (object, "session-id", g_strdup (session_id), g_free);
   g_object_set_data_full (object, "sender-key", g_strdup (sender_key), g_free);
+  g_object_set_data_full (object, "room-id", g_strdup (room_id), g_free);
   g_object_set_data_full (object, "pickle-key", g_strdup (pickle_key),
                           (GDestroyNotify)cm_utils_free_buffer);
   g_object_set_data (object, "type", GINT_TO_POINTER (type));

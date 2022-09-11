@@ -105,6 +105,7 @@ gpointer       cm_db_lookup_session                (CmDb                *self,
                                                     const char          *session_id,
                                                     const char          *sender_key,
                                                     const char          *pickle_key,
+                                                    const char          *room_id,
                                                     CmSessionType        type);
 void           cm_db_add_room_members              (CmDb                *self,
                                                     CmRoom              *cm_room,

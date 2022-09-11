@@ -144,25 +144,59 @@ cm_olm_new_from_pickle (char          *pickle,
                         CmSessionType  session_type)
 {
   CmOlm *self;
-  g_autofree OlmInboundGroupSession *session = NULL;
-  size_t err;
+  g_autofree OlmInboundGroupSession *in_session = NULL;
+  g_autofree OlmOutboundGroupSession *out_session = NULL;
+  g_autofree uint8_t *session_key = NULL;
+  size_t err, len;
 
-  g_assert (session_type == SESSION_MEGOLM_V1_IN);
+  g_assert (session_type == SESSION_MEGOLM_V1_IN ||
+            session_type == SESSION_MEGOLM_V1_OUT);
 
-  session = g_malloc (olm_inbound_group_session_size ());
-  err = olm_unpickle_inbound_group_session (session, pickle_key,
-                                            strlen (pickle_key),
-                                            pickle, strlen (pickle));
-  if (err == olm_error ())
+  if (session_type == SESSION_MEGOLM_V1_IN)
     {
-      g_debug ("Error in group unpickle: %s",
-               olm_inbound_group_session_last_error (session));
+      in_session = g_malloc (olm_inbound_group_session_size ());
+      err = olm_unpickle_inbound_group_session (in_session, pickle_key,
+                                                strlen (pickle_key),
+                                                pickle, strlen (pickle));
+      if (err == olm_error ())
+        {
+          g_debug ("Error in group unpickle: %s",
+                   olm_inbound_group_session_last_error (in_session));
 
-      return NULL;
+          return NULL;
+        }
+    }
+  else
+    {
+      out_session = g_malloc (olm_outbound_group_session_size ());
+      err = olm_unpickle_outbound_group_session (out_session, pickle_key,
+                                                 strlen (pickle_key),
+                                                 pickle, strlen (pickle));
+      if (err == olm_error ())
+        {
+          g_debug ("Error in group unpickle: %s",
+                   olm_outbound_group_session_last_error (out_session));
+
+          return NULL;
+        }
+
+      len = olm_outbound_group_session_key_length (out_session);
+      session_key = g_malloc (len + 1);
+      len = olm_outbound_group_session_key (out_session, session_key, len);
+      if (len == olm_error ())
+        {
+          g_warning ("Error getting session key: %s",
+                     olm_outbound_group_session_last_error (out_session));
+
+          return NULL;
+        }
+      session_key[len] = '\0';
     }
 
   self = g_object_new (CM_TYPE_OLM, NULL);
-  self->in_gp_session = g_steal_pointer (&session);
+  self->in_gp_session = g_steal_pointer (&in_session);
+  self->out_gp_session = g_steal_pointer (&out_session);
+  self->session_key = (char *)g_steal_pointer (&session_key);
   self->curve_key = g_strdup (sender_identity_key);
   self->pickle_key = g_strdup (pickle_key);
   self->type = session_type;
