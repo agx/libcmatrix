@@ -171,6 +171,7 @@ cm_olm_new_from_pickle (char          *pickle,
 
   self = g_object_new (CM_TYPE_OLM, NULL);
   self->in_gp_session = g_steal_pointer (&session);
+  self->curve_key = g_strdup (sender_identity_key);
   self->pickle_key = g_strdup (pickle_key);
   self->type = session_type;
 
