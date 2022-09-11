@@ -55,17 +55,9 @@ static char *
 cm_olm_get_olm_session_pickle (CmOlm *self)
 {
   g_autofree char *pickle = NULL;
-  size_t length, len;
+  size_t len;
 
   g_return_val_if_fail (self->pickle_key, NULL);
-
-  if (!self->session_id)
-    {
-      length = olm_session_id_length (self->olm_session);
-      self->session_id = g_malloc (length + 1);
-      olm_session_id (self->olm_session, self->session_id, length);
-      self->session_id[length] = '\0';
-    }
 
   if (self->olm_session)
     {
