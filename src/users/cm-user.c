@@ -39,11 +39,6 @@ typedef struct
   GListStore   *devices;
   GHashTable   *devices_table;
 
-  /* Set on device changes */
-  /* Reset when new one time keys are set */
-  /* Only valid for E2EE rooms */
-  gboolean      device_added;
-  gboolean      device_removed;
   /* Set when we know about some change, but not sure what it is */
   gboolean      device_changed;
 
@@ -371,78 +366,6 @@ cm_user_get_devices (CmUser *self)
   return G_LIST_MODEL (priv->devices);
 }
 
-gboolean
-cm_user_get_device_changed (CmUser *self)
-{
-  CmUserPrivate *priv = cm_user_get_instance_private (self);
-
-  g_return_val_if_fail (CM_IS_USER (self), FALSE);
-
-  return priv->device_changed;
-}
-
-void
-cm_user_set_device_changed (CmUser *self)
-{
-  CmUserPrivate *priv = cm_user_get_instance_private (self);
-
-  g_return_if_fail (CM_IS_USER (self));
-
-  priv->device_changed = TRUE;
-}
-
-gboolean
-cm_user_get_device_removed (CmUser *self)
-{
-  CmUserPrivate *priv = cm_user_get_instance_private (self);
-
-  g_return_val_if_fail (CM_IS_USER (self), FALSE);
-
-  return priv->device_removed;
-}
-
-/*
- * cm_user_get_device_key_json:
- * @self: A #CmUser
- * @all_device: Whether to include all device
- *
- * if @all_device is %TRUE, keys for all devices
- * are included in the JSON. Otherwise, only
- * devices that has no keys are included in the
- * JSON.
- */
-JsonObject *
-cm_user_get_device_key_json (CmUser   *self,
-                             const char *room_id,
-                             gboolean  all_device)
-{
-  CmUserPrivate *priv = cm_user_get_instance_private (self);
-  JsonObject *object;
-  guint n_items;
-
-  g_return_val_if_fail (CM_IS_USER (self), NULL);
-
-  n_items = g_list_model_get_n_items (G_LIST_MODEL (priv->devices));
-  if (!n_items)
-    return NULL;
-
-  object = json_object_new ();
-
-  for (guint i = 0; i < n_items; i++)
-    {
-      g_autoptr(CmDevice) device = NULL;
-      const char *device_id;
-
-      device = g_list_model_get_item (G_LIST_MODEL (priv->devices), i);
-      device_id = cm_device_get_id (device);
-
-      if (!cm_device_has_one_time_key (device, room_id))
-        json_object_set_string_member (object, device_id, "signed_curve25519");
-    }
-
-  return object;
-}
-
 /*
  * cm_user_set_devices:
  * @self: A #CmUser
@@ -474,11 +397,6 @@ cm_user_set_devices (CmUser     *self,
 
   g_return_if_fail (CM_IS_USER (self));
   g_return_if_fail (root);
-
-  /* Reset generice device_changed, we shall set precise
-   * removed/added value later */
-  if (update_state)
-    priv->device_changed = FALSE;
 
   /* Create a table of devices and add the items here */
   devices_table = g_hash_table_new_full (g_str_hash, g_str_equal,
@@ -524,7 +442,6 @@ cm_user_set_devices (CmUser     *self,
           continue;
         }
 
-      priv->device_added = TRUE;
       device = cm_device_new (self, priv->cm_client, child);
       g_hash_table_insert (devices_table, g_strdup (device_id), g_object_ref (device));
       g_list_store_append (priv->devices, device);
@@ -543,9 +460,6 @@ cm_user_set_devices (CmUser     *self,
 
       /* The old table now contains the devices that are not used by the user anymore */
       devices = g_hash_table_get_values (old_devices);
-
-      if (g_hash_table_size (old_devices) > 0)
-        priv->device_removed = TRUE;
 
       for (GList *device = devices; device && device->data; device = device->next)
         {

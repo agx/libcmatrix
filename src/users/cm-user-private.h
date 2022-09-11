@@ -34,12 +34,6 @@ void           cm_user_set_details          (CmUser         *self,
                                              const char     *display_name,
                                              const char     *avatar_url);
 GListModel    *cm_user_get_devices          (CmUser         *self);
-gboolean       cm_user_get_device_changed   (CmUser         *self);
-void           cm_user_set_device_changed   (CmUser         *self);
-gboolean       cm_user_get_device_removed   (CmUser         *self);
-JsonObject    *cm_user_get_device_key_json  (CmUser         *self,
-                                             const char     *room_id,
-                                             gboolean        all_device);
 void           cm_user_set_devices          (CmUser         *self,
                                              JsonObject     *root,
                                              gboolean        update_state,
