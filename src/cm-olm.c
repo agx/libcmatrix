@@ -340,18 +340,6 @@ cm_olm_out_group_new (const char *sender_identity_key)
       return NULL;
     }
 
-  /* Get session id */
-  length = olm_outbound_group_session_id_length (session);
-  session_id = g_malloc (length + 1);
-  length = olm_outbound_group_session_id (session, session_id, length);
-  if (length == olm_error ())
-    {
-      g_warning ("Error getting session id: %s", olm_outbound_group_session_last_error (session));
-
-      return NULL;
-    }
-  session_id[length] = '\0';
-
   /* Get session key */
   length = olm_outbound_group_session_key_length (session);
   session_key = g_malloc (length + 1);
@@ -672,16 +660,36 @@ cm_olm_get_message_type (CmOlm *self)
 const char *
 cm_olm_get_session_id (CmOlm *self)
 {
+  size_t len;
+
   g_return_val_if_fail (CM_IS_OLM (self), NULL);
 
-  if (!self->session_id && self->olm_session)
+  if (!self->session_id)
     {
-      size_t len;
+      void *session_id = NULL;
 
-      len = olm_session_id_length (self->olm_session);
-      self->session_id = g_malloc (len + 1);
-      olm_session_id (self->olm_session, self->session_id, len);
-      self->session_id[len] = '\0';
+      if (self->olm_session)
+        {
+          len = olm_session_id_length (self->olm_session);
+          session_id = g_malloc (len + 1);
+          olm_session_id (self->olm_session, session_id, len);
+        }
+      else if (self->out_gp_session)
+        {
+          len = olm_outbound_group_session_id_length (self->out_gp_session);
+          session_id = g_malloc (len + 1);
+          olm_outbound_group_session_id (self->out_gp_session, session_id, len);
+        }
+      else if (self->in_gp_session)
+        {
+          len = olm_inbound_group_session_id_length (self->in_gp_session);
+          session_id = g_malloc (len + 1);
+          olm_inbound_group_session_id (self->in_gp_session, session_id, len);
+        }
+
+      if (session_id)
+        ((char *)session_id)[len] = '\0';
+      self->session_id = session_id;
     }
 
   return self->session_id;
