@@ -39,6 +39,7 @@ struct _CmOlm
   char                    *pickle_key;
   char                    *session_id;
   char                    *session_key;
+  uint8_t                 *current_session_key;
   OlmInboundGroupSession  *in_gp_session;
   OlmOutboundGroupSession *out_gp_session;
   OlmSession              *olm_session;
@@ -737,12 +738,43 @@ cm_olm_get_session_id (CmOlm *self)
   return self->session_id;
 }
 
+/**
+ * cm_olm_get_session_key:
+ * @self: A #CmOlm of type %SESSION_MEGOLM_V1_OUT
+ *
+ * Get the session for the next message to be sent.
+ * The session key shall change after a message sent
+ *
+ * The session key can be used to decrypt future
+ * messages, but not the past ones.
+ *
+ * Returns: The session key string
+ */
 const char *
 cm_olm_get_session_key (CmOlm *self)
 {
+  size_t len;
+
   g_return_val_if_fail (CM_IS_OLM (self), NULL);
 
-  return self->session_key;
+  /* Each message is sent with a different ratchet key.  So regenerate the
+   * so that ratchet key that will be used for the next message shall be
+   * returned.  We want let the other party see only the messages sent
+   * after this session key, not the past ones.
+  */
+  cm_utils_free_buffer ((char *)self->current_session_key);
+  self->current_session_key = NULL;
+
+  if (self->out_gp_session)
+    {
+      len = olm_outbound_group_session_key_length (self->out_gp_session);
+      self->current_session_key = g_malloc (len + 1);
+      olm_outbound_group_session_key (self->out_gp_session,
+                                      self->current_session_key, len);
+      self->current_session_key[len] = '\0';
+    }
+
+  return (char *)self->current_session_key;
 }
 
 const char *
