@@ -150,7 +150,13 @@ cm_user_set_user_id (CmUser     *self,
   CmUserPrivate *priv = cm_user_get_instance_private (self);
 
   g_return_if_fail (CM_IS_USER (self));
+
+  if (priv->user_id == user_id)
+    return;
+
+  /* Allow setting user id only once, and never allow changing */
   g_return_if_fail (!priv->user_id);
+  g_return_if_fail (user_id && *user_id == '@');
 
   priv->user_id = g_ref_string_acquire (user_id);
 }
