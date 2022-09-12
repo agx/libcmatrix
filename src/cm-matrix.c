@@ -80,6 +80,7 @@ matrix_has_client (CmMatrix *self,
                    gboolean  check_pending)
 {
   const char *login_name, *user_name;
+  CmAccount *account;
   GListModel *model;
   guint n_items;
 
@@ -88,8 +89,9 @@ matrix_has_client (CmMatrix *self,
 
   model = G_LIST_MODEL (self->clients_list);
   n_items = g_list_model_get_n_items (model);
+  account = cm_client_get_account (client);
   user_name = cm_client_get_user_id (client);
-  login_name = cm_client_get_login_id (client);
+  login_name = cm_account_get_login_id (account);
 
   /* For the time being, let's ignore the fact that the same username
    * can exist in different homeservers
@@ -97,11 +99,13 @@ matrix_has_client (CmMatrix *self,
   for (guint i = 0; i < n_items; i++)
     {
       g_autoptr(CmClient) item = NULL;
+      CmAccount *item_account;
 
       item = g_list_model_get_item (model, i);
+      item_account = cm_client_get_account (item);
 
       if (login_name &&
-          g_strcmp0 (login_name, cm_client_get_login_id (item)) == 0)
+          g_strcmp0 (login_name, cm_account_get_login_id (item_account)) == 0)
         return TRUE;
 
       if (user_name &&
@@ -109,7 +113,7 @@ matrix_has_client (CmMatrix *self,
         return TRUE;
 
       if (user_name &&
-          g_strcmp0 (user_name, cm_client_get_login_id (item)) == 0)
+          g_strcmp0 (user_name, cm_account_get_login_id (item_account)) == 0)
         return TRUE;
     }
 
@@ -587,10 +591,12 @@ cm_matrix_has_client_with_id (CmMatrix   *self,
   for (guint i = 0; i < n_items; i++)
     {
       g_autoptr(CmClient) item = NULL;
+      CmAccount *item_account;
 
       item = g_list_model_get_item (model, i);
+      item_account = cm_client_get_account (item);
 
-      if (g_strcmp0 (user_id, cm_client_get_login_id (item)) == 0)
+      if (g_strcmp0 (user_id, cm_account_get_login_id (item_account)) == 0)
         return TRUE;
 
       if (g_strcmp0 (user_id, cm_client_get_user_id (item)) == 0)
@@ -657,9 +663,12 @@ matrix_save_client_cb (GObject      *object,
     }
   else
     {
+      CmAccount *account;
+
+      account = cm_client_get_account (CM_CLIENT (object));
       g_list_store_append (self->clients_list, object);
       g_hash_table_remove (self->clients_to_save,
-                           cm_client_get_login_id (CM_CLIENT (object)));
+                           cm_account_get_login_id (account));
       g_task_return_boolean (task, ret);
     }
 
@@ -673,11 +682,14 @@ cm_matrix_save_client_async (CmMatrix            *self,
                              gpointer             user_data)
 {
   const char *login_id;
+  CmAccount *account;
   GTask *task;
 
   g_return_if_fail (CM_IS_MATRIX (self));
   g_return_if_fail (CM_IS_CLIENT (client));
-  g_return_if_fail (cm_client_get_login_id (client));
+
+  account = cm_client_get_account (client);
+  g_return_if_fail (cm_account_get_login_id (account));
   /* user id is set after login, which should be set only by cmatrix */
   g_return_if_fail (!cm_client_get_user_id (client));
   g_return_if_fail (cm_client_get_homeserver (client));
@@ -694,7 +706,7 @@ cm_matrix_save_client_async (CmMatrix            *self,
       return;
     }
 
-  login_id = cm_client_get_login_id (client);
+  login_id = cm_account_get_login_id (account);
   g_hash_table_insert (self->clients_to_save, g_strdup (login_id), g_object_ref (client));
   g_object_set_data (G_OBJECT (client), "enable", GINT_TO_POINTER (TRUE));
   cm_client_save_secrets_async (client,
