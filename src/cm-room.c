@@ -314,6 +314,7 @@ ensure_encryption_keys (CmRoom *self)
   else if (self->changed_users->len)
     {
       self->querying_keys = TRUE;
+      self->keys_claimed = FALSE;
       g_debug ("(%p) Load user devices", self);
       cm_user_list_load_devices_async (user_list, self->changed_users,
                                        room_load_device_keys_cb,
@@ -1258,7 +1259,9 @@ room_send_message_from_queue (CmRoom *self)
     return;
 
   if (cm_room_is_encrypted (self) &&
-      !cm_enc_has_room_group_key (cm_client_get_enc (self->client), self))
+      (!cm_enc_has_room_group_key (cm_client_get_enc (self->client), self) ||
+       self->changed_users->len || !self->keys_claimed ||
+       (self->one_time_keys && self->one_time_keys->len)))
     {
       ensure_encryption_keys (self);
       return;
