@@ -1150,7 +1150,7 @@ cm_enc_create_out_group_keys (CmEnc      *self,
                               GPtrArray  *one_time_keys,
                               gpointer   *out_session)
 {
-  CmOlm *session;
+  CmOlm *session = NULL;
   const char *session_key, *session_id;
   char *old_session_id;
   JsonObject *root, *child;
@@ -1160,23 +1160,23 @@ cm_enc_create_out_group_keys (CmEnc      *self,
   g_return_val_if_fail (one_time_keys && one_time_keys->len, NULL);
   g_return_val_if_fail (out_session, NULL);
 
-  /* Return early if the chat has an existing outbound group session */
   old_session_id = g_hash_table_lookup (self->out_group_room_session, room);
-  if (old_session_id &&
-      g_hash_table_contains (self->out_group_sessions, old_session_id))
-    return NULL;
+  if (old_session_id)
+    session = g_hash_table_lookup (self->out_group_sessions, old_session_id);
 
-  session = cm_olm_out_group_new (self->curve_key);
+  if (!session)
+    {
+      session = cm_olm_out_group_new (self->curve_key);
+      cm_olm_set_account_details (session, self->user_id, self->device_id);
+      cm_olm_set_sender_details (session, cm_room_get_id (room), self->user_id);
+      cm_olm_set_key (session, self->pickle_key);
+      cm_olm_set_db (session, self->cm_db);
+      g_debug ("(%p) Create out group keys, room: %p, session: %p", self, room, session);
+    }
 
   if (!session)
     g_return_val_if_reached (NULL);
 
-  g_debug ("(%p) Create out group keys, room: %p, session: %p", self, room, out_session);
-
-  cm_olm_set_account_details (session, self->user_id, self->device_id);
-  cm_olm_set_sender_details (session, cm_room_get_id (room), self->user_id);
-  cm_olm_set_key (session, self->pickle_key);
-  cm_olm_set_db (session, self->cm_db);
   session_id = cm_olm_get_session_id (session);
   session_key = cm_olm_get_session_key (session);
   *out_session = session;
