@@ -121,6 +121,7 @@ simple_matrix_open_cb (GObject      *object,
   g_autoptr(GError) error = NULL;
   char username[255], password[255];
   GListModel *joined_rooms;
+  CmAccount *account;
 
   if (!cm_matrix_open_finish (matrix, result, &error))
     g_error ("Error opening db: %s", error->message);
@@ -134,12 +135,13 @@ simple_matrix_open_cb (GObject      *object,
   g_message ("username: %s, password: %s", username, password);
 
   client = cm_matrix_client_new (matrix);
+  account = cm_client_get_account (client);
   joined_rooms = cm_client_get_joined_rooms (client);
   g_signal_connect_object (joined_rooms, "items-changed",
                            G_CALLBACK (simple_joined_rooms_changed_cb), client,
                            0);
 
-  if (!cm_client_set_login_id (client, username))
+  if (!cm_account_set_login_id (account, username))
     g_error ("'%s' isn't a valid username", username);
   cm_client_set_password (client, password);
   cm_client_set_device_name (client, "Example CMatrix");
