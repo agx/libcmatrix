@@ -21,6 +21,7 @@ static void
 test_cm_client_new (void)
 {
   CmClient *client;
+  CmAccount *account;
 
   client = cm_client_new ();
   /* Mark client to not save changes to db */
@@ -35,11 +36,12 @@ test_cm_client_new (void)
 
   g_assert_false (cm_client_get_enabled (client));
 
-  g_assert_null (cm_client_get_login_id (client));
-  cm_client_set_login_id (client, "user@@invalid");
-  g_assert_null (cm_client_get_login_id (client));
-  cm_client_set_login_id (client, "user@example.com");
-  g_assert_cmpstr (cm_client_get_login_id (client), ==, "user@example.com");
+  account = cm_client_get_account (client);
+  g_assert_null (cm_account_get_login_id (account));
+  cm_account_set_login_id (account, "user@@invalid");
+  g_assert_null (cm_account_get_login_id (account));
+  cm_account_set_login_id (account, "user@example.com");
+  g_assert_cmpstr (cm_account_get_login_id (account), ==, "user@example.com");
 
   g_assert_null (cm_client_get_homeserver (client));
   cm_client_set_homeserver (client, "http://localhost:8008/");
