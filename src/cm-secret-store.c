@@ -57,6 +57,7 @@ cm_secret_store_save_async (CmClient            *client,
   g_autofree char *label = NULL;
   const char *server, *old_pass, *username, *device_id;
   char *password = NULL, *token = NULL, *key = NULL;
+  CmAccount *account;
   char *credentials;
 
   g_return_if_fail (CM_IS_CLIENT (client));
@@ -71,8 +72,9 @@ cm_secret_store_save_async (CmClient            *client,
   if (pickle_key && *pickle_key)
     key = g_strescape (pickle_key, NULL);
 
+  account = cm_client_get_account (client);
   device_id = cm_client_get_device_id (client);
-  username = cm_client_get_login_id (client);
+  username = cm_account_get_login_id (account);
 
   if (!device_id)
     device_id = "";
@@ -212,10 +214,12 @@ cm_secret_store_delete_async (CmClient            *client,
 {
   const SecretSchema *schema;
   const char *server, *username;
+  CmAccount *account;
 
   g_return_if_fail (!cancellable || G_IS_CANCELLABLE (cancellable));
 
-  username = cm_client_get_login_id (client);
+  account = cm_client_get_account (client);
+  username = cm_account_get_login_id (account);
 
   schema = secret_store_get_schema ();
   server = cm_client_get_homeserver (client);
