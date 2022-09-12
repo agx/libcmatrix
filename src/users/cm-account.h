@@ -26,6 +26,9 @@ G_BEGIN_DECLS
 
 G_DECLARE_FINAL_TYPE (CmAccount, cm_account, CM, ACCOUNT, CmUser)
 
+gboolean      cm_account_set_login_id                 (CmAccount           *self,
+                                                       const char          *login_id);
+const char   *cm_account_get_login_id                 (CmAccount           *self);
 void          cm_account_set_display_name_async       (CmAccount           *self,
                                                        const char          *name,
                                                        GCancellable        *cancellable,

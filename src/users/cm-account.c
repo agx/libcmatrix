@@ -34,18 +34,95 @@
 struct _CmAccount
 {
   CmUser        parent_instance;
+
+  /* @login_username can be email/[incomplete] matrix-id/phone-number etc */
+  char         *login_id;
 };
 
 G_DEFINE_TYPE (CmAccount, cm_account, CM_TYPE_USER)
 
 static void
+cm_account_finalize (GObject *object)
+{
+  CmAccount *self = (CmAccount *)object;
+
+  g_free (self->login_id);
+
+  G_OBJECT_CLASS (cm_account_parent_class)->finalize (object);
+}
+
+static void
 cm_account_class_init (CmAccountClass *klass)
 {
+  GObjectClass *object_class = G_OBJECT_CLASS (klass);
+
+  object_class->finalize = cm_account_finalize;
 }
 
 static void
 cm_account_init (CmAccount *self)
 {
+}
+
+/**
+ * cm_account_set_login_id:
+ * @self: A #CmAccount
+ * @login_id: A login ID for the client.
+ *
+ * Set login ID for the account.  The login can be a
+ * fully qualified matrix ID, or an email address
+ * which shall be used to log in to the server
+ * in to the server.
+ *
+ * Returns: %TRUE if @login_id was successfully set,
+ * %FALSE otherwise.
+ */
+gboolean
+cm_account_set_login_id (CmAccount  *self,
+                         const char *login_id)
+{
+  CmClient *client;
+
+  g_return_val_if_fail (CM_IS_ACCOUNT (self), FALSE);
+
+  client = cm_user_get_client (CM_USER (self));
+  g_return_val_if_fail (CM_IS_CLIENT (client), FALSE);
+  g_return_val_if_fail (!cm_client_get_logged_in (client), FALSE);
+  g_return_val_if_fail (!cm_client_get_logged_in (client), FALSE);
+  g_return_val_if_fail (!cm_client_is_sync (client), FALSE);
+
+  if (login_id && g_strcmp0 (login_id, self->login_id) == 0)
+    return TRUE;
+
+  if (cm_utils_user_name_valid (login_id) ||
+      cm_utils_user_name_is_email (login_id))
+    {
+      g_free (self->login_id);
+      self->login_id = g_strdup (login_id);
+      g_debug ("(%p) New login id set: '%s'", client, login_id);
+
+      return TRUE;
+    }
+
+  g_debug ("(%p) New login id failed to set: '%s'", client, login_id);
+
+  return FALSE;
+}
+
+/**
+ * cm_account_get_login_id:
+ * @self: A #CmAccount
+ *
+ * Get the login ID set for the account
+ *
+ * Returns: (nullable): The login ID of the account
+ */
+const char *
+cm_account_get_login_id (CmAccount *self)
+{
+  g_return_val_if_fail (CM_IS_ACCOUNT (self), FALSE);
+
+  return self->login_id;
 }
 
 static void
