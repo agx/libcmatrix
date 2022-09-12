@@ -778,79 +778,45 @@ cm_olm_get_account_device (CmOlm *self)
 }
 
 gpointer
-cm_olm_match_olm_session (const char  *body,
-                          gsize        body_len,
-                          size_t       message_type,
-                          const char  *pickle,
-                          const char  *pickle_key,
-                          char       **out_decrypted)
+cm_olm_match_olm_session (const char     *body,
+                          gsize           body_len,
+                          size_t          message_type,
+                          const char     *pickle,
+                          const char     *pickle_key,
+                          const char     *sender_identify_key,
+                          CmSessionType   session_type,
+                          char          **out_decrypted)
 {
-  CmOlm *self = NULL;
-  g_autofree char *body_copy = NULL;
+  g_autoptr(CmOlm) self = NULL;
   g_autofree char *pickle_copy = NULL;
-  g_autofree OlmSession *session = NULL;
-  g_autofree char *plaintext = NULL;
-  size_t match = 0, length, err;
 
   g_assert (out_decrypted);
 
-  session = g_malloc (olm_session_size ());
-  olm_session (session);
   pickle_copy = g_strdup (pickle);
-  err = olm_unpickle_session (session, pickle_key, strlen (pickle_key),
-                              pickle_copy, strlen (pickle_copy));
-  if (err == olm_error ())
-    goto end;
+  self = cm_olm_new_from_pickle (pickle_copy, pickle_key, sender_identify_key, session_type);
 
-  body_copy = g_malloc (body_len + 1);
-  memcpy (body_copy, body, body_len + 1);
-  length = olm_decrypt_max_plaintext_length (session, message_type, body_copy, body_len);
-  g_clear_pointer (&body_copy, g_free);
+  if (!self)
+    return NULL;
 
-  plaintext = g_malloc (length + 1);
-  if (length != olm_error ())
-    {
-      body_copy = g_malloc (body_len + 1);
-      memcpy (body_copy, body, body_len + 1);
-      length = olm_decrypt (session, message_type, body_copy, body_len, plaintext, length);
-      g_clear_pointer (&body_copy, g_free);
-    }
-
-  if (length != olm_error ())
-    {
-      plaintext[length] = '\0';
-      *out_decrypted = g_steal_pointer (&plaintext);
-
-      self = g_object_new (CM_TYPE_OLM, NULL);
-      self->olm_session = g_steal_pointer (&session);
-      return self;
-    }
-
+  /* If it's a pre key message, check if the session matches */
   if (message_type == OLM_MESSAGE_TYPE_PRE_KEY)
     {
+      g_autofree char *body_copy = NULL;
+      size_t match = 0;
+
       body_copy = g_malloc (body_len + 1);
       memcpy (body_copy, body, body_len + 1);
-      match = olm_matches_inbound_session (session, body_copy, body_len);
-      if (match == 1)
-        {
-          length = olm_decrypt (session, message_type, body_copy, body_len, plaintext, length);
-
-          if (length != olm_error ())
-            {
-              plaintext[length] = '\0';
-              *out_decrypted = g_steal_pointer (&plaintext);
-
-              self = g_object_new (CM_TYPE_OLM, NULL);
-              self->olm_session = g_steal_pointer (&session);
-              return self;
-            }
-        }
-
-      g_clear_pointer (&body_copy, g_free);
+      match = olm_matches_inbound_session (self->olm_session, body_copy, body_len);
+      /* If it doesn't match, don't consider using it for decryption */
+      if (match != 1)
+        return NULL;
     }
 
- end:
-  olm_clear_session (session);
+  /* Try decrypting with the given session */
+  *out_decrypted = cm_olm_decrypt (self, message_type, body);
+
+  if (*out_decrypted)
+    return g_steal_pointer (&self);
 
   return NULL;
 }

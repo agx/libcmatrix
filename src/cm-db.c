@@ -2128,7 +2128,8 @@ db_lookup_olm_session (CmDb  *self,
 
       pickle = (char *)sqlite3_column_text (stmt, 0);
       session = cm_olm_match_olm_session (body, strlen (body), message_type,
-                                          pickle, pickle_key, &plain_text);
+                                          pickle, pickle_key, sender_curve_key,
+                                          type, &plain_text);
 
       if (session)
         break;

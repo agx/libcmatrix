@@ -83,11 +83,13 @@ const char *cm_olm_get_sender_key        (CmOlm        *self);
 GRefString *cm_olm_get_account_id        (CmOlm        *self);
 const char *cm_olm_get_account_device    (CmOlm        *self);
 
-gpointer    cm_olm_match_olm_session     (const char  *body,
-                                          gsize        body_len,
-                                          size_t       message_type,
-                                          const char  *pickle,
-                                          const char  *pickle_key,
-                                          char       **out_decrypted);
+gpointer    cm_olm_match_olm_session     (const char     *body,
+                                          gsize           body_len,
+                                          size_t          message_type,
+                                          const char     *pickle,
+                                          const char     *pickle_key,
+                                          const char     *sender_identify_key,
+                                          CmSessionType   session_type,
+                                          char          **out_decrypted);
 
 G_END_DECLS
