@@ -910,7 +910,7 @@ cm_enc_handle_room_encrypted (CmEnc      *self,
       in_olm_sessions = g_hash_table_lookup (self->in_olm_sessions, sender_key);
       if (in_olm_sessions)
         session = g_hash_table_find (in_olm_sessions, in_olm_matches, body);
-      g_debug ("(%p) Message with pre-key received, has session: %p", self, CM_LOG_BOOL (!!session));
+      g_debug ("(%p) Message with pre-key received, has session: %p", self, session);
 
       if (!session)
         {
