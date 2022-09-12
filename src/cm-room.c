@@ -1000,6 +1000,8 @@ cm_room_user_changed (CmRoom     *self,
           !g_ptr_array_find (self->changed_users, user, NULL))
         g_ptr_array_add (self->changed_users, g_object_ref (user));
     }
+
+  g_debug ("(%p) Room user(s) changed, count: %u", self, self->changed_users->len);
 }
 
 const char *
