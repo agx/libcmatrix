@@ -1215,58 +1215,6 @@ cm_client_get_user_id (CmClient *self)
 }
 
 /**
- * cm_client_set_login_id:
- * @self: A #CmClient
- * @login_id: A login ID for the client.
- *
- * Set login ID for the client.  The login
- * can be a fully qualified matrix ID, or
- * an email address which shall be used to log
- * in to the server.
- *
- * Returns: %TRUE if @login_id was successfully set,
- * %FALSE otherwise.
- */
-gboolean
-cm_client_set_login_id (CmClient   *self,
-                        const char *login_id)
-{
-  g_return_val_if_fail (CM_IS_CLIENT (self), FALSE);
-  g_return_val_if_fail (!self->is_logging_in, FALSE);
-  g_return_val_if_fail (!self->login_success, FALSE);
-
-  if (cm_utils_user_name_valid (login_id) ||
-      cm_utils_user_name_is_email (login_id))
-    {
-      cm_account_set_login_id (self->cm_account, login_id);
-
-      g_free (self->login_user_id);
-      self->login_user_id = g_ascii_strdown (login_id, -1);
-      g_debug ("(%p) New login id: '%s'", self, login_id);
-
-      return TRUE;
-    }
-
-  return FALSE;
-}
-
-/**
- * cm_client_get_login_id:
- * @self: A #CmClient
- *
- * Get the login ID set for the client
- *
- * Returns: The login ID for the client
- */
-const char *
-cm_client_get_login_id (CmClient *self)
-{
-  g_return_val_if_fail (CM_IS_CLIENT (self), NULL);
-
-  return self->login_user_id;
-}
-
-/**
  * cm_client_set_homeserver:
  * @self: A #CmClient
  * @homeserver: The homserver URL
