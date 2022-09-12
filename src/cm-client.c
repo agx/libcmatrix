@@ -52,9 +52,6 @@ struct _CmClient
 {
   GObject         parent_instance;
 
-  GRefString     *user_id;
-  /* @login_username can be email/[incomplete] matrix-id/phone-number etc */
-  char           *login_user_id;
   char           *homeserver;
   char           *password;
   char           *device_id;
@@ -326,11 +323,12 @@ client_login_with_password_async (CmClient            *self,
 
   g_assert (CM_IS_CLIENT (self));
   g_assert (!cancellable || G_IS_CANCELLABLE (cancellable));
-  g_assert (self->login_user_id || self->user_id);
+  g_assert (cm_account_get_login_id (self->cm_account) ||
+            cm_user_get_id (CM_USER (self->cm_account)));
   g_assert (self->homeserver_verified);
   g_assert (self->password && *self->password);
 
-  g_debug ("Logging in with '%s'", self->login_user_id);
+  g_debug ("(%p) Logging in with '%s'", self, cm_account_get_login_id (self->cm_account));
 
   /* https://matrix.org/docs/spec/client_server/r0.6.1#post-matrix-client-r0-login */
   object = json_object_new ();
@@ -340,16 +338,16 @@ client_login_with_password_async (CmClient            *self,
 
   child = json_object_new ();
 
-  if (cm_utils_user_name_is_email (self->login_user_id))
+  if (cm_utils_user_name_is_email (cm_account_get_login_id (self->cm_account)))
     {
       json_object_set_string_member (child, "type", "m.id.thirdparty");
       json_object_set_string_member (child, "medium", "email");
-      json_object_set_string_member (child, "address", self->login_user_id);
+      json_object_set_string_member (child, "address", cm_account_get_login_id (self->cm_account));
     }
   else
     {
       json_object_set_string_member (child, "type", "m.id.user");
-      json_object_set_string_member (child, "user", self->login_user_id);
+      json_object_set_string_member (child, "user", cm_account_get_login_id (self->cm_account));
     }
 
   json_object_set_object_member (object, "identifier", child);
@@ -441,7 +439,7 @@ matrix_upload_filter (CmClient *self,
     }
 
   cancellable = g_task_get_cancellable (task);
-  uri = g_strconcat ("/_matrix/client/r0/user/", self->user_id, "/filter", NULL);
+  uri = g_strconcat ("/_matrix/client/r0/user/", cm_user_get_id (CM_USER (self->cm_account)), "/filter", NULL);
   cm_net_send_json_async (self->cm_net, 2, json_object_ref (filter),
                           uri, SOUP_METHOD_POST,
                           NULL, cancellable, cm_upload_filter_cb,
@@ -486,8 +484,6 @@ cm_client_finalize (GObject *object)
 
   g_clear_object (&self->key_verification_event);
 
-  g_clear_pointer (&self->user_id, g_ref_string_release);
-  g_free (self->login_user_id);
   g_free (self->homeserver);
   g_free (self->device_id);
   g_free (self->device_name);
@@ -532,6 +528,9 @@ cm_client_class_init (CmClientClass *klass)
 static void
 cm_client_init (CmClient *self)
 {
+  self->cm_account = g_object_new (CM_TYPE_ACCOUNT, NULL);
+  cm_user_set_client (CM_USER (self->cm_account), self);
+
   self->cm_net = cm_net_new ();
   self->user_list = cm_user_list_new (self);
   self->cancellable = g_cancellable_new ();
@@ -640,7 +639,7 @@ cm_client_new_from_secret (gpointer  secret_retrievable,
   self->is_self_change = TRUE;
   cm_client_set_db (self, db);
   cm_client_set_homeserver (self, homeserver);
-  cm_client_set_login_id (self, login_username);
+  cm_account_set_login_id (self->cm_account, login_username);
   cm_client_set_user_id (self, username);
   cm_client_set_password (self, password_str);
   cm_client_set_device_id (self, device_id);
@@ -808,12 +807,6 @@ CmAccount *
 cm_client_get_account (CmClient *self)
 {
   g_return_val_if_fail (CM_IS_CLIENT (self), NULL);
-
-  if (!self->cm_account)
-    {
-      self->cm_account = g_object_new (CM_TYPE_ACCOUNT, NULL);
-      cm_user_set_client (CM_USER (self->cm_account), self);
-    }
 
   return self->cm_account;
 }
@@ -1079,7 +1072,8 @@ cm_client_save (CmClient *self)
   if (g_object_get_data (G_OBJECT (self), "no-save"))
     return;
 
-  if (!self->user_id && !self->login_user_id)
+  if (!cm_account_get_login_id (self->cm_account) &&
+      !cm_user_get_id (CM_USER (self->cm_account)))
     return;
 
   if (self->save_client_pending && !self->is_saving_client &&
@@ -1170,7 +1164,6 @@ gboolean
 cm_client_set_user_id (CmClient   *self,
                        const char *matrix_user_id)
 {
-  g_autoptr(GRefString) old_user_id = NULL;
   GRefString *new_user_id = NULL;
   g_autofree char *user_id = NULL;
 
@@ -1185,11 +1178,17 @@ cm_client_set_user_id (CmClient   *self,
       return FALSE;
     }
 
-  old_user_id = self->user_id;
+  if (cm_user_get_id (CM_USER (self->cm_account)))
+    {
+      g_debug ("(%p) New user ID not set, a user id is already set", self);
+      return FALSE;
+    }
+
   user_id = g_ascii_strdown (matrix_user_id, -1);
   new_user_id = g_ref_string_new_intern (user_id);
-  g_atomic_pointer_set (&self->user_id, new_user_id);
-  g_debug ("(%p) New user ID: '%s'", self, matrix_user_id);
+
+  cm_user_set_user_id (CM_USER (self->cm_account), new_user_id);
+  g_debug ("(%p) New user ID set: '%s'", self, matrix_user_id);
 
   client_mark_for_save (self, TRUE, TRUE);
 
@@ -1212,7 +1211,7 @@ cm_client_get_user_id (CmClient *self)
 {
   g_return_val_if_fail (CM_IS_CLIENT (self), NULL);
 
-  return self->user_id;
+  return cm_user_get_id (CM_USER (self->cm_account));
 }
 
 /**
@@ -1239,6 +1238,8 @@ cm_client_set_login_id (CmClient   *self,
   if (cm_utils_user_name_valid (login_id) ||
       cm_utils_user_name_is_email (login_id))
     {
+      cm_account_set_login_id (self->cm_account, login_id);
+
       g_free (self->login_user_id);
       self->login_user_id = g_ascii_strdown (login_id, -1);
       g_debug ("(%p) New login id: '%s'", self, login_id);
@@ -1598,7 +1599,7 @@ cm_client_get_homeserver_async (CmClient            *self,
       return;
     }
 
-  if (!self->user_id && !self->homeserver)
+  if (!cm_user_get_id (CM_USER (self->cm_account)) && !self->homeserver)
     {
       g_debug ("(%p) Get homeserver failed, no user id to guess", self);
       g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED,
@@ -1801,7 +1802,7 @@ client_password_login_cb (GObject      *obj,
     {
       self->sync_failed = TRUE;
 
-      g_debug ("Login failed, username: %s", self->login_user_id);
+      g_debug ("Login failed, username: %s", cm_account_get_login_id (self->cm_account));
       if (error->code == CM_ERROR_FORBIDDEN)
         error->code = CM_ERROR_BAD_PASSWORD;
 
@@ -1818,8 +1819,10 @@ client_password_login_cb (GObject      *obj,
   value = cm_utils_json_object_get_string (root, "user_id");
   if (value)
     {
-      g_clear_pointer (&self->user_id, g_ref_string_release);
-      self->user_id = g_ref_string_new_intern (value);
+      g_autoptr(GRefString) user_id = NULL;
+
+      user_id = g_ref_string_new_intern (value);
+      cm_user_set_user_id (CM_USER (self->cm_account), user_id);
     }
 
   value = cm_utils_json_object_get_string (root, "access_token");
@@ -1843,7 +1846,8 @@ client_password_login_cb (GObject      *obj,
   client_mark_for_save (self, TRUE, TRUE);
   cm_client_save (self);
 
-  g_debug ("Login success: %d, username: %s", self->login_success, self->login_user_id);
+  g_debug ("Login success: %d, username: %s", self->login_success,
+           cm_account_get_login_id (self->cm_account));
 
   matrix_start_sync (self, g_steal_pointer (&task));
 }
@@ -2560,7 +2564,12 @@ matrix_start_sync (CmClient *self,
     }
   else if (!self->homeserver)
     {
-      const char *user_id = self->user_id ?: self->login_user_id;
+      const char *user_id;
+
+      user_id = cm_user_get_id (CM_USER (self->cm_account));
+
+      if (!user_id)
+        user_id = cm_account_get_login_id (self->cm_account);
 
       if (!cm_utils_home_server_valid (self->homeserver) &&
           !cm_utils_user_name_valid (user_id))
@@ -2615,7 +2624,8 @@ matrix_start_sync (CmClient *self,
 
       self->direct_room_list_loading = TRUE;
 
-      uri = g_strconcat ("/_matrix/client/r0/user/", self->user_id,
+      uri = g_strconcat ("/_matrix/client/r0/user/",
+                         cm_user_get_id (CM_USER (self->cm_account)),
                          "/account_data/m.direct", NULL);
       g_debug ("(%p) Get direct rooms", self);
       cm_net_send_json_async (self->cm_net, 0, NULL, uri, SOUP_METHOD_GET,
