@@ -87,6 +87,66 @@ cm_utils_log_bool_str (gboolean value,
     }
 }
 
+const char *
+cm_utils_anonymize (GString    *str,
+                    const char *value)
+{
+  gunichar c, next_c, prev_c;
+
+  g_assert (str);
+
+  if (!value || !*value)
+    return str->str;
+
+  if (str->len && str->str[str->len - 1] != ' ')
+    g_string_append_c (str, ' ');
+
+  if (!g_utf8_validate (value, -1, NULL))
+    {
+      g_string_append (str, "******");
+      return str->str;
+    }
+
+  if (*value == '!' || *value == '@' || *value == '+')
+    {
+      c = g_utf8_get_char (value);
+      value = g_utf8_next_char (value);
+      g_string_append_unichar (str, c);
+    }
+
+  if (!*value)
+    return str->str;
+
+  c = g_utf8_get_char (value);
+  value = g_utf8_next_char (value);
+  g_string_append_unichar (str, c);
+
+  if (!*value)
+    return str->str;
+
+  c = g_utf8_get_char (value);
+  value = g_utf8_next_char (value);
+  g_string_append_unichar (str, c);
+
+  while (*value)
+    {
+      prev_c = c;
+      c = g_utf8_get_char (value);
+
+      value = g_utf8_next_char (value);
+      next_c = g_utf8_get_char (value);
+
+      if (!g_unichar_isalnum (c))
+        g_string_append_unichar (str, c);
+      else if (!g_unichar_isalnum (prev_c) || !g_unichar_isalnum (next_c))
+        g_string_append_unichar (str, c);
+      else
+        g_string_append_c (str, '#');
+    }
+
+  return str->str;
+}
+
 GError *
 cm_utils_json_node_get_error (JsonNode *node)
 {

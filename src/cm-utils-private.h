@@ -33,6 +33,8 @@ static inline void check_format (const char *fmt, ...) {}
 
 const char   *cm_utils_log_bool_str             (gboolean             value,
                                                  gboolean             use_success);
+const char   *cm_utils_anonymize                (GString             *str,
+                                                 const char          *value);
 GError       *cm_utils_json_node_get_error      (JsonNode            *node);
 gboolean      cm_utils_get_item_position        (GListModel          *list,
                                                  gpointer             item,
