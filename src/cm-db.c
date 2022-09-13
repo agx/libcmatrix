@@ -302,9 +302,7 @@ cm_db_create_schema (CmDb  *self,
   g_assert (g_thread_self () == self->worker_thread);
   g_assert (self->db);
 
-  sql = "BEGIN TRANSACTION;"
-
-    "PRAGMA user_version = " STRING (DB_VERSION) ";"
+  sql = "PRAGMA user_version = " STRING (DB_VERSION) ";"
 
     "CREATE TABLE IF NOT EXISTS users ("
     "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
@@ -480,9 +478,7 @@ cm_db_create_schema (CmDb  *self,
     "BEGIN "
     "UPDATE room_events SET replaced_with_id=NEW.id "
     "WHERE id=NEW.replaces_event_id AND (replaced_with_id IS NULL or replaced_with_id < NEW.id); "
-    "END;"
-
-    "COMMIT;";
+    "END;";
 
   status = sqlite3_exec (self->db, sql, NULL, NULL, &error);
 
@@ -567,9 +563,6 @@ cm_db_migrate_db_v1 (CmDb  *self,
   cm_db_backup (self);
 
   status = sqlite3_exec (self->db,
-                         "PRAGMA foreign_keys=OFF;"
-                         "BEGIN TRANSACTION;"
-
                          "CREATE TABLE IF NOT EXISTS tmp_users ("
                          "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
                          "username TEXT NOT NULL UNIQUE, "
@@ -648,11 +641,7 @@ cm_db_migrate_db_v1 (CmDb  *self,
                          "INTEGER REFERENCES rooms(id);"
                          "ALTER TABLE session ADD COLUMN json_data TEXT;"
 
-                         "PRAGMA user_version = 1;"
-
-                         "COMMIT;"
-
-                         "PRAGMA foreign_keys=ON;",
+                         "PRAGMA user_version = 1;",
                          NULL, NULL, &error);
 
   g_debug ("Migrating db to version 1, success: %d", !error);
@@ -684,9 +673,6 @@ cm_db_migrate_to_v2 (CmDb  *self,
   cm_db_backup (self);
 
   status = sqlite3_exec (self->db,
-                         "PRAGMA foreign_keys=OFF;"
-                         "BEGIN TRANSACTION;"
-
                          "CREATE TABLE IF NOT EXISTS room_members ("
                          "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
                          "room_id INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE, "
@@ -848,11 +834,7 @@ cm_db_migrate_to_v2 (CmDb  *self,
                          "WHERE id=NEW.replaces_event_id AND (replaced_with_id IS NULL or replaced_with_id < NEW.id); "
                          "END;"
 
-                         "PRAGMA user_version = 2;"
-
-                         "COMMIT;"
-
-                         "PRAGMA foreign_keys=ON;",
+                         "PRAGMA user_version = 2;",
                          NULL, NULL, &error);
 
   g_debug ("Migrating db to version 2, success: %d", !error);
@@ -1413,15 +1395,24 @@ matrix_open_db (CmDb  *self,
   if (status == SQLITE_OK) {
     self->db = db;
 
+    sqlite3_exec (self->db, "PRAGMA foreign_keys = OFF;", NULL, NULL, NULL);
+    sqlite3_exec (self->db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
     if (db_exists) {
       if (!cm_db_migrate (self, task))
-        return;
+        {
+          sqlite3_exec (self->db, "END TRANSACTION;", NULL, NULL, NULL);
+          return;
+        }
     } else {
       if (!cm_db_create_schema (self, task))
-        return;
+        {
+          sqlite3_exec (self->db, "END TRANSACTION;", NULL, NULL, NULL);
+          return;
+        }
     }
 
     sqlite3_exec (self->db, "PRAGMA foreign_keys = ON;", NULL, NULL, NULL);
+    sqlite3_exec (self->db, "END TRANSACTION;", NULL, NULL, NULL);
     g_task_return_boolean (task, TRUE);
   } else {
     g_task_return_boolean (task, FALSE);
@@ -1495,10 +1486,12 @@ cm_db_save_client (CmDb  *self,
   username = g_object_get_data (G_OBJECT (task), "username");
   filter = g_object_get_data (G_OBJECT (task), "filter-id");
 
+  sqlite3_exec (self->db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
   account_id = matrix_db_get_account_id (self, username, device, &user_device_id, TRUE);
 
   if (!account_id)
     {
+      sqlite3_exec (self->db, "END TRANSACTION;", NULL, NULL, NULL);
       g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR,
                                "Failed to add account to db");
       return;
@@ -1533,6 +1526,7 @@ cm_db_save_client (CmDb  *self,
 
   status = sqlite3_step (stmt);
   sqlite3_finalize (stmt);
+  sqlite3_exec (self->db, "END TRANSACTION;", NULL, NULL, NULL);
 
   if (status == SQLITE_DONE)
     g_task_return_boolean (task, TRUE);
@@ -1726,10 +1720,12 @@ cm_db_save_room (CmDb  *self,
   replacement = g_object_get_data (G_OBJECT (task), "replacement");
   room_status = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (task), "status"));
 
+  sqlite3_exec (self->db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
   account_id = matrix_db_get_account_id (self, username, client_device, NULL, FALSE);
 
   if (!account_id)
     {
+      sqlite3_exec (self->db, "END TRANSACTION;", NULL, NULL, NULL);
       g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR,
                                "Error getting account id");
       return;
@@ -1742,6 +1738,7 @@ cm_db_save_room (CmDb  *self,
 
   if (!room_id)
     {
+      sqlite3_exec (self->db, "END TRANSACTION;", NULL, NULL, NULL);
       g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR,
                                "Error getting room id");
       return;
@@ -1764,6 +1761,7 @@ cm_db_save_room (CmDb  *self,
 
   sqlite3_step (stmt);
   sqlite3_finalize (stmt);
+  sqlite3_exec (self->db, "END TRANSACTION;", NULL, NULL, NULL);
 
   g_task_return_boolean (task, TRUE);
 }
@@ -1785,10 +1783,12 @@ cm_db_delete_client (CmDb  *self,
   username = g_object_get_data (G_OBJECT (task), "username");
   device_id = g_object_get_data (G_OBJECT (task), "device-id");
 
+  sqlite3_exec (self->db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
   account_id = matrix_db_get_account_id (self, username, device_id, NULL, FALSE);
 
   if (!account_id)
     {
+      sqlite3_exec (self->db, "END TRANSACTION;", NULL, NULL, NULL);
       g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR,
                                "Error getting account id");
       return;
@@ -1819,6 +1819,7 @@ cm_db_delete_client (CmDb  *self,
 
   status = sqlite3_step (stmt);
   sqlite3_finalize (stmt);
+  sqlite3_exec (self->db, "END TRANSACTION;", NULL, NULL, NULL);
 
   g_task_return_boolean (task, status == SQLITE_ROW);
 }
@@ -2187,10 +2188,12 @@ db_mark_user_device_change (CmDb  *self,
   account_device = g_object_get_data (G_OBJECT (task), "account-device");
   g_assert (users && users->len);
 
+  sqlite3_exec (self->db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
   account_id = matrix_db_get_account_id (self, username, account_device, NULL, FALSE);
 
   if (!account_id)
     {
+      sqlite3_exec (self->db, "END TRANSACTION;", NULL, NULL, NULL);
       g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR,
                                "Error getting account id");
       return;
@@ -2204,6 +2207,7 @@ db_mark_user_device_change (CmDb  *self,
       user_id = matrix_db_get_user_id (self, account_id, username, TRUE);
       db_update_user_tracking (self, user_id, outdated, is_tracking);
     }
+  sqlite3_exec (self->db, "END TRANSACTION;", NULL, NULL, NULL);
 
   g_task_return_boolean (task, TRUE);
 }
@@ -2228,10 +2232,12 @@ db_update_user_devices (CmDb  *self,
   added = g_object_get_data (G_OBJECT (task), "added");
   g_assert (added || removed);
 
+  sqlite3_exec (self->db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
   account_id = matrix_db_get_account_id (self, account_username, account_device, NULL, FALSE);
 
   if (!account_id)
     {
+      sqlite3_exec (self->db, "END TRANSACTION;", NULL, NULL, NULL);
       g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR,
                                "Error getting account id");
       return;
@@ -2241,11 +2247,12 @@ db_update_user_devices (CmDb  *self,
 
   if (!user_id)
     {
+      sqlite3_exec (self->db, "END TRANSACTION;", NULL, NULL, NULL);
       g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
                                "User not in db");
+      return;
     }
 
-  sqlite3_exec (self->db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
   for (guint i = 0; added &&  i < added->len; i++)
     {
       sqlite3_stmt *stmt;
@@ -2281,9 +2288,8 @@ db_update_user_devices (CmDb  *self,
       sqlite3_finalize (stmt);
     }
 
-  sqlite3_exec (self->db, "END TRANSACTION;", NULL, NULL, NULL);
-
   db_update_user_tracking (self, user_id, FALSE, TRUE);
+  sqlite3_exec (self->db, "END TRANSACTION;", NULL, NULL, NULL);
 
   g_task_return_boolean (task, TRUE);
 }
@@ -2391,6 +2397,7 @@ db_add_room_events (CmDb  *self,
   prepend = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (task), "prepend"));
   g_assert (events && events->len);
 
+  sqlite3_exec (self->db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
   account_id = matrix_db_get_account_id (self, username, device, NULL, FALSE);
   room_id = matrix_db_get_room_id (self, account_id, room, FALSE);
 
@@ -2404,12 +2411,12 @@ db_add_room_events (CmDb  *self,
 
   if (!room_id)
     {
+      sqlite3_exec (self->db, "END TRANSACTION;", NULL, NULL, NULL);
       g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
                                "Account or Room not found in db");
       return;
     }
 
-  /* todo: Look into sqlite transactions */
   for (guint i = 0; i < events->len; i++)
     {
       g_autoptr(JsonObject) encrypted = NULL;
@@ -2517,6 +2524,7 @@ db_add_room_events (CmDb  *self,
 
       prepend ? (--sorted_event_id) : (++sorted_event_id);
     }
+  sqlite3_exec (self->db, "END TRANSACTION;", NULL, NULL, NULL);
 
   g_task_return_boolean (task, TRUE);
 }
