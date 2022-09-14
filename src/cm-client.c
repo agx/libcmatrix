@@ -318,6 +318,7 @@ client_login_with_password_async (CmClient            *self,
                                   GAsyncReadyCallback  callback,
                                   gpointer             user_data)
 {
+  g_autoptr(GString) str = NULL;
   JsonObject *object, *child;
   GTask *task;
 
@@ -328,7 +329,9 @@ client_login_with_password_async (CmClient            *self,
   g_assert (self->homeserver_verified);
   g_assert (self->password && *self->password);
 
-  g_debug ("(%p) Logging in with '%s'", self, cm_account_get_login_id (self->cm_account));
+  str = g_string_new (NULL);
+  g_debug ("(%p) Logging in with '%s'", self,
+           cm_utils_anonymize (str, cm_account_get_login_id (self->cm_account)));
 
   /* https://matrix.org/docs/spec/client_server/r0.6.1#post-matrix-client-r0-login */
   object = json_object_new ();
@@ -819,6 +822,7 @@ db_load_client_cb (GObject      *obj,
   g_autoptr(GTask) task = user_data;
   g_autoptr(GError) error = NULL;
   CmClient *self;
+  guint room_count = 0;
   gboolean success;
 
   g_assert (G_IS_TASK (task));
@@ -838,8 +842,14 @@ db_load_client_cb (GObject      *obj,
   if (!success)
     {
       if (error && !g_error_matches (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
-        g_warning ("Error loading client '%s': %s",
-                   cm_client_get_user_id (self), error->message);
+        {
+          g_autoptr(GString) str = NULL;
+
+          str = g_string_new (NULL);
+          g_warning ("(%p) Error loading client '%s': %s", self,
+                     cm_utils_anonymize (str, cm_user_get_id (CM_USER (self->cm_account))),
+                     error->message);
+        }
 
       /* We can load further even if fail to load from db */
       /* XXX: handle difference between if the user is missing from db and failed fetching data */
@@ -867,6 +877,7 @@ db_load_client_cb (GObject      *obj,
       g_autoptr(GPtrArray) rooms = NULL;
 
       rooms = g_object_steal_data (G_OBJECT (result), "rooms");
+      room_count = rooms->len;
 
       for (guint i = 0; i < rooms->len; i++)
         {
@@ -875,12 +886,14 @@ db_load_client_cb (GObject      *obj,
         }
 
       g_list_store_splice (self->joined_rooms, 0, 0, rooms->pdata, rooms->len);
-      g_debug ("(%p) Load db, added %u rooms from db", self, rooms->len);
     }
 
   self->db_migrated = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (result), "db-migrated"));
   self->filter_id = g_strdup (g_object_get_data (G_OBJECT (result), "filter-id"));
   self->next_batch = g_strdup (g_object_get_data (G_OBJECT (result), "batch"));
+  g_debug ("(%p) Load db, added %u room(s), db migrated: %s, filter-id: %s",
+           self, room_count, CM_LOG_BOOL (self->db_migrated), self->filter_id);
+
   matrix_start_sync (self, g_steal_pointer (&task));
 }
 
@@ -1164,6 +1177,7 @@ gboolean
 cm_client_set_user_id (CmClient   *self,
                        const char *matrix_user_id)
 {
+  g_autoptr(GString) str = NULL;
   GRefString *new_user_id = NULL;
   g_autofree char *user_id = NULL;
 
@@ -1188,7 +1202,10 @@ cm_client_set_user_id (CmClient   *self,
   new_user_id = g_ref_string_new_intern (user_id);
 
   cm_user_set_user_id (CM_USER (self->cm_account), new_user_id);
-  g_debug ("(%p) New user ID set: '%s'", self, matrix_user_id);
+
+  str = g_string_new (NULL);
+  g_debug ("(%p) New user ID set: '%s'", self,
+           cm_utils_anonymize (str, matrix_user_id));
 
   client_mark_for_save (self, TRUE, TRUE);
 
@@ -1748,9 +1765,12 @@ client_password_login_cb (GObject      *obj,
 
   if (error)
     {
+      g_autoptr(GString) str = NULL;
       self->sync_failed = TRUE;
 
-      g_debug ("Login failed, username: %s", cm_account_get_login_id (self->cm_account));
+      str = g_string_new (NULL);
+      g_debug ("(%p) Login failed, username: %s", self,
+               cm_utils_anonymize (str, cm_account_get_login_id (self->cm_account)));
       if (error->code == CM_ERROR_FORBIDDEN)
         error->code = CM_ERROR_BAD_PASSWORD;
 
@@ -1794,8 +1814,14 @@ client_password_login_cb (GObject      *obj,
   client_mark_for_save (self, TRUE, TRUE);
   cm_client_save (self);
 
-  g_debug ("Login success: %d, username: %s", self->login_success,
-           cm_account_get_login_id (self->cm_account));
+  {
+    g_autoptr(GString) str = NULL;
+
+    str = g_string_new (NULL);
+    g_warning ("(%p) Error loading client '%s': %s", self,
+               cm_utils_anonymize (str, cm_account_get_login_id (self->cm_account)),
+               error->message);
+  }
 
   matrix_start_sync (self, g_steal_pointer (&task));
 }
