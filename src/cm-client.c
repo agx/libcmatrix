@@ -1550,6 +1550,7 @@ cm_client_get_homeserver_async (CmClient            *self,
                                 gpointer             user_data)
 {
   g_autoptr(GTask) task = NULL;
+  const char *user_id;
 
   g_return_if_fail (CM_IS_CLIENT (self));
 
@@ -1564,7 +1565,15 @@ cm_client_get_homeserver_async (CmClient            *self,
       return;
     }
 
-  if (!cm_user_get_id (CM_USER (self->cm_account)) && !self->homeserver)
+  user_id = cm_user_get_id (CM_USER (self->cm_account));
+
+  if (!user_id)
+    user_id = cm_account_get_login_id (self->cm_account);
+
+  if (!cm_utils_user_name_valid (user_id))
+    user_id = NULL;
+
+  if (!user_id && !self->homeserver)
     {
       g_debug ("(%p) Get homeserver failed, no user id to guess", self);
       g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED,
