@@ -93,6 +93,26 @@ free_all_details (CmEnc *self)
 }
 
 static CmOlm *
+ma_enc_lookup_out_group_session (CmEnc       *self,
+                                 CmRoom      *room,
+                                 const char **out_session_id)
+{
+  const char *session_id;
+
+  g_assert (CM_IS_ENC (self));
+  g_assert (CM_IS_ROOM (room));
+
+  session_id = g_hash_table_lookup (self->out_group_room_session, room);
+  if (!session_id)
+    return NULL;
+
+  if (out_session_id)
+    *out_session_id = session_id;
+
+  return g_hash_table_lookup (self->out_group_sessions, session_id);
+}
+
+static CmOlm *
 ma_create_olm_out_session (CmEnc      *self,
                            const char *curve_key,
                            const char *one_time_key,
@@ -1112,16 +1132,13 @@ cm_enc_encrypt_for_chat (CmEnc      *self,
   CmOlm *session;
   g_autofree char *encrypted = NULL;
   const char *session_id;
-  char *old_session_id;
   JsonObject *root;
 
   g_return_val_if_fail (CM_IS_ENC (self), NULL);
   g_return_val_if_fail (CM_IS_ROOM (room), NULL);
   g_return_val_if_fail (message && *message, NULL);
 
-  old_session_id = g_hash_table_lookup (self->out_group_room_session, room);
-  g_return_val_if_fail (old_session_id, NULL);
-  session = g_hash_table_lookup (self->out_group_sessions, old_session_id);
+  session = ma_enc_lookup_out_group_session (self, room, NULL);
   g_return_val_if_fail (session, NULL);
 
   encrypted = cm_olm_encrypt (session, message);
@@ -1153,7 +1170,6 @@ cm_enc_create_out_group_keys (CmEnc      *self,
 {
   CmOlm *session = NULL;
   const char *session_key, *session_id;
-  char *old_session_id;
   JsonObject *root, *child;
 
   g_return_val_if_fail (CM_IS_ENC (self), FALSE);
@@ -1161,9 +1177,7 @@ cm_enc_create_out_group_keys (CmEnc      *self,
   g_return_val_if_fail (one_time_keys && one_time_keys->len, NULL);
   g_return_val_if_fail (out_session, NULL);
 
-  old_session_id = g_hash_table_lookup (self->out_group_room_session, room);
-  if (old_session_id)
-    session = g_hash_table_lookup (self->out_group_sessions, old_session_id);
+  session = ma_enc_lookup_out_group_session (self, room, NULL);
 
   if (!session)
     {
@@ -1294,18 +1308,17 @@ gboolean
 cm_enc_has_room_group_key (CmEnc  *self,
                            CmRoom *room)
 {
-  const char *session_id;
+  CmOlm *session;
+  const char *session_id = NULL;
 
   g_return_val_if_fail (CM_IS_ENC (self), FALSE);
   g_return_val_if_fail (CM_IS_ROOM (room), FALSE);
 
-  session_id = g_hash_table_lookup (self->out_group_room_session, room);
+  session = ma_enc_lookup_out_group_session (self, room, &session_id);
 
     if (!session_id && self->cm_db &&
         !g_object_get_data (G_OBJECT (room), "olm-checked"))
       {
-        CmOlm *session;
-
         session = cm_db_lookup_session (self->cm_db, self->user_id,
                                         self->device_id, NULL,
                                         self->curve_key, self->pickle_key,
@@ -1336,10 +1349,7 @@ cm_enc_has_room_group_key (CmEnc  *self,
           }
       }
 
-  if (!session_id)
-    return FALSE;
-
-  return g_hash_table_contains (self->out_group_sessions, session_id);
+  return !!session;
 }
 
 /**
@@ -1365,14 +1375,15 @@ cm_enc_set_room_group_key (CmEnc    *self,
   g_return_if_fail (CM_IS_OLM (out_session));
   g_return_if_fail (cm_olm_get_session_type (out_session) == SESSION_MEGOLM_V1_OUT);
 
-  session_id = cm_olm_get_session_id (out_session);
-  if (out_session == g_hash_table_lookup (self->out_group_sessions, session_id))
+  if (ma_enc_lookup_out_group_session (self, room, NULL) == out_session)
     return;
 
+  /* There should be no existing sessions for the room */
   g_warn_if_fail (!g_hash_table_contains (self->out_group_room_session, room));
 
   g_debug ("(%p) Set out group key, room: %p, session: %p", self, room, out_session);
 
+  session_id = cm_olm_get_session_id (out_session);
   in_session = cm_olm_in_group_new_from_out (out_session, self->curve_key);
   g_hash_table_insert (self->out_group_room_session,
                        g_object_ref (room), g_strdup (session_id));
@@ -1398,18 +1409,12 @@ cm_enc_rm_room_group_key (CmEnc  *self,
                           CmRoom *room)
 {
   g_autoptr(CmOlm) session = NULL;
-  const char *session_id;
+  const char *session_id = NULL;
 
   g_return_if_fail (CM_IS_ENC (self));
   g_return_if_fail (CM_IS_ROOM (room));
 
-  session_id = g_hash_table_lookup (self->out_group_room_session, room);
-
-  if (!session_id)
-    return;
-
-  session = g_hash_table_lookup (self->out_group_sessions, session_id);
-
+  session = ma_enc_lookup_out_group_session (self, room, &session_id);
   g_debug ("(%p) Remove out group key, room: %p, session: %p", self, room, session);
 
   if (session)
