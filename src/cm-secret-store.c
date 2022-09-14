@@ -85,7 +85,7 @@ cm_secret_store_save_async (CmClient            *client,
   credentials = g_strdup_printf ("{\"username\": \"%s\",  \"password\": \"%s\","
                                  "\"access-token\": \"%s\", "
                                  "\"pickle-key\": \"%s\", \"device-id\": \"%s\", \"enabled\": \"%s\"}",
-                                 cm_client_get_user_id (client),
+                                 cm_client_get_user_id (client) ?: "",
                                  password ? password : "", token ? token : "",
                                  key ? key : "", device_id,
                                  cm_client_get_enabled (client) ? "true" : "false");
