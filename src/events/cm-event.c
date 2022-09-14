@@ -469,7 +469,7 @@ cm_event_set_json (CmEvent    *self,
   else if (g_strcmp0 (type, event_type_string (CM_M_KEY_VERIFICATION_START)) == 0)
     priv->event_type = CM_M_KEY_VERIFICATION_START;
   else
-    g_warning ("unhandled event type: %s", type);
+    CM_TRACE ("unhandled event type: %s", type);
 }
 
 GRefString *
