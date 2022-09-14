@@ -517,11 +517,14 @@ cm_room_new_from_json (const char *room_id,
                        JsonObject *root,
                        CmEvent    *last_event)
 {
+  g_autoptr(GString) str = NULL;
   CmRoom *self;
 
   self = cm_room_new (room_id);
 
-  CM_TRACE ("(%p) new room '%s' from json", self, room_id);
+  str = g_string_new (NULL);
+  cm_utils_anonymize (str, room_id);
+  CM_TRACE ("(%p) new room '%s' from json", self, str->str);
 
   if (root)
     {
