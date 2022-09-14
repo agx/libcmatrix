@@ -1769,8 +1769,9 @@ client_password_login_cb (GObject      *obj,
       self->sync_failed = TRUE;
 
       str = g_string_new (NULL);
-      g_debug ("(%p) Login failed, username: %s", self,
-               cm_utils_anonymize (str, cm_account_get_login_id (self->cm_account)));
+      g_debug ("(%p) Login %s, username: %s, error: %s", self, CM_LOG_SUCCESS (FALSE),
+               cm_utils_anonymize (str, cm_account_get_login_id (self->cm_account)),
+               error->message);
       if (error->code == CM_ERROR_FORBIDDEN)
         error->code = CM_ERROR_BAD_PASSWORD;
 
@@ -1813,15 +1814,6 @@ client_password_login_cb (GObject      *obj,
   client_set_login_state (self, FALSE, !!cm_net_get_access_token (self->cm_net));
   client_mark_for_save (self, TRUE, TRUE);
   cm_client_save (self);
-
-  {
-    g_autoptr(GString) str = NULL;
-
-    str = g_string_new (NULL);
-    g_warning ("(%p) Error loading client '%s': %s", self,
-               cm_utils_anonymize (str, cm_account_get_login_id (self->cm_account)),
-               error->message);
-  }
 
   matrix_start_sync (self, g_steal_pointer (&task));
 }
