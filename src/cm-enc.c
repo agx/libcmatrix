@@ -89,6 +89,7 @@ free_all_details (CmEnc *self)
   g_hash_table_remove_all (self->out_olm_sessions);
   g_hash_table_remove_all (self->in_group_sessions);
   g_hash_table_remove_all (self->out_group_sessions);
+  g_hash_table_remove_all (self->out_group_room_session);
 }
 
 static CmOlm *
