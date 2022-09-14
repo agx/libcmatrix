@@ -81,6 +81,7 @@ gboolean
 cm_account_set_login_id (CmAccount  *self,
                          const char *login_id)
 {
+  g_autoptr(GString) str = NULL;
   CmClient *client;
 
   g_return_val_if_fail (CM_IS_ACCOUNT (self), FALSE);
@@ -94,17 +95,21 @@ cm_account_set_login_id (CmAccount  *self,
   if (login_id && g_strcmp0 (login_id, self->login_id) == 0)
     return TRUE;
 
+  str = g_string_new (NULL);
+
   if (cm_utils_user_name_valid (login_id) ||
       cm_utils_user_name_is_email (login_id))
     {
       g_free (self->login_id);
       self->login_id = g_strdup (login_id);
-      g_debug ("(%p) New login id set: '%s'", client, login_id);
+      g_debug ("(%p) New login id set: '%s'", client,
+               cm_utils_anonymize (str, login_id));
 
       return TRUE;
     }
 
-  g_debug ("(%p) New login id failed to set: '%s'", client, login_id);
+  g_debug ("(%p) New login id failed to set: '%s'", client,
+           cm_utils_anonymize (str, login_id));
 
   return FALSE;
 }
