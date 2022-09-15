@@ -492,7 +492,6 @@ cm_utils_get_url_from_user_id (const char *user_id)
 gboolean
 cm_utils_user_name_valid (const char *matrix_user_id)
 {
-  g_autoptr(GRegex) regex = NULL;
   const char *url_start;
 
   if (!matrix_user_id || !*matrix_user_id)
