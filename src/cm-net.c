@@ -188,6 +188,7 @@ queue_data (CmNet      *self,
   g_autoptr(SoupURI) uri = NULL;
 #else
   g_autoptr(GUri) uri = NULL;
+  GUri *old_uri;
   g_autoptr(GBytes) content_data = NULL;
 #endif
   GCancellable *cancellable;
@@ -208,7 +209,9 @@ queue_data (CmNet      *self,
   soup_uri_set_path (uri, uri_path);
 #else
   uri = g_uri_parse (self->homeserver, SOUP_HTTP_URI_FLAGS, NULL);
-  uri = soup_uri_copy (uri, SOUP_URI_PATH, uri_path, SOUP_URI_NONE);
+  old_uri = uri;
+  uri = soup_uri_copy (old_uri, SOUP_URI_PATH, uri_path, SOUP_URI_NONE);
+  g_clear_pointer (&old_uri, g_uri_unref);
 #endif
 
   if (self->access_token) {
@@ -219,7 +222,9 @@ queue_data (CmNet      *self,
 #if SOUP_MAJOR_VERSION == 2
     soup_uri_set_query_from_form (uri, query);
 #else
-    uri = soup_uri_copy(uri, SOUP_URI_QUERY, soup_form_encode_hash(query), SOUP_URI_NONE);
+    old_uri = uri;
+    uri = soup_uri_copy (old_uri, SOUP_URI_QUERY, soup_form_encode_hash (query), SOUP_URI_NONE);
+    g_clear_pointer (&old_uri, g_uri_unref);
 #endif
     g_hash_table_unref (query);
   }
