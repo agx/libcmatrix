@@ -883,7 +883,6 @@ cm_enc_handle_room_encrypted (CmEnc      *self,
   const char *algorithm, *sender_key;
   g_autofree char *plaintext = NULL;
   g_autofree char *body = NULL;
-  g_autofree char *copy = NULL;
   CmOlm *session = NULL;
   size_t type;
   gboolean force_save = FALSE;
