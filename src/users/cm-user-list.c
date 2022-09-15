@@ -232,7 +232,6 @@ request_device_keys_from_queue (CmUserList *self)
   GCancellable *cancellable;
   GPtrArray *users;
   JsonObject *object, *child;
-  g_autofree char *uri = NULL;
   GTask *task;
 
   g_assert (CM_IS_USER_LIST (self));
