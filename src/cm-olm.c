@@ -576,6 +576,8 @@ cm_olm_encrypt (CmOlm      *self,
                                (gpointer)plain_text, strlen (plain_text),
                                (gpointer)encrypted, len);
     }
+  else
+    g_return_val_if_reached (NULL);
 
   if (len == olm_error ())
     {
