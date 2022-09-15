@@ -52,6 +52,22 @@ simple_account_sync_cb (gpointer   object,
 }
 
 static void
+simple_matrix_save_cb (GObject      *object,
+                       GAsyncResult *result,
+                       gpointer      user_data)
+{
+  g_autoptr(GError) error = NULL;
+
+  cm_matrix_save_client_finish (matrix, result, &error);
+
+  if (error)
+    g_warning ("Error saving client: %s", error->message);
+
+  /* Now, enable the client, and the client will start to sync, executing the callback on events */
+  cm_client_set_enabled (client, TRUE);
+}
+
+static void
 simple_get_homeserver_cb (GObject      *object,
                           GAsyncResult *result,
                           gpointer      user_data)
@@ -83,8 +99,9 @@ simple_get_homeserver_cb (GObject      *object,
   cm_client_set_sync_callback (client,
                                simple_account_sync_cb,
                                NULL, NULL);
-  /* Now, enable the client, and the client will start to sync, executing the callback on events */
-  cm_client_set_enabled (client, TRUE);
+  cm_matrix_save_client_async (matrix, client,
+                               simple_matrix_save_cb, NULL);
+
 }
 
 static void
