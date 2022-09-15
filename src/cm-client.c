@@ -2343,8 +2343,8 @@ client_get_homeserver_cb (GObject      *obj,
 {
   CmClient *self;
   g_autoptr(GTask) task = user_data;
+  g_autofree char *homeserver = NULL;
   GError *error = NULL;
-  char *homeserver;
 
   g_assert (G_IS_TASK (task));
 
