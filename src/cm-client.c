@@ -1730,8 +1730,9 @@ client_verify_homeserver_cb (GObject      *obj,
 
   self->has_tried_connecting = TRUE;
 
-  /* if (handle_common_errors (self, error)) */
-  /*   return; */
+  if (g_task_get_source_tag (task) != cm_client_get_homeserver_async &&
+      handle_matrix_glitches (self, error))
+    return;
 
   if (self->homeserver_verified)
     {
