@@ -672,7 +672,7 @@ matrix_save_client_cb (GObject      *object,
       g_task_return_boolean (task, ret);
     }
 
-  g_object_set_data (object, "enable", GPOINTER_TO_INT (FALSE));
+  g_object_set_data (object, "enable", GINT_TO_POINTER (FALSE));
 }
 
 void
