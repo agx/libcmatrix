@@ -256,7 +256,7 @@ queue_data (CmNet      *self,
 #if SOUP_MAJOR_VERSION == 2
    soup_message_set_request (message, "application/json", SOUP_MEMORY_TAKE, data, size);
 #else
-      content_data = g_bytes_new_static (data, size);
+      content_data = g_bytes_new_take (data, size);
       soup_message_set_request_body_from_bytes (message, "application/json", content_data);
 #endif
     }
