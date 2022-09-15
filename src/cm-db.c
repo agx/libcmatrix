@@ -1699,7 +1699,6 @@ static void
 cm_db_save_room (CmDb  *self,
                  GTask *task)
 {
-  g_autofree char *json_str = NULL;
   CmRoom *room;
   const char *username, *client_device, *prev_batch;
   const char *replacement, *json = NULL;
