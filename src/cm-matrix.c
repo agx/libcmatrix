@@ -342,6 +342,12 @@ cm_matrix_new (const char *data_dir,
 void
 cm_init (gboolean init_gcrypt)
 {
+  /* Force HTTP1 as we have issues with HTTP/2 implementation in libsoup3
+   * Like https://gitlab.gnome.org/GNOME/libsoup/-/issues/302,
+   * https://gitlab.gnome.org/GNOME/libsoup/-/issues/296, etc */
+  /* todo: Remove once we have better HTTP/2 support */
+  g_setenv ("SOUP_FORCE_HTTP1", "1", FALSE);
+
   if (init_gcrypt)
     {
       /* Version check should be the very first call because it
