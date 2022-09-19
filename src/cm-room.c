@@ -62,6 +62,7 @@ struct _CmRoom
 
   GQueue     *message_queue;
   guint       retry_timeout_id;
+  gint        unread_count;
 
   CmStatus    room_status;
   gboolean    has_prev_batch;
@@ -528,7 +529,7 @@ cm_room_new_from_json (const char *room_id,
 
   if (root)
     {
-      JsonObject *local;
+      JsonObject *local, *child;
 
       self->local_json = root;
       self->initial_sync_done = TRUE;
@@ -538,6 +539,8 @@ cm_room_new_from_json (const char *room_id,
       self->past_name = cm_utils_json_object_dup_string (local, "past_alias");
       cm_room_set_is_direct (self, cm_utils_json_object_get_bool (local, "direct"));
       self->encryption = cm_utils_json_object_dup_string (local, "encryption");
+      child = cm_utils_json_object_get_object (local, "unread_notifications");
+      self->unread_count = cm_utils_json_object_get_int (child, "highlight_count");
 
       cm_room_event_list_set_local_json (self->room_event, root, last_event);
 
@@ -843,6 +846,14 @@ cm_room_get_events_list (CmRoom *self)
   return cm_room_event_list_get_events (self->room_event);
 }
 
+gint64
+cm_room_get_unread_notification_counts (CmRoom *self)
+{
+  g_return_val_if_fail (CM_IS_ROOM (self), 0);
+
+  return self->unread_count;
+}
+
 CmStatus
 cm_room_get_status (CmRoom *self)
 {
@@ -908,12 +919,17 @@ cm_room_set_data (CmRoom     *self,
                   JsonObject *object)
 {
   g_autoptr(GPtrArray) events = NULL;
-  JsonObject *child;
+  JsonObject *child, *local;
   JsonArray *array;
   guint length = 0;
 
   g_return_val_if_fail (CM_IS_ROOM (self), NULL);
   g_return_val_if_fail (object, NULL);
+
+  child = cm_utils_json_object_get_object (object, "unread_notifications");
+  local = cm_room_event_list_get_local_json (self->room_event);
+  json_object_set_object_member (local, "unread_notifications", json_object_ref (child));
+  self->unread_count = cm_utils_json_object_get_int (child, "notification_count");
 
   events = g_ptr_array_new_full (100, g_object_unref);
   child = cm_utils_json_object_get_object (object, "state");
@@ -1057,6 +1073,8 @@ void
 cm_room_set_generated_name (CmRoom     *self,
                             const char *name)
 {
+  JsonObject *local, *child;
+
   g_return_if_fail (CM_IS_ROOM (self));
 
   if (g_strcmp0 (name, self->generated_name) == 0)
@@ -1065,13 +1083,9 @@ cm_room_set_generated_name (CmRoom     *self,
   g_free (self->generated_name);
   self->generated_name = g_strdup (name);
 
-  if (self->local_json)
-    {
-      JsonObject *child;
-
-      child = cm_utils_json_object_get_object (self->local_json, "local");
-      json_object_set_string_member (child, "generated_alias", name);
-    }
+  local = cm_room_event_list_get_local_json (self->room_event);
+  child = cm_utils_json_object_get_object (local, "local");
+  json_object_set_string_member (child, "generated_alias", name);
 
   self->db_save_pending = TRUE;
 
