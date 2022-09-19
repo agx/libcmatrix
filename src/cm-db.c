@@ -596,15 +596,15 @@ cm_db_migrate_db_v1 (CmDb  *self,
                          "json_data TEXT "
                          ");"
 
-                         "INSERT INTO tmp_users(username) "
+                         "INSERT OR IGNORE INTO tmp_users(username) "
                          "SELECT DISTINCT username FROM users;"
 
-                         "INSERT INTO user_devices(user_id,device) "
+                         "INSERT OR IGNORE INTO user_devices(user_id,device) "
                          "SELECT tmp_users.id,devices.device FROM tmp_users "
                          "JOIN users ON users.username=tmp_users.username "
                          "JOIN devices ON users.device_id=devices.id;"
 
-                         "INSERT INTO tmp_accounts(user_device_id,next_batch,pickle,enabled) "
+                         "INSERT OR IGNORE INTO tmp_accounts(user_device_id,next_batch,pickle,enabled) "
                          "SELECT user_devices.id,next_batch,pickle,enabled FROM accounts "
                          "JOIN users ON users.id=accounts.user_id "
                          "JOIN devices ON users.device_id=devices.id "
@@ -612,13 +612,13 @@ cm_db_migrate_db_v1 (CmDb  *self,
                          "JOIN tmp_users ON user_devices.user_id=tmp_users.id "
                          "AND tmp_users.username=users.username;"
 
-                         "UPDATE session SET account_id=(SELECT tmp_accounts.id "
+                         "UPDATE OR IGNORE session SET account_id=(SELECT tmp_accounts.id "
                          "FROM tmp_accounts "
                          "INNER JOIN accounts ON accounts.pickle=tmp_accounts.pickle "
                          "AND session.account_id=accounts.id"
                          ");"
 
-                         "UPDATE rooms SET account_id=(SELECT tmp_accounts.id "
+                         "UPDATE OR IGNORE rooms SET account_id=(SELECT tmp_accounts.id "
                          "FROM tmp_accounts "
                          "INNER JOIN accounts ON accounts.pickle=tmp_accounts.pickle "
                          "AND rooms.account_id=accounts.id"
@@ -772,7 +772,7 @@ cm_db_migrate_to_v2 (CmDb  *self,
                          "json_data TEXT, "
                          "UNIQUE (account_id, room_name));"
 
-                         "INSERT INTO tmp_rooms(id,account_id,room_name,prev_batch) "
+                         "INSERT OR IGNORE INTO tmp_rooms(id,account_id,room_name,prev_batch) "
                          "SELECT DISTINCT id,account_id,room_name,prev_batch FROM rooms;"
 
                          "CREATE TABLE IF NOT EXISTS tmp_sessions ("
@@ -796,7 +796,7 @@ cm_db_migrate_to_v2 (CmDb  *self,
                          "json_data TEXT, "
                          "UNIQUE (account_id, sender_key, session_id));"
 
-                         "INSERT INTO tmp_sessions(id,account_id,sender_key,session_id,type,pickle,time) "
+                         "INSERT OR IGNORE INTO tmp_sessions(id,account_id,sender_key,session_id,type,pickle,time) "
                          "SELECT DISTINCT id,account_id,sender_key,session_id,type,pickle,time FROM session;"
 
                          "DROP TABLE IF EXISTS rooms;"
