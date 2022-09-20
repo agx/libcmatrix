@@ -12,6 +12,7 @@
 #endif
 
 #include "cm-room-private.h"
+#include "users/cm-account.h"
 #include "cm-utils-private.h"
 #include "cm-event-private.h"
 
@@ -328,6 +329,10 @@ cm_event_get_state (CmEvent *self)
   CmEventPrivate *priv = cm_event_get_instance_private (self);
 
   g_return_val_if_fail (CM_IS_EVENT (self), CM_EVENT_STATE_UNKNOWN);
+
+  if (priv->event_state == CM_EVENT_STATE_UNKNOWN &&
+      CM_IS_ACCOUNT (priv->sender))
+    return CM_EVENT_STATE_SENT;
 
   return priv->event_state;
 }
