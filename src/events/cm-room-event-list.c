@@ -244,10 +244,6 @@ cm_room_event_list_set_client (CmRoomEventList *self,
         }
 
       cm_user_set_client (user, client);
-
-      if (cm_event_get_sender_id (event) ==
-          cm_client_get_user_id (client))
-        cm_event_sender_is_self (event);
     }
 }
 
@@ -361,9 +357,6 @@ cm_room_event_list_add_events (CmRoomEventList *self,
 
       user = cm_room_find_user (self->room, cm_event_get_sender_id (event), TRUE);
       cm_event_set_sender (event, user);
-      if (cm_event_get_sender_id (event) ==
-          cm_client_get_user_id (client))
-        cm_event_sender_is_self (event);
     }
 
   if (append)
@@ -452,7 +445,6 @@ cm_room_event_list_parse_events (CmRoomEventList *self,
                                  GPtrArray       *events,
                                  gboolean         past)
 {
-  CmClient *client;
   JsonObject *child;
   JsonArray *array;
   guint length = 0;
@@ -470,7 +462,6 @@ cm_room_event_list_parse_events (CmRoomEventList *self,
   g_debug ("(%p) Parsing events %p, state event: %s, past events: %s",
            self->room, root, CM_LOG_BOOL (!events), CM_LOG_BOOL (past));
 
-  client = cm_room_get_client (self->room);
   array = cm_utils_json_object_get_array (root, "events");
 
   if (!array)
@@ -508,9 +499,6 @@ cm_room_event_list_parse_events (CmRoomEventList *self,
       value = cm_event_get_sender_id (event);
       user = cm_room_find_user (self->room, cm_event_get_sender_id (event), TRUE);
       cm_event_set_sender (event, user);
-      if (cm_event_get_sender_id (event) ==
-          cm_client_get_user_id (client))
-        cm_event_sender_is_self (event);
 
       if (events)
         {
