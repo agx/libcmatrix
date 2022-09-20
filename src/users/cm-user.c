@@ -47,6 +47,13 @@ typedef struct
 
 G_DEFINE_TYPE_WITH_PRIVATE (CmUser, cm_user, G_TYPE_OBJECT)
 
+enum {
+  CHANGED,
+  N_SIGNALS
+};
+
+static guint signals[N_SIGNALS];
+
 static void
 cm_user_finalize (GObject *object)
 {
@@ -74,6 +81,20 @@ cm_user_class_init (CmUserClass *klass)
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
   object_class->finalize = cm_user_finalize;
+
+  /**
+   * CmUser::changed:
+   * @self: a #CmUser
+   *
+   * changed signal is emitted when name or avatar
+   * of the user changes.
+   */
+  signals [CHANGED] =
+    g_signal_new ("changed",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_LAST,
+                  0, NULL, NULL, NULL,
+                  G_TYPE_NONE, 0);
 }
 
 static void
@@ -167,14 +188,27 @@ cm_user_set_details (CmUser     *self,
                      const char *avatar_url)
 {
   CmUserPrivate *priv = cm_user_get_instance_private (self);
+  gboolean changed = FALSE;
 
   g_return_if_fail (CM_IS_USER (self));
 
-  g_free (priv->display_name);
-  g_free (priv->avatar_url);
+  if (g_strcmp0 (display_name, priv->display_name) != 0)
+    {
+      g_free (priv->display_name);
+      priv->display_name = g_strdup (display_name);
+      changed = TRUE;
+    }
 
-  priv->display_name = g_strdup (display_name);
-  priv->avatar_url = g_strdup (avatar_url);
+  if (g_strcmp0 (avatar_url, priv->avatar_url) != 0)
+    {
+      g_free (priv->avatar_url);
+      priv->avatar_url = g_strdup (avatar_url);
+      changed = TRUE;
+    }
+
+  /* If we are not already loading info, mark as info has loaded */
+  if (changed)
+    g_signal_emit (self, signals[CHANGED], 0);
 }
 
 GRefString *
