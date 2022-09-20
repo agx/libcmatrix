@@ -37,6 +37,8 @@ CmUserList   *cm_user_list_new                     (CmClient            *self);
 void          cm_user_list_device_changed          (CmUserList          *self,
                                                     JsonObject          *root,
                                                     GPtrArray           *changed);
+void          cm_user_list_set_account             (CmUserList          *self,
+                                                    CmAccount           *account);
 CmUser       *cm_user_list_find_user               (CmUserList          *self,
                                                     GRefString          *user_id,
                                                     gboolean             create_if_missing);

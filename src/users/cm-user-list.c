@@ -442,6 +442,37 @@ cm_user_list_find_user (CmUserList *self,
   return user;
 }
 
+/*
+ * cm_user_list_set_account:
+ * @self: A #CmUserList
+ * @account: A #CmAccount
+ *
+ * Set the @account of @self after the matrix user id
+ * of @account is set.  This should be set before adding
+ * any user to the list.
+ */
+void
+cm_user_list_set_account (CmUserList *self,
+                          CmAccount  *account)
+{
+  GRefString *user_id;
+
+  g_return_if_fail (CM_IS_USER_LIST (self));
+  g_return_if_fail (CM_IS_ACCOUNT (account));
+
+  user_id = cm_user_get_id (CM_USER (account));
+  g_return_if_fail (user_id);
+
+  if (g_hash_table_contains (self->users_table, user_id))
+    return;
+
+  /* @account should be the first user added to the table */
+  g_return_if_fail (g_hash_table_size (self->users_table) == 0);
+
+  g_hash_table_insert (self->users_table,
+                       g_ref_string_acquire (user_id), account);
+}
+
 /**
  * cm_user_list_load_devices_async:
  * @self: A #CmUserList
