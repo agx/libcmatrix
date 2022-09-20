@@ -52,7 +52,6 @@ void          cm_event_set_json           (CmEvent      *self,
 GRefString   *cm_event_get_sender_id      (CmEvent      *self);
 void          cm_event_set_sender         (CmEvent      *self,
                                            CmUser       *sender);
-void          cm_event_sender_is_self     (CmEvent      *self);
 const char   *cm_event_get_sender_device_id (CmEvent    *self);
 gboolean      cm_event_has_encrypted_content (CmEvent       *self);
 gboolean      cm_event_is_decrypted          (CmEvent       *self);

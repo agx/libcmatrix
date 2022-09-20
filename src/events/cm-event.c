@@ -517,25 +517,6 @@ cm_event_set_sender (CmEvent *self,
   priv->sender = g_object_ref (sender);
 }
 
-/*
- * cm_event_sender_is_self:
- *
- * Set Whether the sender of the event is same
- * as the account.  This only informs if the
- * sender id is same the account user id, and
- * the event necessarily doesn't have to
- * be originated from this very device.
- */
-void
-cm_event_sender_is_self (CmEvent *self)
-{
-  CmEventPrivate *priv = cm_event_get_instance_private (self);
-
-  g_return_if_fail (CM_IS_EVENT (self));
-
-  priv->event_state = CM_EVENT_STATE_SENT;
-}
-
 const char *
 cm_event_get_sender_device_id (CmEvent *self)
 {
