@@ -1207,6 +1207,7 @@ cm_client_set_user_id (CmClient   *self,
   new_user_id = g_ref_string_new_intern (user_id);
 
   cm_user_set_user_id (CM_USER (self->cm_account), new_user_id);
+  cm_user_list_set_account (self->user_list, self->cm_account);
 
   str = g_string_new (NULL);
   g_debug ("(%p) New user ID set: '%s'", self,
@@ -1805,13 +1806,9 @@ client_password_login_cb (GObject      *obj,
 
   /* https://matrix.org/docs/spec/client_server/r0.6.1#post-matrix-client-r0-login */
   value = cm_utils_json_object_get_string (root, "user_id");
-  if (value)
-    {
-      g_autoptr(GRefString) user_id = NULL;
-
-      user_id = g_ref_string_new_intern (value);
-      cm_user_set_user_id (CM_USER (self->cm_account), user_id);
-    }
+  self->is_logging_in = FALSE;
+  cm_client_set_user_id (self, value);
+  self->is_logging_in = TRUE;
 
   value = cm_utils_json_object_get_string (root, "access_token");
   cm_net_set_access_token (self->cm_net, value);
