@@ -474,7 +474,7 @@ cm_room_init (CmRoom *self)
   self->room_event = cm_room_event_list_new (self);
   self->one_time_keys = g_ptr_array_new_full (32, g_free);
   self->changed_users = g_ptr_array_new_full (32, g_object_unref);
-  self->joined_members = g_list_store_new (CM_TYPE_ROOM_MEMBER);
+  self->joined_members = g_list_store_new (CM_TYPE_USER);
   self->changed_devices = g_hash_table_new_full (g_direct_hash,
                                                  g_direct_equal,
                                                  (GDestroyNotify)g_ref_string_release,
@@ -483,7 +483,7 @@ cm_room_init (CmRoom *self)
                                                       g_direct_equal,
                                                       (GDestroyNotify)g_ref_string_release,
                                                       g_object_unref);
-  self->invited_members = g_list_store_new (CM_TYPE_ROOM_MEMBER);
+  self->invited_members = g_list_store_new (CM_TYPE_USER);
   self->invited_members_table = g_hash_table_new_full (g_direct_hash,
                                                        g_direct_equal,
                                                        (GDestroyNotify)g_ref_string_release,
