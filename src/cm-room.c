@@ -927,9 +927,13 @@ cm_room_set_data (CmRoom     *self,
   g_return_val_if_fail (object, NULL);
 
   child = cm_utils_json_object_get_object (object, "unread_notifications");
-  local = cm_room_event_list_get_local_json (self->room_event);
-  json_object_set_object_member (local, "unread_notifications", json_object_ref (child));
-  self->unread_count = cm_utils_json_object_get_int (child, "notification_count");
+
+  if (child)
+    {
+      local = cm_room_event_list_get_local_json (self->room_event);
+      json_object_set_object_member (local, "unread_notifications", json_object_ref (child));
+      self->unread_count = cm_utils_json_object_get_int (child, "notification_count");
+    }
 
   events = g_ptr_array_new_full (100, g_object_unref);
   child = cm_utils_json_object_get_object (object, "state");
