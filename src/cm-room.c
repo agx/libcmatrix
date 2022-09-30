@@ -2091,7 +2091,7 @@ get_joined_members_cb (GObject      *obj,
             room_find_user (self, user_id, TRUE);
 
           data = json_object_get_object_member (joined, member->data);
-          cm_room_member_set_json_data (CM_ROOM_MEMBER (user), data);
+          cm_user_set_json_data (user, data);
         }
 
       /* We have to keep track of user changes only if the room is encrypted */
@@ -2311,7 +2311,7 @@ cm_room_update_user (CmRoom  *self,
   user_id = cm_room_event_get_room_member_id (CM_ROOM_EVENT (event));
   user_list = cm_client_get_user_list (self->client);
   member = cm_user_list_find_user (user_list, user_id, TRUE);
-  cm_room_member_set_json_data (CM_ROOM_MEMBER (member), child);
+  cm_user_set_json_data (member, child);
 
   g_debug ("(%p) Updating user %p, status: %d", self, member, member_status);
 
@@ -2331,7 +2331,7 @@ cm_room_update_user (CmRoom  *self,
           CmRoomMember *cm_member;
 
           cm_member = g_hash_table_lookup (self->joined_members_table, user_id);
-          cm_room_member_set_json_data (cm_member, child);
+          cm_user_set_json_data (CM_USER (cm_member), child);
 
           g_free (self->past_name);
           self->past_name = g_steal_pointer (&self->generated_name);
@@ -2356,7 +2356,7 @@ cm_room_update_user (CmRoom  *self,
           CmRoomMember *cm_member;
 
           cm_member = g_hash_table_lookup (self->invited_members_table, user_id);
-          cm_room_member_set_json_data (cm_member, child);
+          cm_user_set_json_data (CM_USER (cm_member), child);
 
           /* Clear the name so that it will be regenerated when name is requested */
           g_free (self->past_name);
