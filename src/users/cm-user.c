@@ -142,6 +142,31 @@ cm_user_generate_json (CmUser *self)
 }
 
 void
+cm_user_set_json_data (CmUser     *self,
+                       JsonObject *root)
+{
+  const char *name, *avatar_url;
+  JsonObject *child;
+
+  g_return_if_fail (CM_IS_USER (self));
+
+  if (!root)
+    return;
+
+  child = cm_utils_json_object_get_object (root, "content");
+
+  if (!child)
+    child = root;
+
+  name = cm_utils_json_object_get_string (child, "display_name");
+  if (!name)
+    name = cm_utils_json_object_get_string (child, "displayname");
+
+  avatar_url = cm_utils_json_object_get_string (child, "avatar_url");
+  cm_user_set_details (self, name, avatar_url);
+}
+
+void
 cm_user_set_client (CmUser   *self,
                     CmClient *client)
 {

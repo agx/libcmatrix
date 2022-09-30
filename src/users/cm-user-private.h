@@ -25,6 +25,8 @@
 G_BEGIN_DECLS
 
 JsonObject    *cm_user_generate_json         (CmUser        *self);
+void           cm_user_set_json_data         (CmUser        *self,
+                                              JsonObject    *root);
 void           cm_user_set_client            (CmUser        *self,
                                               CmClient      *client);
 CmClient      *cm_user_get_client            (CmUser        *self);
