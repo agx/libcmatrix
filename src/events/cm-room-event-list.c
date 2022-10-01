@@ -451,7 +451,9 @@ cm_room_event_list_parse_events (CmRoomEventList *self,
 
   g_return_if_fail (CM_IS_ROOM_EVENT_LIST (self));
   g_return_if_fail (self->room);
-  g_return_if_fail (root);
+
+  if (!root)
+    return;
 
   /* If @events is NULL, they are considered to be state
    * events and thus it shouldn't be past events.
