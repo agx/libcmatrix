@@ -939,6 +939,9 @@ cm_room_set_data (CmRoom     *self,
   child = cm_utils_json_object_get_object (object, "state");
   cm_room_event_list_parse_events (self->room_event, child, NULL, FALSE);
 
+  child = cm_utils_json_object_get_object (object, "invite_state");
+  cm_room_event_list_parse_events (self->room_event, child, NULL, FALSE);
+
   child = cm_utils_json_object_get_object (object, "timeline");
   cm_room_event_list_parse_events (self->room_event, child, events, FALSE);
   CM_TRACE ("(%p) New timeline events count: %u", self, events->len);
