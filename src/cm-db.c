@@ -1587,7 +1587,7 @@ cm_db_get_rooms (CmDb       *self,
   g_assert (account_id);
 
   sqlite3_prepare_v2 (self->db,
-                      "SELECT id,room_name,prev_batch,json_data FROM rooms "
+                      "SELECT id,room_name,prev_batch,json_data,room_state FROM rooms "
                       "WHERE account_id=? AND replacement_room_id IS NULL "
                       "AND room_state != ?",
                       -1, &stmt, NULL);
@@ -1614,6 +1614,7 @@ cm_db_get_rooms (CmDb       *self,
       room = cm_room_new_from_json (room_name, json, NULL);
       g_object_set_data (G_OBJECT (room), "-cm-room-id", GINT_TO_POINTER (room_id));
       cm_room_set_prev_batch (room, prev_batch);
+      cm_room_set_status (room, sqlite3_column_int (stmt, 4));
 
       event_id = db_get_last_room_event_id (self, room_id, &sorted_event_id);
       if (event_id)
