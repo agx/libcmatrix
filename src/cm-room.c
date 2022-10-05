@@ -87,6 +87,11 @@ struct _CmRoom
   gboolean    keys_claimed;
   gboolean    uploading_keys;
   gboolean    initial_sync_done;
+
+  gboolean    is_accepting_invite;
+  gboolean    is_rejecting_invite;
+  gboolean    invite_accept_success;
+  gboolean    invite_reject_success;
 };
 
 G_DEFINE_TYPE (CmRoom, cm_room, G_TYPE_OBJECT)
@@ -1344,6 +1349,183 @@ room_resend_message (gpointer user_data)
   return G_SOURCE_REMOVE;
 }
 #endif
+
+static void
+room_accept_invite_cb (GObject      *object,
+                       GAsyncResult *result,
+                       gpointer      user_data)
+{
+  CmRoom *self;
+  g_autoptr(GTask) task = user_data;
+  GError *error = NULL;
+  gboolean success;
+
+  self = g_task_get_source_object (task);
+  success = cm_client_join_room_by_id_finish (self->client, result, &error);
+
+  self->invite_accept_success = success;
+  self->is_accepting_invite = FALSE;
+
+  if (error)
+    g_task_return_error (task, error);
+  else
+    g_task_return_boolean (task, success);
+}
+
+void
+cm_room_accept_invite_async (CmRoom              *self,
+                             GCancellable        *cancellable,
+                             GAsyncReadyCallback  callback,
+                             gpointer             user_data)
+{
+  g_autoptr(GTask) task = NULL;
+
+  g_return_if_fail (CM_IS_ROOM (self));
+  g_return_if_fail (!cancellable || G_IS_CANCELLABLE (cancellable));
+  g_return_if_fail (!self->is_accepting_invite);
+
+  task = g_task_new (self, cancellable, callback, user_data);
+
+  g_debug ("(%p) Accept room invite", self);
+
+  if (self->room_status != CM_STATUS_INVITE)
+    {
+      g_debug ("(%p) Accept room invite error, room is not invite", self);
+      g_task_return_new_error (task, CM_ERROR, CM_ERROR_INVALID_ROOM_STATE,
+                               "Room is not in invite state");
+      return;
+    }
+
+  if (self->invite_accept_success)
+    {
+      g_debug ("(%p) Accept room invite already succeeded", self);
+      g_task_return_boolean (task, TRUE);
+      return;
+    }
+
+  if (self->invite_accept_success)
+    {
+      g_debug ("(%p) Accept room error, user has already accepted invite", self);
+      g_task_return_new_error (task, CM_ERROR, CM_ERROR_INVALID_ROOM_STATE,
+                               "User has already accepted invite");
+      return;
+    }
+
+  if (self->is_accepting_invite)
+    {
+      g_debug ("(%p) Accept room, already in progress", self);
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_PENDING,
+                               "Accept room invite in progress");
+      return;
+    }
+
+  self->is_accepting_invite = TRUE;
+
+  cm_client_join_room_by_id_async (self->client, self->room_id,
+                                   cancellable,
+                                   room_accept_invite_cb,
+                                   g_steal_pointer (&task));
+}
+
+gboolean
+cm_room_accept_invite_finish (CmRoom        *self,
+                              GAsyncResult  *result,
+                              GError       **error)
+{
+  g_return_val_if_fail (CM_IS_ROOM (self), FALSE);
+  g_return_val_if_fail (G_IS_TASK (result), FALSE);
+  g_return_val_if_fail (!error || !*error, FALSE);
+
+  return g_task_propagate_boolean (G_TASK (result), error);
+}
+
+static void
+room_reject_invite_cb (GObject      *object,
+                       GAsyncResult *result,
+                       gpointer      user_data)
+{
+  CmRoom *self;
+  g_autoptr(GTask) task = user_data;
+  GError *error = NULL;
+  gboolean success;
+
+  self = g_task_get_source_object (task);
+  success = cm_room_leave_finish (self, result, &error);
+
+  self->invite_reject_success = success;
+  self->is_rejecting_invite = FALSE;
+
+  if (error)
+    g_task_return_error (task, error);
+  else
+    g_task_return_boolean (task, success);
+}
+
+void
+cm_room_reject_invite_async (CmRoom              *self,
+                             GCancellable        *cancellable,
+                             GAsyncReadyCallback  callback,
+                             gpointer             user_data)
+{
+  g_autoptr(GTask) task = NULL;
+
+  g_return_if_fail (CM_IS_ROOM (self));
+  g_return_if_fail (!cancellable || G_IS_CANCELLABLE (cancellable));
+  g_return_if_fail (!self->is_accepting_invite);
+
+  task = g_task_new (self, cancellable, callback, user_data);
+
+  g_debug ("(%p) Reject room invite", self);
+
+  if (self->room_status != CM_STATUS_INVITE)
+    {
+      g_debug ("(%p) Reject room invite error, room is not invite", self);
+      g_task_return_new_error (task, CM_ERROR, CM_ERROR_INVALID_ROOM_STATE,
+                               "Room is not in invite state");
+      return;
+    }
+
+  if (self->invite_reject_success)
+    {
+      g_debug ("(%p) Reject room invite already succeeded", self);
+      g_task_return_boolean (task, TRUE);
+      return;
+    }
+
+  if (self->invite_accept_success)
+    {
+      g_debug ("(%p) Reject room error, user has already accepted invite", self);
+      g_task_return_new_error (task, CM_ERROR, CM_ERROR_INVALID_ROOM_STATE,
+                               "User has already accepted invite");
+      return;
+    }
+
+  if (self->is_rejecting_invite)
+    {
+      g_debug ("(%p) Reject room, already in progress", self);
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_PENDING,
+                               "Reject room invite in progress");
+      return;
+    }
+
+  self->is_rejecting_invite = TRUE;
+
+  cm_room_leave_async (self, cancellable,
+                       room_reject_invite_cb,
+                       g_steal_pointer (&task));
+}
+
+gboolean
+cm_room_reject_invite_finish (CmRoom        *self,
+                              GAsyncResult  *result,
+                              GError       **error)
+{
+  g_return_val_if_fail (CM_IS_ROOM (self), FALSE);
+  g_return_val_if_fail (G_IS_TASK (result), FALSE);
+  g_return_val_if_fail (!error || !*error, FALSE);
+
+  return g_task_propagate_boolean (G_TASK (result), error);
+}
 
 /**
  * cm_room_send_text_async:
