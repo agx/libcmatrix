@@ -1553,6 +1553,60 @@ cm_client_get_ed25519_key (CmClient *self)
   return NULL;
 }
 
+static void
+client_join_room_by_id_cb (GObject      *obj,
+                           GAsyncResult *result,
+                           gpointer      user_data)
+{
+  g_autoptr(GTask) task = user_data;
+  g_autoptr(JsonObject) object = NULL;
+  GError *error = NULL;
+
+  object = g_task_propagate_pointer (G_TASK (result), &error);
+
+  if (error)
+    g_task_return_error (task, error);
+  else
+    g_task_return_boolean (task, TRUE);
+}
+
+void
+cm_client_join_room_by_id_async (CmClient            *self,
+                                 const char          *room_id,
+                                 GCancellable        *cancellable,
+                                 GAsyncReadyCallback  callback,
+                                 gpointer             user_data)
+{
+  g_autofree char *uri = NULL;
+  GTask *task;
+
+  g_return_if_fail (CM_IS_CLIENT (self));
+  g_return_if_fail (room_id && *room_id == '!');
+  g_return_if_fail (!cancellable || G_IS_CANCELLABLE (cancellable));
+
+  if (!cancellable)
+    cancellable = self->cancellable;
+
+  task = g_task_new (self, cancellable, callback, user_data);
+  uri = g_strconcat ("/_matrix/client/r0/join/", room_id, NULL);
+  cm_net_send_data_async (self->cm_net, 2, NULL, 0,
+                          uri, SOUP_METHOD_POST, NULL,
+                          cancellable,
+                          client_join_room_by_id_cb,
+                          task);
+}
+
+gboolean
+cm_client_join_room_by_id_finish (CmClient      *self,
+                                  GAsyncResult  *result,
+                                  GError       **error)
+{
+  g_return_val_if_fail (CM_IS_CLIENT (self), FALSE);
+  g_return_val_if_fail (G_IS_TASK (result), FALSE);
+
+  return g_task_propagate_boolean (G_TASK (result), error);
+}
+
 void
 cm_client_get_homeserver_async (CmClient            *self,
                                 GCancellable        *cancellable,

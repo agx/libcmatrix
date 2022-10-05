@@ -61,6 +61,14 @@ void          cm_client_set_pickle_key                (CmClient            *self
 const char   *cm_client_get_pickle_key                (CmClient            *self);
 const char   *cm_client_get_ed25519_key               (CmClient            *self);
 
+void          cm_client_join_room_by_id_async         (CmClient            *self,
+                                                       const char          *room_id,
+                                                       GCancellable        *cancellable,
+                                                       GAsyncReadyCallback  callback,
+                                                       gpointer             user_data);
+gboolean      cm_client_join_room_by_id_finish        (CmClient            *self,
+                                                       GAsyncResult        *result,
+                                                       GError             **error);
 void          cm_client_get_homeserver_async          (CmClient            *self,
                                                        GCancellable        *cancellable,
                                                        GAsyncReadyCallback  callback,
