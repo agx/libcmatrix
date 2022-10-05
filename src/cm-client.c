@@ -1906,20 +1906,21 @@ room_matches_id (CmRoom     *room,
 
 static CmRoom *
 client_find_room (CmClient   *self,
-                  const char *room_id)
+                  const char *room_id,
+                  GListStore *rooms)
 {
   guint n_items;
 
   g_assert (CM_IS_CLIENT (self));
   g_assert (room_id && *room_id);
 
-  n_items = g_list_model_get_n_items (G_LIST_MODEL (self->joined_rooms));
+  n_items = g_list_model_get_n_items (G_LIST_MODEL (rooms));
 
   for (guint i = 0; i < n_items; i++)
     {
       g_autoptr(CmRoom) room = NULL;
 
-      room = g_list_model_get_item (G_LIST_MODEL (self->joined_rooms), i);
+      room = g_list_model_get_item (G_LIST_MODEL (rooms), i);
       if (room_matches_id (room, room_id))
         return room;
     }
@@ -2059,7 +2060,7 @@ parse_direct_rooms (CmClient   *self,
           room = g_hash_table_lookup (self->direct_rooms, room_id);
 
           if (!room)
-            room = client_find_room (self, room_id);
+            room = client_find_room (self, room_id, self->joined_rooms);
 
           if (room)
             {
@@ -2195,7 +2196,7 @@ handle_room_join (CmClient   *self,
       CmRoom *room;
       JsonObject *room_data;
 
-      room = client_find_room (self, room_id->data);
+      room = client_find_room (self, room_id->data, self->joined_rooms);
       room_data = cm_utils_json_object_get_object (root, room_id->data);
 
       if (!room)
@@ -2247,7 +2248,7 @@ handle_room_leave (CmClient   *self,
       CmRoom *room;
       JsonObject *room_data;
 
-      room = client_find_room (self, room_id->data);
+      room = client_find_room (self, room_id->data, self->joined_rooms);
       room_data = cm_utils_json_object_get_object (root, room_id->data);
 
       if (!room)
@@ -2511,7 +2512,7 @@ get_joined_rooms_cb (GObject      *obj,
         CmRoom *room;
 
         room_id = json_array_get_string_element (array, i);
-        room = client_find_room (self, room_id);
+        room = client_find_room (self, room_id, self->joined_rooms);
 
         if (!room)
           {
