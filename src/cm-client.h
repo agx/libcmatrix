@@ -91,5 +91,6 @@ void          cm_client_stop_sync                     (CmClient            *self
 gboolean      cm_client_get_logging_in                (CmClient            *self);
 gboolean      cm_client_get_logged_in                 (CmClient            *self);
 GListModel   *cm_client_get_joined_rooms              (CmClient            *self);
+GListModel   *cm_client_get_invited_rooms             (CmClient            *self);
 
 G_END_DECLS

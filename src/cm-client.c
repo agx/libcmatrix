@@ -78,6 +78,7 @@ struct _CmClient
    * which will then be moved to joined_rooms later */
   GHashTable     *direct_rooms;
   GListStore     *joined_rooms;
+  GListStore     *invited_rooms;
 
   CmEvent        *key_verification_event;
 
@@ -215,6 +216,7 @@ client_reset_state (CmClient *self)
 
   g_hash_table_remove_all (self->direct_rooms);
   g_list_store_remove_all (self->joined_rooms);
+  g_list_store_remove_all (self->invited_rooms);
   cm_net_set_access_token (self->cm_net, NULL);
   cm_enc_set_details (self->cm_enc, NULL, NULL);
   client_set_login_state (self, FALSE, FALSE);
@@ -543,6 +545,7 @@ cm_client_init (CmClient *self)
   self->user_list = cm_user_list_new (self);
   self->cancellable = g_cancellable_new ();
   self->joined_rooms = g_list_store_new (CM_TYPE_ROOM);
+  self->invited_rooms = g_list_store_new (CM_TYPE_ROOM);
   self->direct_rooms = g_hash_table_new_full (g_str_hash, g_str_equal,
                                               g_free, g_object_unref);
 }
@@ -2820,6 +2823,23 @@ cm_client_get_joined_rooms (CmClient *self)
   g_return_val_if_fail (CM_IS_CLIENT (self), NULL);
 
   return G_LIST_MODEL (self->joined_rooms);
+}
+
+/**
+ * cm_client_get_invited_rooms:
+ * @self: A #CmClient
+ *
+ * Get the list of invited rooms with
+ * #CmRoom as the members.
+ *
+ * Returns: (transfer none): A #GListModel
+ */
+GListModel *
+cm_client_get_invited_rooms (CmClient *self)
+{
+  g_return_val_if_fail (CM_IS_CLIENT (self), NULL);
+
+  return G_LIST_MODEL (self->invited_rooms);
 }
 
 static void
