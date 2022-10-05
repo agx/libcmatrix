@@ -2221,11 +2221,14 @@ handle_room_join (CmClient   *self,
             }
         }
 
+      cm_room_set_status (room, CM_STATUS_JOIN);
       events = cm_room_set_data (room, room_data);
       cm_db_add_room_events (self->cm_db, room, events, FALSE);
 
       if (self->callback)
         self->callback (self->cb_data, self, room, events, NULL);
+
+      cm_utils_remove_list_item (self->invited_rooms, room);
 
       if (cm_room_get_replacement_room (room))
         cm_utils_remove_list_item (self->joined_rooms, room);
@@ -2265,6 +2268,47 @@ handle_room_leave (CmClient   *self,
         self->callback (self->cb_data, self, room, events, NULL);
 
       cm_utils_remove_list_item (self->joined_rooms, room);
+    }
+}
+
+static void
+handle_room_invite (CmClient   *self,
+                    JsonObject *root)
+{
+  g_autoptr(GList) invited_room_ids = NULL;
+
+  g_assert (CM_IS_CLIENT (self));
+
+  if (!root)
+    return;
+
+  invited_room_ids = json_object_get_members (root);
+
+  for (GList *room_id = invited_room_ids; room_id; room_id = room_id->next)
+    {
+      g_autoptr(GPtrArray) events = NULL;
+      CmRoom *room;
+      JsonObject *room_data;
+
+      room = client_find_room (self, room_id->data, self->invited_rooms);
+      room_data = cm_utils_json_object_get_object (root, room_id->data);
+
+      if (!room)
+        {
+          room = cm_room_new (room_id->data);
+          cm_room_set_status (room, CM_STATUS_INVITE);
+          cm_room_set_client (room, self);
+          g_list_store_append (self->joined_rooms, room);
+          g_object_unref (room);
+        }
+
+      events = cm_room_set_data (room, room_data);
+
+      if (events && events->len)
+        cm_db_add_room_events (self->cm_db, room, events, FALSE);
+
+      if (self->callback)
+        self->callback (self->cb_data, self, room, events, NULL);
     }
 }
 
@@ -2313,6 +2357,7 @@ handle_red_pill (CmClient   *self,
   object = cm_utils_json_object_get_object (root, "rooms");
   handle_room_join (self, cm_utils_json_object_get_object (object, "join"));
   handle_room_leave (self, cm_utils_json_object_get_object (object, "leave"));
+  handle_room_invite (self, cm_utils_json_object_get_object (object, "invite"));
 }
 
 static void
