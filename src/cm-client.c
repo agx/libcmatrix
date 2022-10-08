@@ -1716,7 +1716,8 @@ cm_client_key_verification_cancel_async (CmClient            *self,
   g_debug ("(%p) Key verification %p cancel", self, verification_event);
 
   if (verification_event != self->key_verification_event ||
-      cm_event_get_m_type (verification_event) != CM_M_KEY_VERIFICATION_REQUEST)
+      (cm_event_get_m_type (verification_event) != CM_M_KEY_VERIFICATION_REQUEST &&
+       cm_event_get_m_type (verification_event) != CM_M_KEY_VERIFICATION_START))
     {
       g_debug ("(%p) Key verification %p cancel fail, not in progress", self, verification_event);
       g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_NOT_INITIALIZED,
