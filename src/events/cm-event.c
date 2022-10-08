@@ -203,7 +203,8 @@ cm_event_new_from_json (JsonObject *root,
       child = cm_utils_json_object_get_object (root, "content");
       priv->transaction_id = cm_utils_json_object_dup_string (child, "transaction_id");
 
-      if (type == CM_M_KEY_VERIFICATION_REQUEST)
+      if (type == CM_M_KEY_VERIFICATION_REQUEST ||
+          type == CM_M_KEY_VERIFICATION_START)
         {
           priv->time_stamp = cm_utils_json_object_get_int (child, "timestamp");
           priv->sender_device_id = cm_utils_json_object_dup_string (child, "from_device");
