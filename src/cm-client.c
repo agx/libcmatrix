@@ -80,7 +80,7 @@ struct _CmClient
   GListStore     *joined_rooms;
   GListStore     *invited_rooms;
 
-  CmEvent        *key_verification_event;
+  GListStore     *key_verifications;
 
   /* for sending events, incremented for each event */
   int             event_id;
@@ -490,9 +490,10 @@ cm_client_finalize (GObject *object)
   g_list_store_remove_all (self->joined_rooms);
   g_clear_object (&self->joined_rooms);
 
-  g_hash_table_unref (self->direct_rooms);
+  g_list_store_remove_all (self->key_verifications);
+  g_clear_object (&self->key_verifications);
 
-  g_clear_object (&self->key_verification_event);
+  g_hash_table_unref (self->direct_rooms);
 
   g_free (self->homeserver);
   g_free (self->device_id);
@@ -546,6 +547,7 @@ cm_client_init (CmClient *self)
   self->cancellable = g_cancellable_new ();
   self->joined_rooms = g_list_store_new (CM_TYPE_ROOM);
   self->invited_rooms = g_list_store_new (CM_TYPE_ROOM);
+  self->key_verifications = g_list_store_new (CM_TYPE_EVENT);
   self->direct_rooms = g_hash_table_new_full (g_str_hash, g_str_equal,
                                               g_free, g_object_unref);
 }
@@ -1670,16 +1672,19 @@ client_key_verification_cancel_cb (GObject      *obj,
   CmClient *self;
   g_autoptr(GTask) task = user_data;
   g_autoptr(JsonObject) object = NULL;
+  CmEvent *event;
   GError *error = NULL;
 
   g_assert (G_IS_TASK (task));
 
   self = g_task_get_source_object (task);
+  event = g_task_get_task_data (task);
   g_assert (CM_IS_CLIENT (self));
+  g_assert (CM_IS_EVENT (event));
 
   object = g_task_propagate_pointer (G_TASK (result), &error);
   g_debug ("(%p) Key verification %p cancel %s", self,
-           self->key_verification_event, CM_LOG_SUCCESS (!error));
+           event, CM_LOG_SUCCESS (!error));
 
   if (error)
     {
@@ -1688,7 +1693,7 @@ client_key_verification_cancel_cb (GObject      *obj,
     }
   else
     {
-      g_clear_object (&self->key_verification_event);
+      cm_utils_remove_list_item (self->key_verifications, event);
       g_task_return_boolean (task, TRUE);
     }
 }
@@ -1713,9 +1718,11 @@ cm_client_key_verification_cancel_async (CmClient            *self,
     cancellable = self->cancellable;
 
   task = g_task_new (self, cancellable, callback, user_data);
+  g_task_set_task_data (task, g_object_ref (verification_event), g_object_unref);
+
   g_debug ("(%p) Key verification %p cancel", self, verification_event);
 
-  if (verification_event != self->key_verification_event ||
+  if (!cm_utils_get_item_position (G_LIST_MODEL (self->key_verifications), verification_event, NULL) ||
       (cm_event_get_m_type (verification_event) != CM_M_KEY_VERIFICATION_REQUEST &&
        cm_event_get_m_type (verification_event) != CM_M_KEY_VERIFICATION_START))
     {
@@ -1743,7 +1750,6 @@ cm_client_key_verification_cancel_async (CmClient            *self,
   json_object_set_string_member (child, "transaction_id",
                                  cm_event_get_transaction_id (verification_event));
 
-  task = g_task_new (self, self->cancellable, callback, user_data);
   event = cm_event_new (CM_M_KEY_VERIFICATION_CANCEL);
   cm_event_create_txn_id (event, cm_client_pop_event_id (self));
 
@@ -2171,10 +2177,9 @@ handle_to_device (CmClient   *self,
       else if (type >= CM_M_KEY_VERIFICATION_ACCEPT &&
                type <= CM_M_KEY_VERIFICATION_START)
         {
-          g_clear_object (&self->key_verification_event);
-          self->key_verification_event = g_steal_pointer (&event);
+          g_list_store_append (self->key_verifications, event);
 
-          g_ptr_array_add (events, self->key_verification_event);
+          g_ptr_array_add (events, event);
 
           self->callback (self->cb_data, self, NULL, events, NULL);
         }
@@ -2886,6 +2891,14 @@ cm_client_get_invited_rooms (CmClient *self)
   g_return_val_if_fail (CM_IS_CLIENT (self), NULL);
 
   return G_LIST_MODEL (self->invited_rooms);
+}
+
+GListModel *
+cm_client_get_key_verifications (CmClient *self)
+{
+  g_return_val_if_fail (CM_IS_CLIENT (self), NULL);
+
+  return G_LIST_MODEL (self->key_verifications);
 }
 
 static void
