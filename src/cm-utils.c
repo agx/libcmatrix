@@ -658,12 +658,21 @@ GString *
 cm_utils_json_get_canonical (JsonObject *object,
                              GString    *out)
 {
+  JsonNode *signatures, *non_signed;
+
   g_autoptr(GList) members = NULL;
 
   g_return_val_if_fail (object, NULL);
 
   if (!out)
     out = g_string_sized_new (BUFFER_SIZE);
+
+  signatures = json_object_dup_member (object, "signatures");
+  non_signed = json_object_dup_member (object, "unsigned");
+
+  /* Remove the non signed members before verification */
+  json_object_remove_member (object, "signatures");
+  json_object_remove_member (object, "unsigned");
 
   g_string_append_c (out, '{');
 
@@ -684,6 +693,12 @@ cm_utils_json_get_canonical (JsonObject *object,
   }
 
   g_string_append_c (out, '}');
+
+  /* Revert the changes we made to the JSON object */
+  if (signatures)
+    json_object_set_member (object, "signatures", signatures);
+  if (non_signed)
+    json_object_set_member (object, "unsigned", non_signed);
 
   return out;
 }
