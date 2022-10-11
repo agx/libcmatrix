@@ -26,8 +26,11 @@ typedef struct
   char          *reply_to_event_id;
   /* Transaction id generated/recived for every event */
   char          *txn_id;
+
   /* Transaction id received in events (like key verification) */
   char          *transaction_id;
+  char          *verification_key;
+
   char          *state_key;
   JsonObject    *json;
   /* The JSON source if the event was encrypted */
@@ -131,6 +134,7 @@ cm_event_finalize (GObject *object)
   g_free (priv->reply_to_event_id);
   g_free (priv->txn_id);
   g_free (priv->transaction_id);
+  g_free (priv->verification_key);
   g_free (priv->state_key);
   g_clear_pointer (&priv->encrypted_json, json_object_unref);
   g_clear_pointer (&priv->json, json_object_unref);
@@ -203,6 +207,9 @@ cm_event_new_from_json (JsonObject *root,
       child = cm_utils_json_object_get_object (root, "content");
       priv->transaction_id = cm_utils_json_object_dup_string (child, "transaction_id");
 
+      if (type == CM_M_KEY_VERIFICATION_KEY)
+        priv->verification_key = cm_utils_json_object_dup_string (child, "key");
+
       if (type == CM_M_KEY_VERIFICATION_REQUEST ||
           type == CM_M_KEY_VERIFICATION_START)
         {
@@ -264,6 +271,16 @@ cm_event_get_transaction_id (CmEvent *self)
   g_return_val_if_fail (CM_IS_EVENT (self), NULL);
 
   return priv->transaction_id;
+}
+
+const char *
+cm_event_get_verification_key (CmEvent *self)
+{
+  CmEventPrivate *priv = cm_event_get_instance_private (self);
+
+  g_return_val_if_fail (CM_IS_EVENT (self), NULL);
+
+  return priv->verification_key;
 }
 
 const char *
