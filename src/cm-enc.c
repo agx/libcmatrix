@@ -28,6 +28,7 @@
 #include "cm-device-private.h"
 #include "cm-db-private.h"
 #include "cm-olm-private.h"
+#include "cm-olm-sas-private.h"
 #include "cm-enc-private.h"
 
 #define KEY_LABEL_SIZE    6
@@ -369,6 +370,27 @@ cm_enc_new (gpointer    matrix_db,
     return NULL;
 
   return g_steal_pointer (&self);
+}
+
+gpointer
+cm_enc_get_sas_for_event (CmEnc   *self,
+                          CmEvent *event)
+{
+  CmOlmSas *sas;
+
+  g_return_val_if_fail (CM_IS_ENC (self), NULL);
+  g_return_val_if_fail (CM_IS_EVENT (event), NULL);
+
+  sas = g_object_get_data (G_OBJECT (event), "olm-sas");
+
+  if (sas)
+    return sas;
+
+  sas = cm_olm_sas_new ();
+  cm_olm_sas_set_key_verification (sas, event);
+  g_object_set_data_full (G_OBJECT (event), "olm-sas", sas, g_object_unref);
+
+  return sas;
 }
 
 /**

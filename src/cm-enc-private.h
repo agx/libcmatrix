@@ -16,6 +16,7 @@
 #include <json-glib/json-glib.h>
 #include <glib-object.h>
 
+#include "events/cm-event.h"
 #include "cm-types.h"
 
 G_BEGIN_DECLS
@@ -50,6 +51,8 @@ G_DECLARE_FINAL_TYPE (CmEnc, cm_enc, CM, ENC, GObject)
 CmEnc          *cm_enc_new                       (gpointer             matrix_db,
                                                   const char          *pickle,
                                                   const char          *key);
+gpointer       cm_enc_get_sas_for_event          (CmEnc               *self,
+                                                  CmEvent             *event);
 void           cm_enc_set_details                (CmEnc               *self,
                                                   GRefString          *user_id,
                                                   const char          *device_id);
