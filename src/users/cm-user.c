@@ -431,6 +431,34 @@ cm_user_get_devices (CmUser *self)
   return G_LIST_MODEL (priv->devices);
 }
 
+CmDevice *
+cm_user_find_device (CmUser     *self,
+                     const char *device_id)
+{
+  GListModel *devices;
+  guint n_items;
+
+  g_return_val_if_fail (CM_IS_USER (self), NULL);
+  g_return_val_if_fail (device_id && *device_id, NULL);
+
+  devices = cm_user_get_devices (self);
+  n_items = g_list_model_get_n_items (devices);
+
+  for (guint i = 0; i < n_items; i++)
+    {
+      g_autoptr(CmDevice) device = NULL;
+      const char *id;
+
+      device = g_list_model_get_item (devices, i);
+      id = cm_device_get_id (device);
+
+      if (g_strcmp0 (id, device_id) == 0)
+        return device;
+    }
+
+  return NULL;
+}
+
 /*
  * cm_user_set_devices:
  * @self: A #CmUser

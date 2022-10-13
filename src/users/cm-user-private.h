@@ -20,6 +20,7 @@
 #include <gio/gio.h>
 
 #include "cm-client.h"
+#include "cm-device.h"
 #include "cm-user.h"
 
 G_BEGIN_DECLS
@@ -36,6 +37,8 @@ void           cm_user_set_details          (CmUser         *self,
                                              const char     *display_name,
                                              const char     *avatar_url);
 GListModel    *cm_user_get_devices          (CmUser         *self);
+CmDevice      *cm_user_find_device          (CmUser         *self,
+                                             const char     *device_id);
 void           cm_user_set_devices          (CmUser         *self,
                                              JsonObject     *root,
                                              gboolean        update_state,
