@@ -23,6 +23,9 @@ G_BEGIN_DECLS
 CmDevice   *cm_device_new              (CmUser     *user,
                                         CmClient   *client,
                                         JsonObject *root);
+void        cm_device_set_verified     (CmDevice   *self,
+                                        gboolean    verified);
+gboolean    cm_device_is_verified      (CmDevice   *self);
 CmUser     *cm_device_get_user         (CmDevice   *self);
 JsonObject *cm_device_get_json         (CmDevice   *self);
 

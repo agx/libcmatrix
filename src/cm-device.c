@@ -33,6 +33,7 @@ struct _CmDevice
   gboolean meagolm_v1;
   gboolean olm_v1;
   gboolean signature_failed;
+  gboolean verified;
 };
 
 G_DEFINE_TYPE (CmDevice, cm_device, G_TYPE_OBJECT)
@@ -131,6 +132,23 @@ cm_device_new (CmUser     *user,
   }
 
   return self;
+}
+
+void
+cm_device_set_verified (CmDevice *self,
+                        gboolean  verified)
+{
+  g_return_if_fail (CM_IS_DEVICE (self));
+
+  self->verified = !!verified;
+}
+
+gboolean
+cm_device_is_verified (CmDevice *self)
+{
+  g_return_val_if_fail (CM_IS_DEVICE (self), FALSE);
+
+  return !self->signature_failed && self->verified;
 }
 
 JsonObject *
