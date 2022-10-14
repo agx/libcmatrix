@@ -267,6 +267,90 @@ client_reset_state (CmClient *self)
 }
 
 static void
+client_key_verification_done_cb (GObject      *obj,
+                                 GAsyncResult *result,
+                                 gpointer      user_data)
+{
+  CmClient *self;
+  g_autoptr(GTask) task = user_data;
+  g_autoptr(JsonObject) object = NULL;
+  CmEvent *event;
+  GError *error = NULL;
+
+  g_assert (G_IS_TASK (task));
+
+  self = g_task_get_source_object (task);
+  event = g_task_get_task_data (task);
+  g_assert (CM_IS_CLIENT (self));
+  g_assert (CM_IS_EVENT (event));
+
+  object = g_task_propagate_pointer (G_TASK (result), &error);
+  g_debug ("(%p) Key verification %p cancel %s", self,
+           event, CM_LOG_SUCCESS (!error));
+
+  if (error)
+    {
+      g_debug ("(%p) Key verification cancel error: %s", self, error->message);
+      g_task_return_error (task, error);
+    }
+  else
+    {
+      cm_utils_remove_list_item (self->key_verifications, event);
+      g_object_set_data (G_OBJECT (event), "completed", GINT_TO_POINTER (TRUE));
+      g_signal_emit_by_name (event, "updated", 0);
+      g_task_return_boolean (task, TRUE);
+    }
+}
+
+static void
+cm_client_key_verification_done_async (CmClient            *self,
+                                       CmEvent             *verification_event,
+                                       GCancellable        *cancellable,
+                                       GAsyncReadyCallback  callback,
+                                       gpointer             user_data)
+{
+  CmOlmSas *olm_sas = NULL;
+  CmEvent *event, *reply_event;
+  g_autoptr(GTask) task = NULL;
+  g_autofree char *uri = NULL;
+  JsonObject *root;
+
+  g_return_if_fail (CM_IS_CLIENT (self));
+  g_return_if_fail (!cancellable || G_IS_CANCELLABLE (cancellable));
+  g_return_if_fail (CM_IS_EVENT (verification_event));
+
+  if (!cancellable)
+    cancellable = self->cancellable;
+
+  task = g_task_new (self, cancellable, callback, user_data);
+  event = client_find_key_verification (self, verification_event, FALSE);
+  g_debug ("(%p) Key verification %p cancel", self, event);
+
+  if (event)
+    olm_sas = g_object_get_data (G_OBJECT (event), "olm-sas");
+
+  if (!olm_sas)
+    {
+      g_debug ("(%p) Key verification %p cancel fail, not in progress", self, verification_event);
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_NOT_INITIALIZED,
+                               "Provided key verification request is not in progress");
+      return;
+    }
+
+  g_task_set_task_data (task, g_object_ref (event), g_object_unref);
+
+  reply_event = cm_olm_sas_get_done_event (olm_sas);
+  root = cm_event_get_json (reply_event);
+
+  uri = g_strdup_printf ("/_matrix/client/r0/sendToDevice/m.key.verification.done/%s",
+                         cm_event_get_txn_id (reply_event));
+  cm_net_send_json_async (self->cm_net, 0, root, uri, SOUP_METHOD_PUT,
+                          NULL, cancellable,
+                          client_key_verification_done_cb,
+                          g_steal_pointer (&task));
+}
+
+static void
 send_json_cb (GObject      *obj,
               GAsyncResult *result,
               gpointer      user_data)
@@ -2465,6 +2549,14 @@ handle_to_device (CmClient   *self,
                                           g_object_ref (self));
                 }
             }
+
+          if (key_event && type == CM_M_KEY_VERIFICATION_MAC) {
+            CmDevice *device;
+
+            device = cm_olm_sas_get_device (olm_sas);
+            cm_db_update_device (self->cm_db, self, cm_event_get_sender (key_event), device);
+            cm_client_key_verification_done_async (self, key_event, NULL, NULL, NULL);
+          }
         }
     }
 }
