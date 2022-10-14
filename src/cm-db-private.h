@@ -15,6 +15,7 @@
 
 #include "cm-enc-private.h"
 #include "cm-client.h"
+#include "cm-device.h"
 #include "cm-room.h"
 
 G_BEGIN_DECLS
@@ -142,5 +143,9 @@ void           cm_db_update_user_devices           (CmDb                *self,
                                                     GPtrArray           *added,
                                                     GPtrArray           *removed,
                                                     gboolean             force_add);
+void          cm_db_update_device                  (CmDb                *self,
+                                                    CmClient            *client,
+                                                    CmUser              *user,
+                                                    CmDevice            *device);
 
 G_END_DECLS

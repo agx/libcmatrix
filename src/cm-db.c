@@ -2257,17 +2257,23 @@ db_update_user_devices (CmDb  *self,
     {
       sqlite3_stmt *stmt;
       CmDevice *device;
+      gboolean verified;
 
       device = added->pdata[i];
+      verified = cm_device_is_verified (device);
       sqlite3_prepare_v2 (self->db,
-                          "INSERT OR IGNORE INTO user_devices(user_id,device,curve25519_key,ed25519_key) "
-                          "VALUES(?1,?2,?3,?4)",
+                          "INSERT INTO user_devices(user_id,device,curve25519_key,ed25519_key,verification) "
+                          "VALUES(?1,?2,?3,?4,?5) ON CONFLICT(user_id,device) DO UPDATE SET "
+                          "verification=?5",
                           -1, &stmt, NULL);
 
       matrix_bind_int (stmt, 1, user_id, "binding add user device");
       matrix_bind_text (stmt, 2, cm_device_get_id (device), "binding add user device");
       matrix_bind_text (stmt, 3, cm_device_get_curve_key (device), "binding add user device");
       matrix_bind_text (stmt, 4, cm_device_get_ed_key (device), "binding add user device");
+      if (verified)
+        matrix_bind_int (stmt, 5, VERIFICATION_VERIFIED, "binding add user device");
+
       sqlite3_step (stmt);
       sqlite3_finalize (stmt);
     }
@@ -2289,6 +2295,70 @@ db_update_user_devices (CmDb  *self,
     }
 
   db_update_user_tracking (self, user_id, FALSE, TRUE);
+  sqlite3_exec (self->db, "END TRANSACTION;", NULL, NULL, NULL);
+
+  g_task_return_boolean (task, TRUE);
+}
+
+static void
+db_update_user_device (CmDb  *self,
+                       GTask *task)
+{
+  const char *account_username, *account_device, *username;
+  sqlite3_stmt *stmt;
+  CmDevice *device;
+  int account_id, user_id;
+  gboolean verified;
+
+  g_assert (CM_IS_DB (self));
+  g_assert (g_thread_self () == self->worker_thread);
+  g_assert (G_IS_TASK (task));
+
+  account_username = g_object_get_data (G_OBJECT (task), "account-id");
+  account_device = g_object_get_data (G_OBJECT (task), "account-device");
+  username = g_object_get_data (G_OBJECT (task), "username");
+  device = g_object_get_data (G_OBJECT (task), "device");
+  g_assert (device);
+
+  sqlite3_exec (self->db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+  account_id = matrix_db_get_account_id (self, account_username, account_device, NULL, FALSE);
+
+  if (!account_id)
+    {
+      sqlite3_exec (self->db, "END TRANSACTION;", NULL, NULL, NULL);
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR,
+                               "Error getting account id");
+      return;
+    }
+
+  user_id = matrix_db_get_user_id (self, account_id, username, FALSE);
+
+  if (!user_id)
+    {
+      sqlite3_exec (self->db, "END TRANSACTION;", NULL, NULL, NULL);
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
+                               "User not in db");
+      return;
+    }
+
+  verified = cm_device_is_verified (device);
+
+  sqlite3_prepare_v2 (self->db,
+                      "INSERT INTO user_devices(user_id,device,curve25519_key,ed25519_key,verification) "
+                      "VALUES(?1,?2,?3,?4,?5) ON CONFLICT(user_id,device) DO UPDATE SET "
+                      "verification=?5",
+                      -1, &stmt, NULL);
+
+  matrix_bind_int (stmt, 1, user_id, "binding add user device");
+  matrix_bind_text (stmt, 2, cm_device_get_id (device), "binding add user device");
+  matrix_bind_text (stmt, 3, cm_device_get_curve_key (device), "binding add user device");
+  matrix_bind_text (stmt, 4, cm_device_get_ed_key (device), "binding add user device");
+  if (verified)
+    matrix_bind_int (stmt, 5, VERIFICATION_VERIFIED, "binding add user device");
+
+  sqlite3_step (stmt);
+  sqlite3_finalize (stmt);
+
   sqlite3_exec (self->db, "END TRANSACTION;", NULL, NULL, NULL);
 
   g_task_return_boolean (task, TRUE);
@@ -3322,6 +3392,61 @@ cm_db_update_user_devices (CmDb       *self,
     g_debug ("Updating user devices. user %p skipped, we are not tracking the user", user);
   else if (error)
     g_warning ("Error updating user devices, user %p: %s", user, error->message);
+}
+
+void
+cm_db_update_device (CmDb     *self,
+                     CmClient *client,
+                     CmUser   *user,
+                     CmDevice *device)
+{
+  const char *account_id, *device_id;
+  g_autoptr(GTask) task = NULL;
+  g_autoptr(GError) error = NULL;
+  GObject *object;
+
+  g_return_if_fail (CM_IS_DB (self));
+  g_return_if_fail (CM_IS_CLIENT (client));
+  g_return_if_fail (CM_IS_DEVICE (device));
+  g_return_if_fail (CM_IS_USER (user));
+  g_return_if_fail (cm_device_get_user (device) == user);
+
+  task = g_task_new (self, NULL, NULL, NULL);
+  g_object_ref (task);
+
+  g_task_set_source_tag (task, cm_db_update_user_device);
+  g_task_set_task_data (task, db_update_user_device, NULL);
+  account_id = cm_client_get_user_id (client);
+  device_id = cm_client_get_device_id (client);
+  object = G_OBJECT (task);
+
+  if (g_application_get_default ())
+    g_application_hold (g_application_get_default ());
+
+  g_debug ("Updating device. user %p, device: %p ", user, device);
+  g_object_set_data_full (object, "client", g_object_ref (client), g_object_unref);
+  g_object_set_data_full (object, "user", g_object_ref (user), g_object_unref);
+  g_object_set_data_full (object, "device", g_object_ref (device), g_object_unref);
+  g_object_set_data_full (object, "account-id", g_strdup (account_id), g_free);
+  g_object_set_data_full (object, "username", g_strdup (cm_user_get_id (user)), g_free);
+  g_object_set_data_full (object, "account-device", g_strdup (device_id), g_free);
+
+  g_async_queue_push (self->queue, task);
+  g_assert (task);
+
+  /* Wait until the task is completed */
+  while (!g_task_get_completed (task))
+    g_main_context_iteration (NULL, TRUE);
+
+  if (g_application_get_default ())
+    g_application_release (g_application_get_default ());
+
+  g_task_propagate_boolean (task, &error);
+
+  g_debug ("Updating user device. user: %p, device: %p, %s", user, device, CM_LOG_SUCCESS (!error));
+
+  if (error)
+    g_warning ("Error updating user devices, user: %p, device: %p: %s", user, device, error->message);
 }
 
 void
