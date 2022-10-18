@@ -31,6 +31,7 @@
  */
 
 #define MAX_CONNECTIONS     4
+#define DATA_BLOCK_SIZE     8192
 
 struct _CmNet
 {
@@ -83,28 +84,25 @@ net_get_file_stream_cb (GObject      *obj,
 }
 
 static void
-net_load_from_stream_cb (GObject      *object,
-                         GAsyncResult *result,
-                         gpointer      user_data)
+parse_from_data (GTask        *task,
+                 gpointer      source_object,
+                 gpointer      task_data,
+                 GCancellable *cancellable)
 {
-  CmNet *self;
-  JsonParser *parser = JSON_PARSER (object);
-  g_autoptr(GTask) task = user_data;
+  g_autoptr(JsonParser) parser = NULL;
   JsonNode *root = NULL;
   GError *error = NULL;
+  GByteArray *content;
 
-  g_assert (JSON_IS_PARSER (parser));
-  g_assert (G_IS_TASK (task));
+  content = g_object_get_data (G_OBJECT (task), "content");
+  parser = json_parser_new ();
+  json_parser_load_from_data (parser, (char *)content->data, -1, &error);
 
-  self = g_task_get_source_object (task);
-  g_assert (CM_IS_NET (self));
-
-  json_parser_load_from_stream_finish (parser, result, &error);
-
-  if (!error) {
-    root = json_parser_get_root (parser);
-    error = cm_utils_json_node_get_error (root);
-  }
+  if (!error)
+    {
+      root = json_parser_get_root (parser);
+      error = cm_utils_json_node_get_error (root);
+    }
 
   if (error) {
     if (g_error_matches (error, CM_ERROR, CM_ERROR_LIMIT_EXCEEDED) &&
@@ -136,21 +134,73 @@ net_load_from_stream_cb (GObject      *object,
 }
 
 static void
+read_from_stream (GObject      *object,
+                  GAsyncResult *result,
+                  gpointer      user_data)
+{
+  g_autoptr(GTask) task = user_data;
+  GInputStream *stream;
+  GByteArray *content;
+  GError *error = NULL;
+  gssize n_bytes;
+  gsize pos;
+
+  g_assert (G_IS_TASK (task));
+
+  stream = g_object_get_data (user_data, "stream");
+  content = g_object_get_data (user_data, "content");
+  pos = GPOINTER_TO_SIZE (g_object_get_data (user_data, "pos"));
+  g_assert (stream);
+  g_assert (content);
+
+  n_bytes = g_input_stream_read_finish (stream, result, &error);
+
+  if (n_bytes < 0)
+    {
+      g_task_return_error (task, error);
+    }
+  else if (n_bytes > 0)
+    {
+      GCancellable *cancellable;
+
+      pos += n_bytes;
+      g_object_set_data (user_data, "pos", GSIZE_TO_POINTER (pos));
+      g_byte_array_set_size (content, pos + DATA_BLOCK_SIZE + 1);
+
+      cancellable = g_task_get_cancellable (task);
+      g_input_stream_read_async (stream,
+                                 content->data + pos,
+                                 DATA_BLOCK_SIZE,
+                                 G_PRIORITY_DEFAULT,
+                                 cancellable,
+                                 read_from_stream,
+                                 g_steal_pointer (&task));
+    }
+  else
+    {
+      content->data[pos] = 0;
+
+      if (*(content->data) != '{' &&
+          content->len < 1024 &&
+          g_ascii_isalnum (*(content->data)))
+        g_warning ("Invalid data: %s", (char *)content->data);
+
+      g_task_run_in_thread (task, parse_from_data);
+    }
+}
+
+static void
 session_send_cb (GObject      *object,
                  GAsyncResult *result,
                  gpointer      user_data)
 {
-  CmNet *self;
   g_autoptr(GTask) task = user_data;
-  g_autoptr(GInputStream) stream = NULL;
-  g_autoptr(JsonParser) parser = NULL;
+  GInputStream *stream = NULL;
   GCancellable *cancellable;
+  GByteArray *content;
   GError *error = NULL;
 
   g_assert (G_IS_TASK (task));
-
-  self = g_task_get_source_object (task);
-  g_assert (CM_IS_NET (self));
 
   stream = soup_session_send_finish (SOUP_SESSION (object), result, &error);
 
@@ -161,11 +211,19 @@ session_send_cb (GObject      *object,
     return;
   }
 
+  content = g_byte_array_new ();
+  g_byte_array_set_size (content, DATA_BLOCK_SIZE + 1);
+  g_object_set_data_full (user_data, "stream", stream, g_object_unref);
+  g_object_set_data_full (user_data, "content", content, (GDestroyNotify)g_byte_array_unref);
+
   cancellable = g_task_get_cancellable (task);
-  parser = json_parser_new ();
-  json_parser_load_from_stream_async (parser, stream, cancellable,
-                                      net_load_from_stream_cb,
-                                      g_steal_pointer (&task));
+  g_input_stream_read_async (stream,
+                             content->data,
+                             DATA_BLOCK_SIZE,
+                             G_PRIORITY_DEFAULT,
+                             cancellable,
+                             read_from_stream,
+                             g_steal_pointer (&task));
 }
 
 /*
