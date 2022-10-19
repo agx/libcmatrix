@@ -119,6 +119,7 @@ struct _CmOlmSas
   CmEvent   *key_verification_event;
   CmEvent   *key_verification_cancel;
   CmEvent   *key_verification_accept;
+  CmEvent   *key_verification_ready;
   CmEvent   *key_verification_mac;
   CmEvent   *key_verification_done;
   CmEvent   *verification_key;
@@ -679,6 +680,36 @@ cm_olm_sas_get_cancel_event (CmOlmSas   *self,
   json_object_set_string_member (child, "code", cancel_code);
 
   return self->key_verification_cancel;
+}
+
+CmEvent *
+cm_olm_sas_get_ready_event (CmOlmSas *self)
+{
+  JsonObject *root, *child;
+  JsonArray *array;
+  CmEvent *event;
+
+  g_return_val_if_fail (CM_IS_OLM_SAS (self), NULL);
+  g_return_val_if_fail (self->key_verification, NULL);
+
+  if (self->key_verification_ready)
+    return self->key_verification_ready;
+
+  event = cm_event_new (CM_M_KEY_VERIFICATION_READY);
+  cm_event_create_txn_id (event, cm_client_pop_event_id (self->cm_client));
+  self->key_verification_ready = event;
+
+  root = olm_sas_get_message_json (self, &child);
+  cm_event_set_json (event, root, NULL);
+
+  array = json_array_new ();
+  json_array_add_string_element (array, "m.sas.v1");
+  json_object_set_array_member (child, "methods", array);
+
+  json_object_set_string_member (child, "from_device",
+                                 cm_client_get_device_id (self->cm_client));
+
+  return self->key_verification_ready;
 }
 
 CmEvent *

@@ -32,6 +32,7 @@ gboolean       cm_olm_sas_matches_event         (CmOlmSas     *self,
 const char    *cm_olm_sas_get_cancel_code       (CmOlmSas     *self);
 CmEvent       *cm_olm_sas_get_cancel_event      (CmOlmSas     *self,
                                                  const char   *cancel_code);
+CmEvent       *cm_olm_sas_get_ready_event       (CmOlmSas     *self);
 CmEvent       *cm_olm_sas_get_accept_event      (CmOlmSas     *self);
 CmEvent       *cm_olm_sas_get_key_event         (CmOlmSas     *self);
 GPtrArray     *cm_olm_sas_get_emojis            (CmOlmSas     *self);
