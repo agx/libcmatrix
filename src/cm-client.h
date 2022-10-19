@@ -76,30 +76,6 @@ void          cm_client_get_homeserver_async          (CmClient            *self
 const char   *cm_client_get_homeserver_finish         (CmClient            *self,
                                                        GAsyncResult        *result,
                                                        GError             **error);
-void          cm_client_key_verification_continue_async (CmClient            *self,
-                                                         CmEvent             *verification_event,
-                                                         GCancellable        *cancellable,
-                                                         GAsyncReadyCallback  callback,
-                                                          gpointer             user_data);
-gboolean      cm_client_key_verification_continue_finish (CmClient           *self,
-                                                          GAsyncResult       *result,
-                                                          GError            **error);
-void          cm_client_key_verification_cancel_async    (CmClient            *self,
-                                                          CmEvent             *verification_event,
-                                                          GCancellable        *cancellable,
-                                                          GAsyncReadyCallback  callback,
-                                                          gpointer             user_data);
-gboolean      cm_client_key_verification_cancel_finish   (CmClient           *self,
-                                                          GAsyncResult       *result,
-                                                          GError            **error);
-void          cm_client_key_verification_match_async     (CmClient            *self,
-                                                          CmEvent             *verification_event,
-                                                          GCancellable        *cancellable,
-                                                          GAsyncReadyCallback  callback,
-                                                          gpointer             user_data);
-gboolean       cm_client_key_verification_match_finish   (CmClient           *self,
-                                                          GAsyncResult       *result,
-                                                          GError            **error);
 gboolean      cm_client_can_connect                   (CmClient            *self);
 void          cm_client_start_sync                    (CmClient            *self);
 gboolean      cm_client_is_sync                       (CmClient            *self);
