@@ -258,7 +258,7 @@ request_device_keys_from_queue (CmUserList *self)
   if (users->len == 0)
     {
       g_debug ("(%p) Load user devices %s", users, CM_LOG_SUCCESS (TRUE));
-      g_task_return_boolean (task, TRUE);
+      g_task_return_pointer (task, NULL, NULL);
       self->is_requesting_device = FALSE;
       /* Repeat */
       request_device_keys_from_queue (self);
@@ -506,7 +506,7 @@ cm_user_list_load_devices_async (CmUserList          *self,
   if (users->len == 0)
     {
       g_debug ("(%p) Load %p user devices %s", self->client, users, CM_LOG_SUCCESS (TRUE));
-      g_task_return_boolean (task, TRUE);
+      g_task_return_pointer (task, NULL, NULL);
     }
   else
     {
