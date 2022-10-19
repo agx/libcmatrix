@@ -28,6 +28,8 @@
 #include "cm-enc-private.h"
 #include "cm-enums.h"
 #include "events/cm-event-private.h"
+#include "events/cm-verification-event.h"
+#include "events/cm-verification-event-private.h"
 #include "users/cm-room-member-private.h"
 #include "users/cm-user-private.h"
 #include "users/cm-user-list-private.h"
@@ -152,34 +154,34 @@ cm_set_string_value (char       **strp,
 }
 
 static CmEvent *
-client_find_key_verification (CmClient *self,
-                              CmEvent  *event,
-                              gboolean  add_if_missing)
+client_find_key_verification (CmClient            *self,
+                              CmVerificationEvent *event,
+                              gboolean             add_if_missing)
 {
   CmOlmSas *olm_sas;
   GListModel *model;
   CmEventType type;
 
   g_assert (CM_IS_CLIENT (self));
-  g_assert (CM_IS_EVENT (event));
+  g_assert (CM_IS_VERIFICATION_EVENT (event));
 
-  type = cm_event_get_m_type (event);
+  type = cm_event_get_m_type (CM_EVENT (event));
   model = G_LIST_MODEL (self->key_verifications);
 
   g_assert (type >= CM_M_KEY_VERIFICATION_ACCEPT && type <= CM_M_KEY_VERIFICATION_START);
 
   for (guint i = 0; i < g_list_model_get_n_items (model); i++)
     {
-      g_autoptr(CmEvent) item = NULL;
+      g_autoptr(CmVerificationEvent) item = NULL;
 
       item = g_list_model_get_item (model, i);
       if (item == event)
-        return event;
+        return CM_EVENT (event);
 
       olm_sas = g_object_get_data (G_OBJECT (item), "olm-sas");
 
       if (cm_olm_sas_matches_event (olm_sas, event))
-        return item;
+        return CM_EVENT (item);
     }
 
   if (type != CM_M_KEY_VERIFICATION_START && type != CM_M_KEY_VERIFICATION_REQUEST)
@@ -191,7 +193,7 @@ client_find_key_verification (CmClient *self,
   if (add_if_missing)
     g_list_store_append (self->key_verifications, event);
 
-  return event;
+  return CM_EVENT (event);
 }
 
 /*
@@ -323,7 +325,7 @@ cm_client_key_verification_done_async (CmClient            *self,
     cancellable = self->cancellable;
 
   task = g_task_new (self, cancellable, callback, user_data);
-  event = client_find_key_verification (self, verification_event, FALSE);
+  event = client_find_key_verification (self, CM_VERIFICATION_EVENT (verification_event), FALSE);
   g_debug ("(%p) Key verification %p cancel", self, event);
 
   if (event)
@@ -675,7 +677,7 @@ cm_client_init (CmClient *self)
   self->cancellable = g_cancellable_new ();
   self->joined_rooms = g_list_store_new (CM_TYPE_ROOM);
   self->invited_rooms = g_list_store_new (CM_TYPE_ROOM);
-  self->key_verifications = g_list_store_new (CM_TYPE_EVENT);
+  self->key_verifications = g_list_store_new (CM_TYPE_VERIFICATION_EVENT);
   self->direct_rooms = g_hash_table_new_full (g_str_hash, g_str_equal,
                                               g_free, g_object_unref);
 }
@@ -1876,7 +1878,7 @@ cm_client_key_verification_continue_async (CmClient            *self,
 
   task = g_task_new (self, cancellable, callback, user_data);
 
-  event = client_find_key_verification (self, verification_event, FALSE);
+  event = client_find_key_verification (self, CM_VERIFICATION_EVENT (verification_event), FALSE);
   g_debug ("(%p) Key verification %p continue", self, event);
 
   if (event)
@@ -1968,7 +1970,7 @@ cm_client_key_verification_match_async (CmClient            *self,
 
   task = g_task_new (self, cancellable, callback, user_data);
 
-  event = client_find_key_verification (self, verification_event, FALSE);
+  event = client_find_key_verification (self, CM_VERIFICATION_EVENT (verification_event), FALSE);
   g_debug ("(%p) Key verification %p match", self, event);
 
   if (event)
@@ -2061,7 +2063,7 @@ cm_client_key_verification_cancel_async (CmClient            *self,
     cancellable = self->cancellable;
 
   task = g_task_new (self, cancellable, callback, user_data);
-  event = client_find_key_verification (self, verification_event, FALSE);
+  event = client_find_key_verification (self, CM_VERIFICATION_EVENT (verification_event), FALSE);
   g_debug ("(%p) Key verification %p cancel", self, event);
 
   if (event)
@@ -2487,6 +2489,7 @@ handle_to_device (CmClient   *self,
       g_autoptr(GPtrArray) events = NULL;
       g_autoptr(CmEvent) event = NULL;
       GRefString *user_id;
+      CmUser *user = NULL;
       CmEventType type;
 
       object = json_array_get_object_element (array, i);
@@ -2495,8 +2498,6 @@ handle_to_device (CmClient   *self,
       user_id = cm_event_get_sender_id (event);
       if (user_id)
         {
-          CmUser *user;
-
           user = cm_user_list_find_user (self->user_list, user_id, TRUE);
           cm_event_set_sender (event, user);
         }
@@ -2511,22 +2512,35 @@ handle_to_device (CmClient   *self,
       else if (type >= CM_M_KEY_VERIFICATION_ACCEPT &&
                type <= CM_M_KEY_VERIFICATION_START)
         {
+          g_autoptr(CmVerificationEvent) verification_event = NULL;
           CmEvent *key_event;
           CmOlmSas *olm_sas;
 
+          verification_event = cm_verification_event_new (self);
+          cm_verification_event_set_json (verification_event, object);
+
           /* Don't force add the event now. If the event has to be cancelled
            * for any reason cancel it now and don't even report to the user */
-          key_event = client_find_key_verification (self, event, FALSE);
-          olm_sas = g_object_get_data (G_OBJECT (key_event ?: event), "olm-sas");
+          key_event = client_find_key_verification (self, verification_event, FALSE);
+          if (!key_event)
+            return;
+
+          if (user && !cm_event_get_sender (key_event))
+            cm_event_set_sender (key_event, user);
+
+          olm_sas = g_object_get_data (G_OBJECT (key_event), "olm-sas");
 
           if (cm_olm_sas_get_cancel_code (olm_sas))
             {
-              cm_client_key_verification_cancel_async (self, event, NULL, NULL, NULL);
+              cm_verification_event_cancel_async (CM_VERIFICATION_EVENT (key_event), NULL, NULL, NULL);
               return;
             }
 
           /* Now add the event if not already done so */
-          key_event = client_find_key_verification (self, event, TRUE);
+          key_event = client_find_key_verification (self, verification_event, TRUE);
+
+          if (user && !cm_event_get_sender (key_event))
+            cm_event_set_sender (key_event, user);
 
           if (key_event && type == CM_M_KEY_VERIFICATION_KEY)
             {
@@ -2555,7 +2569,7 @@ handle_to_device (CmClient   *self,
 
             device = cm_olm_sas_get_device (olm_sas);
             cm_db_update_device (self->cm_db, self, cm_event_get_sender (key_event), device);
-            cm_client_key_verification_done_async (self, key_event, NULL, NULL, NULL);
+            cm_verification_event_done_async (CM_VERIFICATION_EVENT (key_event), NULL, NULL, NULL);
           }
         }
     }

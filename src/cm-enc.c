@@ -373,8 +373,8 @@ cm_enc_new (gpointer    matrix_db,
 }
 
 gpointer
-cm_enc_get_sas_for_event (CmEnc   *self,
-                          CmEvent *event)
+cm_enc_get_sas_for_event (CmEnc               *self,
+                          CmVerificationEvent *event)
 {
   CmOlmSas *sas;
 

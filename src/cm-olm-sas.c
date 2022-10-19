@@ -21,6 +21,7 @@
 #include <olm/sas.h>
 
 #include "events/cm-event-private.h"
+#include "events/cm-verification-event-private.h"
 #include "cm-enc-private.h"
 #include "cm-client.h"
 #include "cm-client-private.h"
@@ -116,7 +117,7 @@ struct _CmOlmSas
 
   char      *cancel_code;
 
-  CmEvent   *key_verification_event;
+  CmVerificationEvent *key_verification;
   CmEvent   *key_verification_cancel;
   CmEvent   *key_verification_accept;
   CmEvent   *key_verification_ready;
@@ -176,7 +177,7 @@ cm_olm_sas_generate_bytes (CmOlmSas *self)
   their_info = g_strdup_printf ("%s|%s|%s", user_id, device_id, self->their_pub_key);
 
   sas_info = g_string_sized_new (1024);
-  transaction_id = cm_event_get_transaction_id (self->key_verification_event);
+  transaction_id = cm_verification_event_get_transaction_id (self->key_verification);
 
   g_string_append_printf (sas_info, "MATRIX_KEY_VERIFICATION_SAS|%s|%s|%s",
                           their_info, our_info, transaction_id);
@@ -221,15 +222,15 @@ olm_sas_get_message_json (CmOlmSas    *self,
   child = json_object_new ();
   json_object_set_object_member (root, "messages", child);
 
-  value = cm_event_get_sender_id (self->key_verification_event);
+  value = cm_event_get_sender_id (CM_EVENT (self->key_verification));
   json_object_set_object_member (child, value, json_object_new ());
   child = cm_utils_json_object_get_object (child, value);
 
-  value = cm_event_get_sender_device_id (self->key_verification_event);
+  value = cm_event_get_sender_device_id (CM_EVENT (self->key_verification));
   json_object_set_object_member (child, value, json_object_new ());
   child = cm_utils_json_object_get_object (child, value);
 
-  value = cm_event_get_transaction_id (self->key_verification_event);
+  value = cm_verification_event_get_transaction_id (self->key_verification);
   json_object_set_string_member (child, "transaction_id", value);
 
   if (content)
@@ -245,20 +246,20 @@ cm_olm_sas_create_commitment (CmOlmSas *self)
   g_autofree char *sha256 = NULL;
   g_autoptr(JsonObject) json = NULL;
   g_autoptr(GString) str = NULL;
+  CmVerificationEvent *event;
   JsonObject *content;
-  CmEvent *event;
   size_t len;
 
   g_return_if_fail (CM_IS_OLM_SAS (self));
-  g_return_if_fail (self->key_verification_event);
+  g_return_if_fail (self->key_verification);
 
   if (self->commitment_str->len)
     return;
 
-  if (cm_event_get_m_type (self->key_verification_event) == CM_M_KEY_VERIFICATION_REQUEST)
-    event = g_object_get_data (G_OBJECT (self->key_verification_event), "start");
+  if (cm_event_get_m_type (CM_EVENT (self->key_verification)) == CM_M_KEY_VERIFICATION_REQUEST)
+    event = g_object_get_data (G_OBJECT (self->key_verification), "start");
   else
-    event = self->key_verification_event;
+    event = self->key_verification;
 
   /* We should have an m.key.verification.start event to get commitment */
   g_return_if_fail (event);
@@ -273,7 +274,7 @@ cm_olm_sas_create_commitment (CmOlmSas *self)
     }
 
   g_string_append_len (str, self->our_pub_key, strlen (self->our_pub_key));
-  json = cm_event_get_json (event);
+  json = cm_event_get_json (CM_EVENT (event));
   content = cm_utils_json_object_get_object (json, "content");
   cm_utils_json_get_canonical (content, str);
 
@@ -291,7 +292,7 @@ cm_olm_sas_finalize (GObject *object)
 {
   CmOlmSas *self = (CmOlmSas *)object;
 
-  g_clear_object (&self->key_verification_event);
+  g_clear_object (&self->key_verification);
   olm_clear_sas (self->olm_sas);
   g_free (self->olm_sas);
 
@@ -413,7 +414,7 @@ cm_olm_sas_parse_verification_mac (CmOlmSas *self,
   g_assert (CM_IS_OLM_SAS (self));
   g_assert (CM_IS_EVENT (event));
 
-  if (!g_object_get_data (G_OBJECT (self->key_verification_event), "key") &&
+  if (!g_object_get_data (G_OBJECT (self->key_verification), "key") &&
       !self->cancel_code)
     {
       self->cancel_code = g_strdup ("m.unexpected_message");
@@ -458,7 +459,7 @@ cm_olm_sas_parse_verification_mac (CmOlmSas *self,
                    self->their_user_id, self->their_device_id,
                    cm_client_get_user_id (self->cm_client),
                    cm_client_get_device_id (self->cm_client),
-                   cm_event_get_transaction_id (self->key_verification_event));
+                   cm_verification_event_get_transaction_id (self->key_verification));
   g_string_append (base_info, "KEY_IDS");
 
   mac = calculate_mac (self, key_ids->str, base_info->str, base_info->len);
@@ -490,7 +491,7 @@ cm_olm_sas_parse_verification_mac (CmOlmSas *self,
         continue;
 
       key_mac = cm_utils_json_object_get_string (mac_json, item->data);
-      user = cm_event_get_sender (self->key_verification_event);
+      user = cm_event_get_sender (CM_EVENT (self->key_verification));
       device = cm_user_find_device (user, self->their_device_id);
 
       if (!device || !key_mac || !cm_device_get_ed_key (device))
@@ -520,8 +521,8 @@ cm_olm_sas_parse_verification_mac (CmOlmSas *self,
 }
 
 void
-cm_olm_sas_set_key_verification (CmOlmSas *self,
-                                 CmEvent  *event)
+cm_olm_sas_set_key_verification (CmOlmSas            *self,
+                                 CmVerificationEvent *event)
 {
   g_autoptr(JsonObject) json = NULL;
   CmEventType type;
@@ -529,21 +530,21 @@ cm_olm_sas_set_key_verification (CmOlmSas *self,
 
   g_return_if_fail (CM_IS_OLM_SAS (self));
   g_return_if_fail (CM_IS_EVENT (event));
-  g_return_if_fail (!self->key_verification_event);
+  g_return_if_fail (!self->key_verification);
 
-  type = cm_event_get_m_type (event);
+  type = cm_event_get_m_type (CM_EVENT (event));
   g_return_if_fail (type == CM_M_KEY_VERIFICATION_REQUEST ||
                     type == CM_M_KEY_VERIFICATION_START);
-  self->key_verification_event = g_object_ref (event);
+  self->key_verification = g_object_ref (event);
 
   /* fixme: We now only accepts verification requests */
-  self->their_user_id = g_strdup (cm_event_get_sender_id (event));
-  self->their_device_id = g_strdup (cm_event_get_sender_device_id (event));
+  self->their_user_id = g_strdup (cm_event_get_sender_id (CM_EVENT (event)));
+  self->their_device_id = g_strdup (cm_event_get_sender_device_id (CM_EVENT (event)));
 
-  minutes = (time (NULL) - cm_event_get_time_stamp (event) / 1000) % 60;
+  minutes = (time (NULL) - cm_event_get_time_stamp (CM_EVENT (event)) / 1000) % 60;
 
   if (type == CM_M_KEY_VERIFICATION_START)
-    cm_olm_sas_parse_verification_start (self, event);
+    cm_olm_sas_parse_verification_start (self, CM_EVENT (event));
 
   if (self->cancel_code)
     return;
@@ -554,34 +555,34 @@ cm_olm_sas_set_key_verification (CmOlmSas *self,
 }
 
 gboolean
-cm_olm_sas_matches_event (CmOlmSas *self,
-                          CmEvent  *event)
+cm_olm_sas_matches_event (CmOlmSas            *self,
+                          CmVerificationEvent *event)
 {
-  GObject *obj = (GObject *)self->key_verification_event;
+  GObject *obj = (GObject *)self->key_verification;
   const char *item_txn_id, *event_txn_id;
   CmEventType type;
 
   g_return_val_if_fail (CM_IS_OLM_SAS (self), FALSE);
   g_return_val_if_fail (CM_IS_EVENT (event), FALSE);
-  g_return_val_if_fail (self->key_verification_event, FALSE);
+  g_return_val_if_fail (self->key_verification, FALSE);
 
-  if (event == self->key_verification_event)
+  if (event == self->key_verification)
     return TRUE;
 
-  item_txn_id = cm_event_get_transaction_id (event);
-  event_txn_id = cm_event_get_transaction_id (self->key_verification_event);
+  item_txn_id = cm_verification_event_get_transaction_id (event);
+  event_txn_id = cm_verification_event_get_transaction_id (self->key_verification);
 
   if (g_strcmp0 (item_txn_id, event_txn_id) != 0)
     return FALSE;
 
   g_object_ref (event);
-  type = cm_event_get_m_type (event);
+  type = cm_event_get_m_type (CM_EVENT (event));
 
   if (type == CM_M_KEY_VERIFICATION_KEY)
     {
       g_autofree char *key = NULL;
 
-      key = g_strdup (cm_event_get_verification_key (event));
+      key = g_strdup (cm_verification_event_get_verification_key (event));
 
       if (olm_sas_is_their_key_set (self->olm_sas))
         {
@@ -610,10 +611,10 @@ cm_olm_sas_matches_event (CmOlmSas *self,
     g_object_set_data_full (obj, "start", event, g_object_unref);
 
   if (type == CM_M_KEY_VERIFICATION_START)
-    cm_olm_sas_parse_verification_start (self, event);
+    cm_olm_sas_parse_verification_start (self, CM_EVENT (event));
 
   if (type == CM_M_KEY_VERIFICATION_MAC)
-    cm_olm_sas_parse_verification_mac (self, event);
+    cm_olm_sas_parse_verification_mac (self, CM_EVENT (event));
 
   if (type == CM_M_KEY_VERIFICATION_CANCEL && !self->cancel_code)
     self->cancel_code = g_strdup ("m.timeout");
@@ -653,7 +654,7 @@ cm_olm_sas_get_cancel_event (CmOlmSas   *self,
   CmEvent *event;
 
   g_return_val_if_fail (CM_IS_OLM_SAS (self), NULL);
-  g_return_val_if_fail (self->key_verification_event, NULL);
+  g_return_val_if_fail (self->key_verification, NULL);
   g_return_val_if_fail (self->cm_client, NULL);
 
   if (self->key_verification_cancel)
@@ -720,15 +721,15 @@ cm_olm_sas_get_accept_event (CmOlmSas *self)
   CmEvent *event;
 
   g_return_val_if_fail (CM_IS_OLM_SAS (self), NULL);
-  g_return_val_if_fail (self->key_verification_event, NULL);
+  g_return_val_if_fail (self->key_verification, NULL);
 
   if (self->key_verification_accept)
     return self->key_verification_accept;
 
-  if (cm_event_get_m_type (self->key_verification_event) == CM_M_KEY_VERIFICATION_REQUEST)
-    event = g_object_get_data (G_OBJECT (self->key_verification_event), "start");
+  if (cm_event_get_m_type (CM_EVENT (self->key_verification)) == CM_M_KEY_VERIFICATION_REQUEST)
+    event = g_object_get_data (G_OBJECT (self->key_verification), "start");
   else
-    event = self->key_verification_event;
+    event = (CmEvent *)self->key_verification;
 
   /* We should have an m.key.verification.start event to get commitment */
   g_return_val_if_fail (event, NULL);
@@ -762,15 +763,15 @@ cm_olm_sas_get_key_event (CmOlmSas *self)
   CmEvent *event;
 
   g_return_val_if_fail (CM_IS_OLM_SAS (self), NULL);
-  g_return_val_if_fail (self->key_verification_event, NULL);
+  g_return_val_if_fail (self->key_verification, NULL);
 
   if (self->verification_key)
     return self->verification_key;
 
-  if (cm_event_get_m_type (self->key_verification_event) == CM_M_KEY_VERIFICATION_REQUEST)
-    event = g_object_get_data (G_OBJECT (self->key_verification_event), "start");
+  if (cm_event_get_m_type (CM_EVENT (self->key_verification)) == CM_M_KEY_VERIFICATION_REQUEST)
+    event = g_object_get_data (G_OBJECT (self->key_verification), "start");
   else
-    event = self->key_verification_event;
+    event = (CmEvent *)self->key_verification;
 
   /* We should have an m.key.verification.start event to get key event */
   g_return_val_if_fail (event, NULL);
@@ -792,9 +793,9 @@ GPtrArray *
 cm_olm_sas_get_emojis (CmOlmSas *self)
 {
   g_return_val_if_fail (CM_IS_OLM_SAS (self), NULL);
-  g_return_val_if_fail (self->key_verification_event, NULL);
+  g_return_val_if_fail (self->key_verification, NULL);
 
-  if (!g_object_get_data (G_OBJECT (self->key_verification_event), "key"))
+  if (!g_object_get_data (G_OBJECT (self->key_verification), "key"))
     return NULL;
 
   /* We need to have both keys to have a drink */
@@ -810,8 +811,8 @@ cm_olm_sas_get_emojis (CmOlmSas *self)
       for (guint i = 0; i < 7; i++)
         g_ptr_array_add (self->sas_emojis, g_strdup (emojis[self->sas_emoji_indices[i]]));
 
-      g_object_set_data (G_OBJECT (self->key_verification_event), "emoji", self->sas_emojis);
-      g_object_set_data (G_OBJECT (self->key_verification_event), "decimal", self->sas_decimals);
+      g_object_set_data (G_OBJECT (self->key_verification), "emoji", self->sas_emojis);
+      g_object_set_data (G_OBJECT (self->key_verification), "decimal", self->sas_decimals);
     }
 
   return self->sas_emojis;
@@ -829,7 +830,7 @@ cm_olm_sas_get_mac_event (CmOlmSas *self)
   CmEvent *event;
 
   g_return_val_if_fail (CM_IS_OLM_SAS (self), NULL);
-  g_return_val_if_fail (self->key_verification_event, NULL);
+  g_return_val_if_fail (self->key_verification, NULL);
   g_return_val_if_fail (self->verification_key, NULL);
 
   if (self->key_verification_mac)
@@ -840,7 +841,7 @@ cm_olm_sas_get_mac_event (CmOlmSas *self)
                    cm_client_get_user_id (self->cm_client),
                    cm_client_get_device_id (self->cm_client),
                    self->their_user_id, self->their_device_id,
-                   cm_event_get_transaction_id (self->key_verification_event));
+                   cm_verification_event_get_transaction_id (self->key_verification));
   key_id = g_strconcat ("ed25519:", cm_client_get_device_id (self->cm_client), NULL);
   g_string_append (base_info, key_id);
 
@@ -872,7 +873,7 @@ cm_olm_sas_get_done_event (CmOlmSas *self)
   CmEvent *event;
 
   g_return_val_if_fail (CM_IS_OLM_SAS (self), NULL);
-  g_return_val_if_fail (self->key_verification_event, NULL);
+  g_return_val_if_fail (self->key_verification, NULL);
   g_return_val_if_fail (self->cm_client, NULL);
 
   if (self->key_verification_done)

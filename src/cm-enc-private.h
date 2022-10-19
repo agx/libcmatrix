@@ -52,7 +52,7 @@ CmEnc          *cm_enc_new                       (gpointer             matrix_db
                                                   const char          *pickle,
                                                   const char          *key);
 gpointer       cm_enc_get_sas_for_event          (CmEnc               *self,
-                                                  CmEvent             *event);
+                                                  CmVerificationEvent *event);
 void           cm_enc_set_details                (CmEnc               *self,
                                                   GRefString          *user_id,
                                                   const char          *device_id);

@@ -188,35 +188,12 @@ CmEvent *
 cm_event_new_from_json (JsonObject *root,
                         JsonObject *encrypted)
 {
-  CmEventPrivate *priv;
-  JsonObject *child;
   CmEvent *self;
-  CmEventType type;
 
   g_return_val_if_fail (root || encrypted, NULL);
 
   self = g_object_new (CM_TYPE_EVENT, NULL);
-  priv = cm_event_get_instance_private (self);
   cm_event_set_json (self, root, encrypted);
-
-  type = cm_event_get_m_type (self);
-
-  if (type >= CM_M_KEY_VERIFICATION_ACCEPT &&
-      type <= CM_M_KEY_VERIFICATION_START)
-    {
-      child = cm_utils_json_object_get_object (root, "content");
-      priv->transaction_id = cm_utils_json_object_dup_string (child, "transaction_id");
-
-      if (type == CM_M_KEY_VERIFICATION_KEY)
-        priv->verification_key = cm_utils_json_object_dup_string (child, "key");
-
-      if (type == CM_M_KEY_VERIFICATION_REQUEST ||
-          type == CM_M_KEY_VERIFICATION_START)
-        {
-          priv->time_stamp = cm_utils_json_object_get_int (child, "timestamp");
-          priv->sender_device_id = cm_utils_json_object_dup_string (child, "from_device");
-        }
-    }
 
   return self;
 }
@@ -493,6 +470,15 @@ cm_event_set_json (CmEvent    *self,
     priv->event_type = CM_M_KEY_VERIFICATION_START;
   else
     CM_TRACE ("unhandled event type: %s", type);
+
+  if (priv->event_type == CM_M_KEY_VERIFICATION_REQUEST ||
+      priv->event_type == CM_M_KEY_VERIFICATION_START)
+    {
+      child = cm_utils_json_object_get_object (root, "content");
+      priv->sender_device_id = cm_utils_json_object_dup_string (child, "from_device");
+      if (!priv->time_stamp)
+        priv->time_stamp = cm_utils_json_object_get_int (child, "timestamp");
+    }
 }
 
 GRefString *
