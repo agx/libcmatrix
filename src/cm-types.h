@@ -27,6 +27,7 @@ typedef struct _CmRoom              CmRoom;
 typedef struct _CmEvent             CmEvent;
 typedef struct _CmRoomEvent         CmRoomEvent;
 typedef struct _CmRoomMessageEvent  CmRoomMessageEvent;
+typedef struct _CmVerificationEvent CmVerificationEvent;
 
 /* Private types */
 #ifdef CMATRIX_COMPILATION

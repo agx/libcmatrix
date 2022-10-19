@@ -16,6 +16,7 @@ libcmatrix_sources = [
   'events/cm-room-event.c',
   'events/cm-room-message-event.c',
   'events/cm-room-event-list.c',
+  'events/cm-verification-event.c',
   'users/cm-user.c',
   'users/cm-account.c',
   'users/cm-room-member.c',
