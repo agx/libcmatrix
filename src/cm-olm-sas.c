@@ -210,6 +210,21 @@ cm_olm_sas_generate_bytes (CmOlmSas *self)
   self->sas_decimals[2] = ((bytes[3] & 0b111111) << 7 | bytes[4] >> 1) + 1000;
 }
 
+static CmVerificationEvent *
+cm_olm_sas_get_start_event (CmOlmSas *self)
+{
+  CmEvent *event;
+
+  g_assert (CM_IS_OLM_SAS (self));
+
+  event = CM_EVENT (self->key_verification);
+
+  if (cm_event_get_m_type (event) == CM_M_KEY_VERIFICATION_REQUEST)
+    return g_object_get_data (G_OBJECT (event), "start");
+
+  return self->key_verification;
+}
+
 static JsonObject *
 olm_sas_get_message_json (CmOlmSas    *self,
                           JsonObject **content)
@@ -256,12 +271,8 @@ cm_olm_sas_create_commitment (CmOlmSas *self)
   if (self->commitment_str->len)
     return;
 
-  if (cm_event_get_m_type (CM_EVENT (self->key_verification)) == CM_M_KEY_VERIFICATION_REQUEST)
-    event = g_object_get_data (G_OBJECT (self->key_verification), "start");
-  else
-    event = self->key_verification;
-
   /* We should have an m.key.verification.start event to get commitment */
+  event = cm_olm_sas_get_start_event (self);
   g_return_if_fail (event);
 
   str = g_string_sized_new (1024);
@@ -726,13 +737,8 @@ cm_olm_sas_get_accept_event (CmOlmSas *self)
   if (self->key_verification_accept)
     return self->key_verification_accept;
 
-  if (cm_event_get_m_type (CM_EVENT (self->key_verification)) == CM_M_KEY_VERIFICATION_REQUEST)
-    event = g_object_get_data (G_OBJECT (self->key_verification), "start");
-  else
-    event = (CmEvent *)self->key_verification;
-
   /* We should have an m.key.verification.start event to get commitment */
-  g_return_val_if_fail (event, NULL);
+  g_return_val_if_fail (cm_olm_sas_get_start_event (self), NULL);
   cm_olm_sas_create_commitment (self);
 
   event = cm_event_new (CM_M_KEY_VERIFICATION_ACCEPT);
@@ -768,13 +774,8 @@ cm_olm_sas_get_key_event (CmOlmSas *self)
   if (self->verification_key)
     return self->verification_key;
 
-  if (cm_event_get_m_type (CM_EVENT (self->key_verification)) == CM_M_KEY_VERIFICATION_REQUEST)
-    event = g_object_get_data (G_OBJECT (self->key_verification), "start");
-  else
-    event = (CmEvent *)self->key_verification;
-
   /* We should have an m.key.verification.start event to get key event */
-  g_return_val_if_fail (event, NULL);
+  g_return_val_if_fail (cm_olm_sas_get_start_event (self), NULL);
   cm_olm_sas_create_commitment (self);
 
   event = cm_event_new (CM_M_KEY_VERIFICATION_KEY);
