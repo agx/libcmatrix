@@ -27,6 +27,8 @@ struct _CmVerificationEvent
 
   CmClient      *client;
 
+  GTask         *pending_task;
+
   /* transaction_id in key verification */
   char          *transaction_id;
   char          *verification_key;
@@ -35,10 +37,48 @@ struct _CmVerificationEvent
 G_DEFINE_TYPE (CmVerificationEvent, cm_verification_event, CM_TYPE_EVENT)
 
 static void
+key_verification_continue_cb (GObject      *obj,
+                              GAsyncResult *result,
+                              gpointer      user_data);
+
+static void
+verification_event_updated_cb (CmVerificationEvent *self)
+{
+  g_assert (CM_IS_VERIFICATION_EVENT (self));
+
+  g_warning ("updated");
+
+  if (cm_event_get_m_type (CM_EVENT (self)) == CM_M_KEY_VERIFICATION_REQUEST &&
+      g_object_get_data (G_OBJECT (self), "start") &&
+      g_object_get_data (G_OBJECT (self), "ready-complete") &&
+      self->pending_task)
+    {
+      g_autofree char *uri = NULL;
+      GCancellable *cancellable;
+      CmOlmSas *olm_sas = NULL;
+      CmEvent *reply_event;
+      JsonObject *root;
+
+      cancellable = g_task_get_cancellable (self->pending_task);
+      olm_sas = g_object_get_data (G_OBJECT (self), "olm-sas");
+      reply_event = cm_olm_sas_get_accept_event (olm_sas);
+      root = cm_event_get_json (reply_event);
+      uri = g_strdup_printf ("/_matrix/client/r0/sendToDevice/m.key.verification.accept/%s",
+                             cm_event_get_txn_id (reply_event));
+      cm_net_send_json_async (cm_client_get_net (self->client),
+                              0, root, uri, SOUP_METHOD_PUT,
+                              NULL, cancellable,
+                              key_verification_continue_cb,
+                              g_object_ref (self->pending_task));
+    }
+}
+
+static void
 cm_verification_event_finalize (GObject *object)
 {
   CmVerificationEvent *self = (CmVerificationEvent *)object;
 
+  g_clear_object (&self->pending_task);
   g_free (self->transaction_id);
   g_free (self->verification_key);
   g_clear_object (&self->client);
@@ -96,6 +136,10 @@ cm_verification_event_set_json (CmVerificationEvent *self,
 
   if (type == CM_M_KEY_VERIFICATION_KEY)
     self->verification_key = cm_utils_json_object_dup_string (child, "key");
+
+  g_signal_connect_object (self, "updated",
+                           G_CALLBACK (verification_event_updated_cb),
+                           self, G_CONNECT_SWAPPED);
 }
 
 const char *
@@ -243,18 +287,38 @@ key_verification_continue_cb (GObject      *obj,
     }
   else
     {
-      g_autoptr(GPtrArray) users = NULL;
-      CmUserList *user_list;
-      CmUser *user;
+      /* Reset ready-complete marker */
+      if (cm_event_get_m_type (CM_EVENT (self)) == CM_M_KEY_VERIFICATION_REQUEST &&
+          g_object_get_data (G_OBJECT (self), "start") &&
+          g_object_get_data (G_OBJECT (self), "ready-complete"))
+        {
+          g_object_set_data (G_OBJECT (self), "ready-complete", GINT_TO_POINTER (FALSE));
+          g_clear_object (&self->pending_task);
+        }
 
-      users = g_ptr_array_new_full (1, g_object_unref);
-      user = cm_event_get_sender (CM_EVENT (self));;
-      g_ptr_array_add (users, g_object_ref (user));
+      /* Cache the task, we shall complete the task once we have "start" event */
+      if (cm_event_get_m_type (CM_EVENT (self)) == CM_M_KEY_VERIFICATION_REQUEST &&
+          !g_object_get_data (G_OBJECT (self), "start") &&
+          !g_object_get_data (G_OBJECT (self), "ready-complete"))
+        {
+          g_object_set_data (G_OBJECT (self), "ready-complete", GINT_TO_POINTER (TRUE));
+          g_set_object (&self->pending_task, task);
+        }
+      else
+        {
+          g_autoptr(GPtrArray) users = NULL;
+          CmUserList *user_list;
+          CmUser *user;
 
-      user_list = cm_client_get_user_list (self->client);
-      cm_user_list_load_devices_async (user_list, users,
-                                       verification_load_user_devices_cb,
-                                       g_steal_pointer (&task));
+          users = g_ptr_array_new_full (1, g_object_unref);
+          user = cm_event_get_sender (CM_EVENT (self));;
+          g_ptr_array_add (users, g_object_ref (user));
+
+          user_list = cm_client_get_user_list (self->client);
+          cm_user_list_load_devices_async (user_list, users,
+                                           verification_load_user_devices_cb,
+                                           g_steal_pointer (&task));
+        }
     }
 }
 
@@ -280,15 +344,32 @@ cm_verification_event_continue_async (CmVerificationEvent *self,
   olm_sas = g_object_get_data (G_OBJECT (self), "olm-sas");
   g_return_if_fail (CM_IS_OLM_SAS (olm_sas));
 
-  reply_event = cm_olm_sas_get_accept_event (olm_sas);
-  root = cm_event_get_json (reply_event);
-  uri = g_strdup_printf ("/_matrix/client/r0/sendToDevice/m.key.verification.accept/%s",
-                         cm_event_get_txn_id (reply_event));
-  cm_net_send_json_async (cm_client_get_net (self->client),
-                          0, root, uri, SOUP_METHOD_PUT,
-                          NULL, cancellable,
-                          key_verification_continue_cb,
-                          g_steal_pointer (&task));
+  if (cm_event_get_m_type (CM_EVENT (self)) == CM_M_KEY_VERIFICATION_REQUEST &&
+      (!g_object_get_data (G_OBJECT (self), "start") &&
+       !g_object_get_data (G_OBJECT (self), "ready-complete")))
+    {
+      reply_event = cm_olm_sas_get_ready_event (olm_sas);
+      root = cm_event_get_json (reply_event);
+      uri = g_strdup_printf ("/_matrix/client/r0/sendToDevice/m.key.verification.ready/%s",
+                             cm_event_get_txn_id (reply_event));
+      cm_net_send_json_async (cm_client_get_net (self->client),
+                              0, root, uri, SOUP_METHOD_PUT,
+                              NULL, cancellable,
+                              key_verification_continue_cb,
+                              g_steal_pointer (&task));
+    }
+  else
+    {
+      reply_event = cm_olm_sas_get_accept_event (olm_sas);
+      root = cm_event_get_json (reply_event);
+      uri = g_strdup_printf ("/_matrix/client/r0/sendToDevice/m.key.verification.accept/%s",
+                             cm_event_get_txn_id (reply_event));
+      cm_net_send_json_async (cm_client_get_net (self->client),
+                              0, root, uri, SOUP_METHOD_PUT,
+                              NULL, cancellable,
+                              key_verification_continue_cb,
+                              g_steal_pointer (&task));
+    }
 }
 
 gboolean
