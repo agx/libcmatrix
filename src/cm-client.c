@@ -2172,7 +2172,8 @@ handle_to_device (CmClient   *self,
                 }
             }
 
-          if (key_event && type == CM_M_KEY_VERIFICATION_MAC) {
+          if (g_object_get_data (G_OBJECT (key_event), "mac") &&
+              g_object_get_data (G_OBJECT (key_event), "mac-sent")) {
             CmDevice *device;
 
             device = cm_olm_sas_get_device (olm_sas);
