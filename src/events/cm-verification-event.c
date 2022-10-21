@@ -384,6 +384,25 @@ cm_verification_event_continue_finish (CmVerificationEvent *self,
 }
 
 static void
+mac_sent_done_cb (GObject      *obj,
+                  GAsyncResult *result,
+                  gpointer      user_data)
+{
+  g_autoptr (GTask) task = user_data;
+  GError *error = NULL;
+  gboolean success;
+
+  g_assert (G_IS_TASK (task));
+
+  success = g_task_propagate_boolean (G_TASK (result), &error);
+
+  if (error)
+    g_task_return_error (task, error);
+  else
+    g_task_return_boolean (task, success);
+}
+
+static void
 key_verification_match_cb (GObject      *obj,
                            GAsyncResult *result,
                            gpointer      user_data)
@@ -409,7 +428,26 @@ key_verification_match_cb (GObject      *obj,
     }
   else
     {
-      g_task_return_boolean (task, TRUE);
+      g_object_set_data (G_OBJECT (self), "mac-sent", GINT_TO_POINTER (TRUE));
+      if (g_object_get_data (G_OBJECT (self), "mac"))
+        {
+          GCancellable *cancellable;
+          CmOlmSas *olm_sas;
+
+          cancellable = g_task_get_cancellable (task);
+          olm_sas = g_object_get_data (G_OBJECT (self), "olm-sas");
+
+          if (cm_olm_sas_get_cancel_code (olm_sas))
+            cm_verification_event_cancel_async (self, cancellable,
+                                                mac_sent_done_cb,
+                                                g_steal_pointer (&task));
+          else
+            cm_verification_event_done_async (self, cancellable,
+                                              mac_sent_done_cb,
+                                              g_steal_pointer (&task));
+        }
+      else
+        g_task_return_boolean (task, TRUE);
     }
 }
 
