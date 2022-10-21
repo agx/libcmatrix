@@ -46,8 +46,6 @@ verification_event_updated_cb (CmVerificationEvent *self)
 {
   g_assert (CM_IS_VERIFICATION_EVENT (self));
 
-  g_warning ("updated");
-
   if (cm_event_get_m_type (CM_EVENT (self)) == CM_M_KEY_VERIFICATION_REQUEST &&
       g_object_get_data (G_OBJECT (self), "start") &&
       g_object_get_data (G_OBJECT (self), "ready-complete") &&
