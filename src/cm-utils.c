@@ -18,7 +18,9 @@
 #include <libsoup/soup.h>
 #include <json-glib/json-glib.h>
 
+#include "cm-client-private.h"
 #include "cm-common.h"
+#include "cm-enc-private.h"
 #include "cm-enums.h"
 #include "cm-utils-private.h"
 
@@ -1271,6 +1273,155 @@ cm_utils_verify_homeserver_finish (GAsyncResult  *result,
   g_return_val_if_fail (G_IS_TASK (result), FALSE);
 
   return g_task_propagate_boolean (G_TASK (result), error);
+}
+
+static void
+utils_file_stream_cb (GObject      *obj,
+                      GAsyncResult *result,
+                      gpointer      user_data)
+{
+  g_autoptr(GTask) task = user_data;
+  GError *error = NULL;
+
+  g_assert (G_IS_TASK (task));
+
+  g_output_stream_splice_finish (G_OUTPUT_STREAM (obj), result, &error);
+
+  if (error) {
+    g_task_return_error (task, error);
+  } else {
+    GFile *out_file;
+
+    out_file = g_object_get_data (user_data, "file");
+    if (out_file)
+      g_object_ref (out_file);
+    g_task_return_pointer (task, out_file, g_object_unref);
+  }
+}
+
+static void
+get_file_cb (GObject      *object,
+             GAsyncResult *result,
+             gpointer      user_data)
+{
+  CmClient *client;
+  g_autoptr(GTask) task = user_data;
+  GInputStream *istream = NULL;
+  GError *error = NULL;
+
+  g_assert (G_IS_TASK (task));
+
+  client = g_task_get_source_object (task);
+  g_assert (CM_IS_CLIENT (client));
+
+  istream = cm_net_get_file_finish (CM_NET (object), result, &error);
+
+  if (error)
+    g_task_return_error (task, error);
+  else
+    {
+      GOutputStream *out_stream = NULL;
+      GFile *out_file = NULL;
+      const char *file_path;
+
+      file_path = g_object_get_data (user_data, "path");
+      out_file = g_file_new_for_path (file_path);
+      out_stream = (GOutputStream *)g_file_create (out_file, G_FILE_CREATE_NONE, NULL, &error);
+
+      if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_EXISTS))
+        {
+          GFileIOStream *io_stream;
+
+          g_clear_error (&error);
+          io_stream = g_file_open_readwrite (out_file, NULL, &error);
+          if (io_stream)
+            {
+              g_object_set_data_full (G_OBJECT (task), "io-stream", io_stream, g_object_unref);
+              out_stream = g_io_stream_get_output_stream (G_IO_STREAM (io_stream));
+            }
+        }
+
+      if (out_stream)
+        {
+          g_object_set_data_full (G_OBJECT (task), "file", out_file, g_object_unref);
+          g_output_stream_splice_async (G_OUTPUT_STREAM (out_stream), istream,
+                                        G_OUTPUT_STREAM_SPLICE_CLOSE_SOURCE |
+                                        G_OUTPUT_STREAM_SPLICE_CLOSE_TARGET,
+                                        0, NULL,
+                                        utils_file_stream_cb,
+                                        g_steal_pointer (&task));
+        }
+      else
+        {
+          if (error)
+            g_task_return_error (task, error);
+          else
+            g_task_return_boolean (task, FALSE);
+        }
+    }
+}
+
+static void
+find_file_enc_cb (GObject      *object,
+                  GAsyncResult *result,
+                  gpointer      user_data)
+{
+  CmClient *client;
+  g_autoptr(GTask) task = user_data;
+  CmEncFileInfo *file_info;
+  GCancellable *cancellable;
+  char *uri;
+
+  g_assert (G_IS_TASK (task));
+
+  client = g_task_get_source_object (task);
+  g_assert (CM_IS_CLIENT (client));
+
+  file_info = cm_enc_find_file_enc_finish (CM_ENC (object), result, NULL);
+
+  cancellable = g_task_get_cancellable (task);
+  uri = g_object_get_data (user_data, "uri");
+
+  cm_net_get_file_async (cm_client_get_net (client),
+                         uri, file_info, cancellable,
+                         get_file_cb,
+                         g_steal_pointer (&task));
+}
+
+void
+cm_utils_save_url_to_path_async (CmClient              *client,
+                                 const char            *uri,
+                                 char                  *file_path,
+                                 GCancellable          *cancellable,
+                                 GFileProgressCallback  progress_callback,
+                                 gpointer               progress_user_data,
+                                 GAsyncReadyCallback    callback,
+                                 gpointer               user_data)
+{
+  GTask *task;
+
+  g_return_if_fail (CM_IS_CLIENT (client));
+  g_return_if_fail (uri && *uri);
+  g_return_if_fail (file_path && *file_path == '/');
+  g_return_if_fail (!cancellable || G_IS_CANCELLABLE (cancellable));
+
+  task = g_task_new (client, cancellable, callback, user_data);
+  g_object_set_data_full (G_OBJECT (task), "uri", g_strdup (uri), g_free);
+  g_object_set_data_full (G_OBJECT (task), "path", file_path, g_free);
+  g_object_set_data (G_OBJECT (task), "progress-cb", progress_callback);
+  g_object_set_data (G_OBJECT (task), "progress-cb-data", progress_user_data);
+
+  cm_enc_find_file_enc_async (cm_client_get_enc (client), uri,
+                              find_file_enc_cb, task);
+}
+
+GFile *
+cm_utils_save_url_to_path_finish (GAsyncResult  *result,
+                                  GError       **error)
+{
+  g_return_val_if_fail (G_IS_TASK (result), FALSE);
+
+  return g_task_propagate_pointer (G_TASK (result), error);
 }
 
 /*

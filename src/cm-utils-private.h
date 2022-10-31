@@ -14,6 +14,7 @@
 #include <libsoup/soup.h>
 
 #include "cm-enums.h"
+#include "cm-types.h"
 
 /* Hack to check format specifier arguments match */
 static inline void check_format (const char *fmt, ...) G_GNUC_PRINTF (1, 2);
@@ -91,6 +92,16 @@ void          cm_utils_verify_homeserver_async  (const char          *server,
                                                  gpointer             user_data);
 gboolean      cm_utils_verify_homeserver_finish (GAsyncResult        *result,
                                                  GError             **error);
+void          cm_utils_save_url_to_path_async     (CmClient              *client,
+                                                   const char            *uri,
+                                                   char                  *file_path,
+                                                   GCancellable          *cancellable,
+                                                   GFileProgressCallback  progress_callback,
+                                                   gpointer               progress_user_data,
+                                                   GAsyncReadyCallback    callback,
+                                                   gpointer               user_data);
+GFile        *cm_utils_save_url_to_path_finish    (GAsyncResult          *result,
+                                                   GError               **error);
 char         *cm_utils_get_path_for_m_type      (const char          *base_path,
                                                  CmEventType          type,
                                                  gboolean             thumbnail,
