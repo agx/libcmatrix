@@ -33,6 +33,7 @@ typedef struct
   char *avatar_url;
   char *avatar_file_path;
 
+  GTask        *avatar_task;
   GFile        *avatar_file;
   JsonObject   *generated_json;
 
@@ -42,7 +43,10 @@ typedef struct
   /* Set when we know about some change, but not sure what it is */
   gboolean      device_changed;
 
-  gboolean info_loaded;
+  gboolean      info_loading;
+  gboolean      info_loaded;
+  gboolean      avatar_loading;
+  gboolean      avatar_loaded;
 } CmUserPrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (CmUser, cm_user, G_TYPE_OBJECT)
@@ -67,6 +71,7 @@ cm_user_finalize (GObject *object)
 
   g_list_store_remove_all (priv->devices);
   g_clear_object (&priv->devices);
+  g_clear_object (&priv->avatar_task);
   g_clear_pointer (&priv->devices_table, g_hash_table_unref);
 
   g_clear_object (&priv->avatar_file);
@@ -228,7 +233,19 @@ cm_user_set_details (CmUser     *self,
     {
       g_free (priv->avatar_url);
       priv->avatar_url = g_strdup (avatar_url);
+      g_clear_object (&priv->avatar_file);
+      priv->avatar_loaded = FALSE;
       changed = TRUE;
+
+      if (priv->avatar_task)
+        {
+          GCancellable *cancellable;
+
+          cancellable = g_task_get_cancellable (priv->avatar_task);
+          if (cancellable)
+            g_cancellable_cancel (cancellable);
+          g_clear_object (&priv->avatar_task);
+        }
     }
 
   /* If we are not already loading info, mark as info has loaded */
@@ -277,21 +294,73 @@ user_get_avatar_cb (GObject      *object,
                     gpointer      user_data)
 {
   CmUser *self;
+  CmUserPrivate *priv;
   g_autoptr(GTask) task = user_data;
-  GInputStream *stream;
   GError *error = NULL;
 
   g_assert (G_IS_TASK (task));
 
   self = g_task_get_source_object (task);
+  priv = cm_user_get_instance_private (self);
 
-  stream = cm_client_get_file_finish (CM_CLIENT (object), result, &error);
+  g_clear_object (&priv->avatar_file);
+  priv->avatar_file = cm_utils_save_url_to_path_finish (result, &error);
   g_debug ("(%p) Get avatar %s", self, CM_LOG_SUCCESS (!error));
+
+  priv->avatar_loading = FALSE;
+  priv->avatar_loaded = !error;
 
   if (error)
     g_task_return_error (task, error);
+  else if (priv->avatar_file)
+    {
+      GInputStream *istream;
+
+      istream = (GInputStream *)g_file_read (priv->avatar_file, NULL, NULL);
+      g_object_set_data_full (G_OBJECT (priv->avatar_file), "stream",
+                              istream, g_object_unref);
+      g_task_return_pointer (task, g_object_ref (istream), g_object_unref);
+      return;
+    }
   else
-    g_task_return_pointer (task, stream, g_object_unref);
+    g_task_return_pointer (task, NULL, NULL);
+}
+
+static void
+avatar_get_user_info_cb (GObject      *object,
+                         GAsyncResult *result,
+                         gpointer      user_data)
+{
+  CmUser *self;
+  CmUserPrivate *priv;
+  g_autoptr(GTask) task = user_data;
+
+  g_assert (G_IS_TASK (task));
+
+  self = g_task_get_source_object (task);
+  priv = cm_user_get_instance_private (self);
+  g_assert (CM_IS_USER (self));
+
+  if (priv->avatar_url)
+    {
+      g_autofree char *file_name = NULL;
+      GCancellable *cancellable;
+      const char *path;
+      char *file_path;
+
+      path = cm_matrix_get_data_dir ();
+      file_name = g_path_get_basename (priv->avatar_url);
+      file_path = cm_utils_get_path_for_m_type (path, CM_M_ROOM_MEMBER, FALSE, file_name);
+      cancellable = g_task_get_cancellable (task);
+
+      priv->avatar_loading = TRUE;
+      cm_utils_save_url_to_path_async (priv->cm_client, priv->avatar_url,
+                                       file_path, cancellable,
+                                       NULL, NULL,
+                                       user_get_avatar_cb, g_steal_pointer (&task));
+    }
+  else
+    g_task_return_pointer (task, NULL, NULL);
 }
 
 void
@@ -301,20 +370,59 @@ cm_user_get_avatar_async (CmUser              *self,
                           gpointer             user_data)
 {
   CmUserPrivate *priv = cm_user_get_instance_private (self);
-  GTask *task;
+  g_autoptr(GTask) task = NULL;
 
   task = g_task_new (self, cancellable, callback, user_data);
   g_task_set_source_tag (task, cm_user_get_avatar_async);
 
   g_debug ("(%p) Get avatar", self);
 
+  if (priv->avatar_file)
+    {
+      GInputStream *istream;
+
+      istream = (GInputStream *)g_file_read (priv->avatar_file, NULL, NULL);
+      g_object_set_data_full (G_OBJECT (priv->avatar_file), "stream",
+                              istream, g_object_unref);
+      g_task_return_pointer (task, g_object_ref (istream), g_object_unref);
+      return;
+    }
+
+  if (priv->avatar_loaded)
+    {
+      g_task_return_pointer (task, NULL, NULL);
+      return;
+    }
+
+  if (priv->info_loading || priv->avatar_loading)
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_PENDING,
+                               "Avatar already being downloaded");
+      return;
+    }
+
+  g_set_object (&priv->avatar_task, task);
+
   if ((!priv->display_name && !priv->avatar_url) || !priv->info_loaded)
     cm_user_load_info_async (self, cancellable,
-                             user_get_avatar_cb, task);
+                             avatar_get_user_info_cb,
+                             g_steal_pointer (&task));
   else if (priv->avatar_url)
-    cm_client_get_file_async (priv->cm_client, priv->avatar_url, cancellable,
-                              NULL, NULL,
-                              user_get_avatar_cb, g_steal_pointer (&task));
+    {
+      g_autofree char *file_name = NULL;
+      const char *path;
+      char *file_path;
+
+      path = cm_matrix_get_data_dir ();
+      file_name = g_path_get_basename (priv->avatar_url);
+      file_path = cm_utils_get_path_for_m_type (path, CM_M_ROOM_MEMBER, FALSE, file_name);
+
+      priv->avatar_loading = TRUE;
+      cm_utils_save_url_to_path_async (priv->cm_client, priv->avatar_url,
+                                       file_path, cancellable,
+                                       NULL, NULL,
+                                       user_get_avatar_cb, g_steal_pointer (&task));
+    }
   else
     g_task_return_pointer (task, NULL, NULL);
 }
@@ -367,24 +475,12 @@ user_get_user_info_cb (GObject      *obj,
   priv->display_name = g_strdup (name);
   priv->avatar_url = g_strdup (avatar_url);
   priv->info_loaded = TRUE;
+  priv->info_loading = FALSE;
 
-  if (g_task_get_source_tag (task) == cm_user_get_avatar_async)
-    {
-      GCancellable *cancellable;
+  if (!priv->avatar_url)
+    priv->avatar_loaded = TRUE;
 
-      cancellable = g_task_get_cancellable (task);
-
-      if (priv->avatar_url)
-        cm_client_get_file_async (priv->cm_client, priv->avatar_url, cancellable,
-                                  NULL, NULL,
-                                  user_get_avatar_cb, g_steal_pointer (&task));
-      else
-        g_task_return_pointer (task, NULL, NULL);
-    }
-  else
-    {
-      g_task_return_boolean (task, TRUE);
-    }
+  g_task_return_boolean (task, TRUE);
 }
 
 void
@@ -395,7 +491,7 @@ cm_user_load_info_async (CmUser              *self,
 {
   CmUserPrivate *priv = cm_user_get_instance_private (self);
   g_autofree char *uri = NULL;
-  GTask *task;
+  g_autoptr(GTask) task = NULL;
 
   g_return_if_fail (CM_IS_USER (self));
   g_return_if_fail (!cancellable || G_IS_CANCELLABLE (cancellable));
@@ -403,10 +499,25 @@ cm_user_load_info_async (CmUser              *self,
   task = g_task_new (self, cancellable, callback, user_data);
   g_debug ("(%p) Load info", self);
 
+  if (priv->info_loaded)
+    {
+      g_task_return_boolean (task, TRUE);
+      return;
+    }
+
+  if (priv->info_loading)
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_PENDING,
+                               "info already being loaded");
+      return;
+    }
+
+  priv->info_loading = TRUE;
   uri = g_strdup_printf ("/_matrix/client/r0/profile/%s", priv->user_id);
   cm_net_send_json_async (cm_client_get_net (priv->cm_client),
                           1, NULL, uri, SOUP_METHOD_GET,
-                          NULL, cancellable, user_get_user_info_cb, task);
+                          NULL, cancellable, user_get_user_info_cb,
+                          g_steal_pointer (&task));
 }
 
 gboolean
