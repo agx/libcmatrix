@@ -33,6 +33,13 @@ gboolean      cm_room_is_encrypted                (CmRoom                *self);
 GListModel   *cm_room_get_joined_members          (CmRoom                *self);
 GListModel   *cm_room_get_events_list             (CmRoom                *self);
 gint64        cm_room_get_unread_notification_counts  (CmRoom                *self);
+void          cm_room_get_avatar_async                (CmRoom                *self,
+                                                       GCancellable          *cancellable,
+                                                       GAsyncReadyCallback    callback,
+                                                       gpointer               user_data);
+GInputStream *cm_room_get_avatar_finish               (CmRoom                *self,
+                                                       GAsyncResult          *result,
+                                                       GError               **error);
 void          cm_room_accept_invite_async         (CmRoom                *self,
                                                    GCancellable          *cancellable,
                                                    GAsyncReadyCallback    callback,

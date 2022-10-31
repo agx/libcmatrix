@@ -37,6 +37,7 @@ struct _CmRoomEventList
   GListStore   *events_list;
   CmEvent      *room_create_event;
   CmEvent      *room_name_event;
+  CmEvent      *room_avatar_event;
   CmEvent      *canonical_alias_event;
   CmEvent      *room_topic_event;
   CmEvent      *power_level_event;
@@ -151,6 +152,7 @@ room_event_list_generate_json (CmRoomEventList *self)
 
   set_json_from_event (self->room_create_event, child);
   set_json_from_event (self->room_name_event, child);
+  set_json_from_event (self->room_avatar_event, child);
   set_json_from_event (self->canonical_alias_event, child);
   set_json_from_event (self->room_topic_event, child);
   set_json_from_event (self->encryption_event, child);
@@ -175,6 +177,7 @@ cm_room_event_list_finalize (GObject *object)
   g_clear_object (&self->events_list);
   g_clear_object (&self->room_create_event);
   g_clear_object (&self->room_name_event);
+  g_clear_object (&self->room_avatar_event);
   g_clear_object (&self->canonical_alias_event);
   g_clear_object (&self->room_topic_event);
   g_clear_object (&self->power_level_event);
@@ -279,6 +282,9 @@ cm_room_event_list_get_event (CmRoomEventList *self,
 
   if (type == CM_M_ROOM_TOMBSTONE)
     return self->tombstone_event;
+
+  if (type == CM_M_ROOM_AVATAR)
+    return self->room_avatar_event;
 
   return NULL;
 }
@@ -405,6 +411,7 @@ cm_room_event_list_set_local_json (CmRoomEventList *self,
   local = cm_utils_json_object_get_object (root, "local");
 
   set_event_from_json (room, self->room_name_event, local, CM_M_ROOM_NAME);
+  set_event_from_json (room, self->room_avatar_event, local, CM_M_ROOM_AVATAR);
   set_event_from_json (room, self->room_topic_event, local, CM_M_ROOM_TOPIC);
   set_event_from_json (room, self->room_create_event, local, CM_M_ROOM_CREATE);
   set_event_from_json (room, self->tombstone_event, local, CM_M_ROOM_TOMBSTONE);
@@ -523,6 +530,8 @@ cm_room_event_list_parse_events (CmRoomEventList *self,
           value = cm_room_event_get_room_name (CM_ROOM_EVENT (event));
           cm_room_set_name (self->room, value);
         }
+      else if (type == CM_M_ROOM_AVATAR)
+        g_set_object (&self->room_avatar_event, event);
       else if (type == CM_M_ROOM_MEMBER)
         cm_room_update_user (self->room, event);
       else if (type == CM_M_ROOM_POWER_LEVELS)
@@ -543,6 +552,7 @@ cm_room_event_list_parse_events (CmRoomEventList *self,
         g_set_object (&self->tombstone_event, event);
 
       if (type == CM_M_ROOM_NAME ||
+          type == CM_M_ROOM_AVATAR ||
           type == CM_M_ROOM_POWER_LEVELS ||
           type == CM_M_ROOM_ENCRYPTION ||
           type == CM_M_ROOM_CANONICAL_ALIAS ||
@@ -555,6 +565,9 @@ cm_room_event_list_parse_events (CmRoomEventList *self,
           set_local_json_event (self->local_json, event);
           self->save_pending = TRUE;
         }
+
+      if (type == CM_M_ROOM_AVATAR)
+        g_object_notify (G_OBJECT (self->room), "name");
 
       if (type == CM_M_ROOM_ENCRYPTION)
         g_object_notify (G_OBJECT (self->room), "encrypted");

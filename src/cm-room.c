@@ -25,6 +25,7 @@
 #include "users/cm-user.h"
 #include "users/cm-user-private.h"
 #include "users/cm-user-list-private.h"
+#include "cm-matrix-private.h"
 #include "cm-room-private.h"
 #include "cm-room.h"
 
@@ -60,6 +61,10 @@ struct _CmRoom
   char       *encryption;
   char       *prev_batch;
 
+  GTask      *avatar_task;
+  GFile      *avatar_file;
+  CmEvent    *avatar_event;
+
   GQueue     *message_queue;
   guint       retry_timeout_id;
   gint        unread_count;
@@ -76,6 +81,8 @@ struct _CmRoom
 
   gboolean    loading_initial_sync;
   gboolean    loading_past_events;
+  gboolean    avatar_loading;
+  gboolean    avatar_loaded;
   gboolean    db_save_pending;
   gboolean    is_sending_message;
   gboolean    name_loaded;
@@ -857,6 +864,141 @@ cm_room_get_unread_notification_counts (CmRoom *self)
   g_return_val_if_fail (CM_IS_ROOM (self), 0);
 
   return self->unread_count;
+}
+
+static void
+room_get_avatar_cb (GObject      *object,
+                    GAsyncResult *result,
+                    gpointer      user_data)
+{
+  CmRoom *self;
+  g_autoptr(GTask) task = user_data;
+  GError *error = NULL;
+
+  g_assert (G_IS_TASK (task));
+
+  self = g_task_get_source_object (task);
+
+  g_clear_object (&self->avatar_file);
+  self->avatar_file = cm_utils_save_url_to_path_finish (result, &error);
+  g_debug ("(%p) Get avatar %s", self, CM_LOG_SUCCESS (!error));
+
+  self->avatar_loading = FALSE;
+  self->avatar_loaded = !error;
+
+  if (error)
+    g_task_return_error (task, error);
+  else if (self->avatar_file)
+    {
+      GInputStream *istream;
+
+      istream = (GInputStream *)g_file_read (self->avatar_file, NULL, NULL);
+      g_object_set_data_full (G_OBJECT (self->avatar_file), "stream",
+                              istream, g_object_unref);
+      g_task_return_pointer (task, g_object_ref (istream), g_object_unref);
+      g_object_notify (G_OBJECT (self), "name");
+      return;
+    }
+  else
+    g_task_return_pointer (task, NULL, NULL);
+}
+
+void
+cm_room_get_avatar_async (CmRoom              *self,
+                          GCancellable        *cancellable,
+                          GAsyncReadyCallback  callback,
+                          gpointer             user_data)
+{
+  g_autoptr(JsonObject) json = NULL;
+  g_autoptr(GTask) task = NULL;
+  const char *avatar_url = NULL;
+  JsonObject *child;
+  CmEvent *event;
+
+  task = g_task_new (self, cancellable, callback, user_data);
+  g_task_set_source_tag (task, cm_user_get_avatar_async);
+
+  g_debug ("(%p) Get avatar", self);
+
+  event = cm_room_event_list_get_event (self->room_event, CM_M_ROOM_AVATAR);
+
+  if (event != self->avatar_event)
+    {
+      GCancellable *old_cancellable = NULL;
+
+      g_clear_object (&self->avatar_file);
+      self->avatar_loaded = FALSE;
+
+      if (self->avatar_task)
+        old_cancellable = g_task_get_cancellable (self->avatar_task);
+
+      if (old_cancellable)
+        g_cancellable_cancel (old_cancellable);
+
+      g_clear_object (&self->avatar_task);
+      self->avatar_event = event;
+    }
+
+  if (self->avatar_file)
+    {
+      GInputStream *istream;
+
+      istream = (GInputStream *)g_file_read (self->avatar_file, NULL, NULL);
+      g_object_set_data_full (G_OBJECT (self->avatar_file), "stream",
+                              istream, g_object_unref);
+      g_task_return_pointer (task, g_object_ref (istream), g_object_unref);
+      return;
+    }
+
+  if (self->avatar_loaded || !event)
+    {
+      g_task_return_pointer (task, NULL, NULL);
+      return;
+    }
+
+  if (self->avatar_loading)
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_PENDING,
+                               "Avatar already being downloaded");
+      return;
+    }
+
+  json = cm_event_get_json (event);
+  child = cm_utils_json_object_get_object (json, "content");
+  avatar_url = cm_utils_json_object_get_string (child, "url");
+  g_set_object (&self->avatar_task, task);
+
+  if (avatar_url)
+    {
+      g_autofree char *file_name = NULL;
+      const char *path;
+      char *file_path;
+
+      path = cm_matrix_get_data_dir ();
+      file_name = g_path_get_basename (avatar_url);
+      file_path = cm_utils_get_path_for_m_type (path, CM_M_ROOM_AVATAR, FALSE, file_name);
+
+      self->avatar_loading = TRUE;
+      cm_utils_save_url_to_path_async (self->client, avatar_url,
+                                       file_path, cancellable,
+                                       NULL, NULL,
+                                       room_get_avatar_cb,
+                                       g_steal_pointer (&task));
+    }
+  else
+    g_task_return_pointer (task, NULL, NULL);
+}
+
+GInputStream *
+cm_room_get_avatar_finish (CmRoom        *self,
+                           GAsyncResult  *result,
+                           GError       **error)
+{
+  g_return_val_if_fail (CM_IS_ROOM (self), NULL);
+  g_return_val_if_fail (G_IS_TASK (result), NULL);
+  g_return_val_if_fail (!error || !*error, NULL);
+
+  return g_task_propagate_pointer (G_TASK (result), error);
 }
 
 CmStatus
