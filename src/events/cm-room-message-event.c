@@ -294,98 +294,28 @@ message_file_stream_cb (GObject      *obj,
   CmRoomMessageEvent *self;
   g_autoptr(GTask) task = user_data;
   GError *error = NULL;
+  GFile *out_file;
 
   g_assert (G_IS_TASK (task));
 
   self = g_task_get_source_object (task);
   g_assert (CM_IS_ROOM_MESSAGE_EVENT (self));
 
-  g_output_stream_splice_finish (G_OUTPUT_STREAM (obj), result, &error);
-  self->downloading_file = FALSE;
-
-  if (error) {
-    g_task_return_error (task, error);
-  } else {
-    g_autofree char *file_name = NULL;
-    GFile *out_file;
-
-    out_file = g_object_steal_data (user_data, "out-file");
-    self->file_istream = (GInputStream *)g_file_read (out_file, NULL, NULL);
-    g_object_set_data_full (G_OBJECT (self->file_istream), "out-file",
-                            out_file, g_object_unref);
-    g_task_return_pointer (task, g_object_ref (self->file_istream), g_object_unref);
-  }
-}
-
-static void
-message_event_get_file_cb (GObject      *object,
-                           GAsyncResult *result,
-                           gpointer      user_data)
-{
-  CmRoomMessageEvent *self;
-  g_autoptr(GTask) task = user_data;
-  g_autoptr(GInputStream) istream = NULL;
-  GOutputStream *out_stream = NULL;
-  GFile *out_file = NULL;
-  GError *error = NULL;
-
-  g_assert (G_IS_TASK (task));
-
-  self = g_task_get_source_object (task);
-  g_assert (CM_IS_ROOM_MESSAGE_EVENT (self));
-
-  istream = cm_client_get_file_finish (CM_CLIENT (object), result, &error);
+  out_file = cm_utils_save_url_to_path_finish (result, &error);
   self->downloading_file = FALSE;
 
   if (error)
-    {
-      g_task_return_error (task, error);
-
-      return;
-    }
+    g_task_return_error (task, error);
+  else if (!out_file)
+    g_task_return_pointer (task, NULL, NULL);
   else
     {
-      g_autofree char *file_path = NULL;
       g_autofree char *file_name = NULL;
-      const char *path;
 
-      path = cm_matrix_get_data_dir ();
-      file_name = g_path_get_basename (self->mxc_uri);
-      file_path = cm_utils_get_path_for_m_type (path, CM_M_ROOM_MESSAGE, FALSE, file_name);
-      out_file = g_file_new_build_filename (file_path, NULL);
-      out_stream = (GOutputStream *)g_file_create (out_file, G_FILE_CREATE_NONE, NULL, &error);
-      g_object_set_data_full (G_OBJECT (task), "out-file", out_file, g_object_unref);
-    }
-
-  if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_EXISTS))
-    {
-      GFileIOStream *io_stream;
-
-      g_clear_error (&error);
-      io_stream = g_file_open_readwrite (out_file, NULL, &error);
-      if (io_stream)
-        {
-          g_object_set_data_full (G_OBJECT (task), "io-stream", io_stream, g_object_unref);
-          out_stream = g_io_stream_get_output_stream (G_IO_STREAM (io_stream));
-        }
-    }
-
-  if (out_stream)
-    {
-      self->downloading_file = TRUE;
-      g_output_stream_splice_async (G_OUTPUT_STREAM (out_stream), istream,
-                                    G_OUTPUT_STREAM_SPLICE_CLOSE_SOURCE |
-                                    G_OUTPUT_STREAM_SPLICE_CLOSE_TARGET,
-                                    0, NULL,
-                                    message_file_stream_cb,
-                                    g_steal_pointer (&task));
-    }
-  else
-    {
-      if (error)
-        g_task_return_error (task, error);
-      else
-        g_task_return_boolean (task, FALSE);
+      self->file_istream = (GInputStream *)g_file_read (out_file, NULL, NULL);
+      g_object_set_data_full (G_OBJECT (self->file_istream), "out-file",
+                              out_file, g_object_unref);
+      g_task_return_pointer (task, g_object_ref (self->file_istream), g_object_unref);
     }
 }
 
@@ -397,6 +327,8 @@ cm_room_message_event_get_file_async (CmRoomMessageEvent    *self,
                                       GAsyncReadyCallback    callback,
                                       gpointer               user_data)
 {
+  g_autofree char *file_name = NULL;
+  const char *path;
   CmRoom *room;
   GTask *task;
 
@@ -430,11 +362,16 @@ cm_room_message_event_get_file_async (CmRoomMessageEvent    *self,
 
   self->downloading_file = TRUE;
   room = cm_room_event_get_room (CM_ROOM_EVENT (self));
-  cm_client_get_file_async (cm_room_get_client (room),
-                            self->mxc_uri,
-                            cancellable,
-                            NULL, NULL,
-                            message_event_get_file_cb, task);
+
+  path = cm_matrix_get_data_dir ();
+  file_name = g_path_get_basename (self->mxc_uri);
+  cm_utils_save_url_to_path_async (cm_room_get_client (room),
+                                   self->mxc_uri,
+                                   cm_utils_get_path_for_m_type (path, CM_M_ROOM_MESSAGE, FALSE, file_name),
+                                   cancellable,
+                                   NULL, NULL,
+                                   message_file_stream_cb,
+                                   g_steal_pointer (&task));
 }
 
 GInputStream *
