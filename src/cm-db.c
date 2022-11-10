@@ -1600,6 +1600,7 @@ cm_db_get_rooms (CmDb       *self,
       char *room_name, *prev_batch, *json_str;
       JsonObject *json = NULL;
       CmRoom *room;
+      CmStatus room_status;
       int room_id, event_id, sorted_event_id = 0;
 
       if (!rooms)
@@ -1610,11 +1611,15 @@ cm_db_get_rooms (CmDb       *self,
       prev_batch = (char *)sqlite3_column_text (stmt, 2);
       json_str = (char *)sqlite3_column_text (stmt, 3);
       json = cm_utils_string_to_json_object (json_str);
+      room_status = sqlite3_column_int (stmt, 4);
+
+      if (room_status == CM_STATUS_UNKNOWN)
+        continue;
 
       room = cm_room_new_from_json (room_name, json, NULL);
       g_object_set_data (G_OBJECT (room), "-cm-room-id", GINT_TO_POINTER (room_id));
       cm_room_set_prev_batch (room, prev_batch);
-      cm_room_set_status (room, sqlite3_column_int (stmt, 4));
+      cm_room_set_status (room, room_status);
 
       event_id = db_get_last_room_event_id (self, room_id, &sorted_event_id);
       if (event_id)
