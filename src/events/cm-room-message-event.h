@@ -29,6 +29,7 @@ G_DECLARE_FINAL_TYPE (CmRoomMessageEvent, cm_room_message_event, CM, ROOM_MESSAG
 
 CmContentType       cm_room_message_event_get_msg_type    (CmRoomMessageEvent   *self);
 const char         *cm_room_message_event_get_body        (CmRoomMessageEvent    *self);
+const char         *cm_room_message_event_get_file_path   (CmRoomMessageEvent    *self);
 void                cm_room_message_event_get_file_async  (CmRoomMessageEvent    *self,
                                                            GCancellable          *cancellable,
                                                            GFileProgressCallback  progress_callback,

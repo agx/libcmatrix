@@ -32,6 +32,7 @@ struct _CmRoomMessageEvent
   CmContentType   type;
 
   char           *body;
+  char           *file_path;    /* Local path to which file is saved */
   GFile          *file;
   GInputStream   *file_istream;
   char           *mxc_uri;
@@ -160,6 +161,7 @@ cm_room_message_event_finalize (GObject *object)
   g_clear_pointer (&self->json, json_object_unref);
   g_free (self->body);
   g_free (self->mxc_uri);
+  g_free (self->file_path);
 
   G_OBJECT_CLASS (cm_room_message_event_parent_class)->finalize (object);
 }
@@ -258,6 +260,14 @@ cm_room_message_event_get_body (CmRoomMessageEvent *self)
   g_return_val_if_fail (CM_IS_ROOM_MESSAGE_EVENT (self), NULL);
 
   return self->body;
+}
+
+const char *
+cm_room_message_event_get_file_path (CmRoomMessageEvent *self)
+{
+  g_return_val_if_fail (CM_IS_ROOM_MESSAGE_EVENT (self), NULL);
+
+  return self->file_path;
 }
 
 void
@@ -365,9 +375,10 @@ cm_room_message_event_get_file_async (CmRoomMessageEvent    *self,
 
   path = cm_matrix_get_data_dir ();
   file_name = g_path_get_basename (self->mxc_uri);
+  self->file_path = cm_utils_get_path_for_m_type (path, CM_M_ROOM_MESSAGE, FALSE, file_name);
   cm_utils_save_url_to_path_async (cm_room_get_client (room),
                                    self->mxc_uri,
-                                   cm_utils_get_path_for_m_type (path, CM_M_ROOM_MESSAGE, FALSE, file_name),
+                                   g_strdup (self->file_path),
                                    cancellable,
                                    NULL, NULL,
                                    message_file_stream_cb,
