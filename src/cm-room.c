@@ -2415,7 +2415,7 @@ get_joined_members_cb (GObject      *obj,
           user = g_hash_table_lookup (self->joined_members_table, user_id);
 
           if (!user)
-            room_find_user (self, user_id, TRUE);
+            user = room_find_user (self, user_id, TRUE);
 
           data = json_object_get_object_member (joined, member->data);
           cm_user_set_json_data (user, data);
