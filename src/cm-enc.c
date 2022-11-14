@@ -1200,7 +1200,11 @@ cm_enc_create_out_group_keys (CmEnc      *self,
 
   session = ma_enc_lookup_out_group_session (self, room, NULL);
 
-  if (!session)
+  if (session)
+    {
+      g_object_ref (session);
+    }
+  else
     {
       session = cm_olm_out_group_new (self->curve_key);
       cm_olm_set_account_details (session, self->user_id, self->device_id);
