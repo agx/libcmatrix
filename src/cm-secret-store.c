@@ -76,6 +76,17 @@ cm_secret_store_save_async (CmClient            *client,
   device_id = cm_client_get_device_id (client);
   username = cm_account_get_login_id (account);
 
+  {
+    g_autoptr(GString) str = NULL;
+
+    str = g_string_new (NULL);
+    cm_utils_anonymize (str, username);
+
+    if (!access_token && pickle_key)
+      g_critical ("'%s' user with device: %s, has no access key, but has pickle",
+                  str->str, device_id);
+  }
+
   if (!device_id)
     device_id = "";
 
