@@ -913,6 +913,22 @@ db_load_client_cb (GObject      *obj,
       return;
     }
 
+  if ((g_object_get_data (G_OBJECT (result), "pickle") && !self->pickle_key) ||
+      (!g_object_get_data (G_OBJECT (result), "pickle") && self->pickle_key))
+    {
+      g_autoptr(GString) str = NULL;
+      gboolean has_pickle, has_pickle_key;
+
+      has_pickle_key = !!self->pickle_key;
+      has_pickle = !!g_object_get_data (G_OBJECT (result), "pickle");
+
+      str = g_string_new (NULL);
+      cm_utils_anonymize (str, cm_client_get_user_id (self));
+
+      g_critical ("'%s' Missing secrets, has-pickle: %d, has-pickle-key: %d",
+                  str->str, has_pickle, has_pickle_key);
+    }
+
   if (g_object_get_data (G_OBJECT (result), "pickle") && self->pickle_key)
     {
       const char *pickle;
