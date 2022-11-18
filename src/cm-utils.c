@@ -1067,9 +1067,13 @@ get_homeserver_cb (GObject      *obj,
   root = cm_utils_read_uri_finish (result, &error);
 
   if (!root)
-{
-    g_task_return_error (task, error);
-    return;
+    {
+      if (error)
+        g_task_return_error (task, error);
+      else
+        g_task_return_pointer (task, NULL, NULL);
+
+      return;
   }
 
   g_object_set_data_full (G_OBJECT (task), "address",
