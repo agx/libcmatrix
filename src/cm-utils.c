@@ -1405,6 +1405,7 @@ cm_utils_save_url_to_path_async (CmClient              *client,
   GTask *task;
 
   g_return_if_fail (CM_IS_CLIENT (client));
+  g_return_if_fail (cm_client_get_enc (client));
   g_return_if_fail (uri && *uri);
   g_return_if_fail (file_path && *file_path == '/');
   g_return_if_fail (!cancellable || G_IS_CANCELLABLE (cancellable));
