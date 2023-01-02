@@ -14,11 +14,23 @@
 #include <libsecret/secret.h>
 #include <glib/gi18n.h>
 
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
+
 #include "cm-matrix-private.h"
 #include "cm-utils-private.h"
 #include "cm-secret-store-private.h"
 
 #define PROTOCOL_MATRIX_STR  "matrix"
+
+struct _CmSecretStore
+{
+  GObject    parent_instance;
+};
+
+
+G_DEFINE_TYPE (CmSecretStore, cm_secret_store, G_TYPE_OBJECT)
 
 static const SecretSchema *
 secret_store_get_schema (void)
@@ -45,8 +57,124 @@ secret_store_get_schema (void)
   return schema;
 }
 
+static void
+cm_secret_store_class_init (CmSecretStoreClass *klass)
+{
+}
+
+static void
+cm_secret_store_init (CmSecretStore *self)
+{
+}
+
+CmSecretStore *
+cm_secret_store_new (void)
+{
+  return g_object_new (CM_TYPE_SECRET_STORE, NULL);
+}
+
+static void
+secret_load_cb (GObject      *object,
+                GAsyncResult *result,
+                gpointer      user_data)
+{
+  CmSecretStore *self;
+  g_autoptr(GPtrArray) old_accounts = NULL;
+  g_autoptr(GPtrArray) accounts = NULL;
+  g_autoptr(GTask) task = user_data;
+  GError *error = NULL;
+  GList *secrets;
+
+  g_assert_true (G_IS_TASK (task));
+
+  self = g_task_get_source_object (task);
+  g_assert (CM_IS_SECRET_STORE (self));
+
+  secrets = secret_password_search_finish (result, &error);
+
+  if (error) {
+    g_task_return_error (task, error);
+    return;
+  }
+
+  old_accounts = g_ptr_array_new_full (5, g_object_unref);
+  accounts = g_ptr_array_new_full (5, g_object_unref);
+
+  for (GList *item = secrets; item; item = item->next) {
+    g_autofree char *label = NULL;
+    g_autofree char *expected = NULL;
+
+    label = secret_retrievable_get_label (item->data);
+    expected = g_strconcat (cm_matrix_get_app_id (), " Matrix password", NULL);
+
+    if (!label || !expected)
+      continue;
+
+    if (!g_str_has_prefix (label, expected)) {
+      if (item->data)
+        g_ptr_array_add (old_accounts, g_object_ref (item->data));
+      continue;
+    }
+
+    if (item->data)
+      g_ptr_array_add (accounts, g_object_ref (item->data));
+  }
+
+  if (secrets)
+    g_list_free_full (secrets, g_object_unref);
+
+  if (accounts && accounts->len) {
+    g_task_return_pointer (task,
+                           g_steal_pointer (&accounts),
+                           (GDestroyNotify)g_ptr_array_unref);
+  } else if (old_accounts && old_accounts->len) {
+    g_object_set_data (G_OBJECT (self), "force-save", GINT_TO_POINTER (TRUE));
+    g_task_return_pointer (task,
+                           g_steal_pointer (&old_accounts),
+                           (GDestroyNotify)g_ptr_array_unref);
+  } else {
+    g_task_return_pointer (task, NULL, NULL);
+  }
+}
+
 void
-cm_secret_store_save_async (CmClient            *client,
+cm_secret_store_load_async (CmSecretStore       *self,
+                            GCancellable        *cancellable,
+                            GAsyncReadyCallback  callback,
+                            gpointer             user_data)
+{
+  const SecretSchema *schema;
+  GTask *task;
+
+  g_return_if_fail (!cancellable || G_IS_CANCELLABLE (cancellable));
+
+  schema = secret_store_get_schema ();
+  task = g_task_new (self, cancellable, callback, user_data);
+
+  /** With using SECRET_SCHEMA_DONT_MATCH_NAME we need some other attribute
+   *  (apart from the schema name itself) to use for the lookup.
+   *  The protocol attribute seems like a reasonable choice.
+   */
+  secret_password_search (schema,
+                          SECRET_SEARCH_ALL | SECRET_SEARCH_UNLOCK | SECRET_SEARCH_LOAD_SECRETS,
+                          cancellable, secret_load_cb, task,
+                          CM_PROTOCOL_ATTRIBUTE, PROTOCOL_MATRIX_STR,
+                          NULL);
+}
+
+GPtrArray *
+cm_secret_store_load_finish (CmSecretStore  *self,
+                             GAsyncResult   *result,
+                             GError        **error)
+{
+  g_return_val_if_fail (G_IS_ASYNC_RESULT (result), NULL);
+
+  return g_task_propagate_pointer (G_TASK (result), error);
+}
+
+void
+cm_secret_store_save_async (CmSecretStore       *self,
+                            CmClient            *client,
                             char                *access_token,
                             char                *pickle_key,
                             GCancellable        *cancellable,
@@ -131,94 +259,18 @@ cm_secret_store_save_async (CmClient            *client,
 }
 
 gboolean
-cm_secret_store_save_finish (GAsyncResult  *result,
-                             GError       **error)
+cm_secret_store_save_finish (CmSecretStore  *self,
+                             GAsyncResult   *result,
+                             GError        **error)
 {
   g_return_val_if_fail (G_IS_ASYNC_RESULT (result), FALSE);
 
   return secret_password_store_finish (result, error);
 }
 
-static void
-secret_load_cb (GObject      *object,
-                GAsyncResult *result,
-                gpointer      user_data)
-{
-  g_autoptr(GTask) task = user_data;
-  GPtrArray *accounts = NULL;
-  GError *error = NULL;
-  GList *secrets;
-
-  g_assert_true (G_IS_TASK (task));
-
-  secrets = secret_password_search_finish (result, &error);
-
-  if (error) {
-    g_task_return_error (task, error);
-    return;
-  }
-
-  for (GList *item = secrets; item; item = item->next) {
-    g_autofree char *label = NULL;
-    g_autofree char *expected = NULL;
-
-    label = secret_retrievable_get_label (item->data);
-    expected = g_strconcat (cm_matrix_get_app_id (), " Matrix password", NULL);
-
-    if (!label || !expected)
-      continue;
-
-    if (!g_str_has_prefix (label, expected))
-      continue;
-
-    if (!accounts)
-      accounts = g_ptr_array_new_full (5, g_object_unref);
-
-    if (item->data)
-      g_ptr_array_add (accounts, g_object_ref (item->data));
-  }
-
-  if (secrets)
-    g_list_free_full (secrets, g_object_unref);
-
-  g_task_return_pointer (task, accounts, (GDestroyNotify)g_ptr_array_unref);
-}
-
 void
-cm_secret_store_load_async (GCancellable        *cancellable,
-                            GAsyncReadyCallback  callback,
-                            gpointer             user_data)
-{
-  const SecretSchema *schema;
-  GTask *task;
-
-  g_return_if_fail (!cancellable || G_IS_CANCELLABLE (cancellable));
-
-  schema = secret_store_get_schema ();
-  task = g_task_new (NULL, cancellable, callback, user_data);
-
-  /** With using SECRET_SCHEMA_DONT_MATCH_NAME we need some other attribute
-   *  (apart from the schema name itself) to use for the lookup.
-   *  The protocol attribute seems like a reasonable choice.
-   */
-  secret_password_search (schema,
-                          SECRET_SEARCH_ALL | SECRET_SEARCH_UNLOCK | SECRET_SEARCH_LOAD_SECRETS,
-                          cancellable, secret_load_cb, task,
-                          CM_PROTOCOL_ATTRIBUTE, PROTOCOL_MATRIX_STR,
-                          NULL);
-}
-
-GPtrArray *
-cm_secret_store_load_finish (GAsyncResult  *result,
-                             GError       **error)
-{
-  g_return_val_if_fail (G_IS_ASYNC_RESULT (result), NULL);
-
-  return g_task_propagate_pointer (G_TASK (result), error);
-}
-
-void
-cm_secret_store_delete_async (CmClient            *client,
+cm_secret_store_delete_async (CmSecretStore       *self,
+                              CmClient            *client,
                               GCancellable        *cancellable,
                               GAsyncReadyCallback  callback,
                               gpointer             user_data)
@@ -242,8 +294,9 @@ cm_secret_store_delete_async (CmClient            *client,
 }
 
 gboolean
-cm_secret_store_delete_finish  (GAsyncResult  *result,
-                                GError       **error)
+cm_secret_store_delete_finish  (CmSecretStore  *self,
+                                GAsyncResult   *result,
+                                GError        **error)
 {
   g_return_val_if_fail (G_IS_ASYNC_RESULT (result), FALSE);
 

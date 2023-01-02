@@ -740,7 +740,7 @@ save_secrets_cb (GObject      *object,
   self = g_task_get_source_object (task);
   g_assert (CM_IS_CLIENT (self));
 
-  ret = cm_secret_store_save_finish (result, &error);
+  ret = cm_secret_store_save_finish (NULL, result, &error);
 
   if (error)
     {
@@ -790,7 +790,7 @@ cm_client_save_secrets_async (CmClient            *self,
   if (self->cm_enc)
     pickle_key = cm_enc_get_pickle_key (self->cm_enc);
 
-  cm_secret_store_save_async (self,
+  cm_secret_store_save_async (NULL, self,
                               g_strdup (cm_client_get_access_token (self)),
                               pickle_key, NULL,
                               save_secrets_cb,
@@ -823,7 +823,7 @@ delete_secrets_cb (GObject      *object,
   self = g_task_get_source_object (task);
   g_assert (CM_IS_CLIENT (self));
 
-  ret = cm_secret_store_delete_finish (result, &error);
+  ret = cm_secret_store_delete_finish (NULL, result, &error);
 
   if (error)
     {
@@ -847,7 +847,7 @@ cm_client_delete_secrets_async (CmClient            *self,
 
   task = g_task_new (self, NULL, callback, user_data);
   cm_client_set_enabled (self, FALSE);
-  cm_secret_store_delete_async (self, NULL,
+  cm_secret_store_delete_async (NULL, self, NULL,
                                 delete_secrets_cb, task);
 }
 

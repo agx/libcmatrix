@@ -49,6 +49,7 @@ struct _CmMatrix
 
   GListStore *clients_list;
   GHashTable *clients_to_save;
+  CmSecretStore *secret_store;
 
   guint    network_change_id;
 
@@ -73,6 +74,10 @@ enum {
 };
 
 static GParamSpec *properties[N_PROPS];
+
+static void matrix_save_client (GObject      *object,
+                                GAsyncResult *result,
+                                gpointer      user_data);
 
 static gboolean
 matrix_has_client (CmMatrix *self,
@@ -212,7 +217,7 @@ cm_matrix_finalize (GObject *object)
   CmMatrix *self = (CmMatrix *)object;
 
   g_clear_handle_id (&self->network_change_id, g_source_remove);
-
+  g_clear_object (&self->secret_store);
   matrix_stop (self);
   g_list_store_remove_all (self->clients_list);
   g_clear_object (&self->clients_list);
@@ -256,6 +261,7 @@ cm_matrix_init (CmMatrix *self)
   if (!gcry_control (GCRYCTL_INITIALIZATION_FINISHED_P))
     g_error ("libgcrypt has not been initialized, did you run cm_init()?");
 
+  self->secret_store = cm_secret_store_new ();
   self->clients_list = g_list_store_new (CM_TYPE_CLIENT);
   self->clients_to_save = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                  g_free, g_object_unref);
@@ -368,6 +374,8 @@ static void
 load_accounts_from_secrets (CmMatrix  *self,
                             GPtrArray *accounts)
 {
+  g_autoptr(GPtrArray) clients = NULL;
+
   g_assert (CM_IS_MATRIX (self));
 
   if (!accounts || !accounts->len)
@@ -377,15 +385,30 @@ load_accounts_from_secrets (CmMatrix  *self,
 
   g_assert (SECRET_IS_RETRIEVABLE (accounts->pdata[0]));
 
+  clients = g_ptr_array_new_full (accounts->len, g_object_unref);
+
   for (guint i = 0; i < accounts->len; i++)
     {
       g_autoptr(CmClient) client = NULL;
 
       client = cm_client_new_from_secret (accounts->pdata[i], self->cm_db);
-      g_list_store_append (self->clients_list, client);
-      if (!self->disable_auto_login)
-        cm_client_enable_as_in_store (client);
+      g_ptr_array_add (clients, client);
+
+      if (!g_object_get_data (G_OBJECT (self->secret_store), "force-save")) {
+        g_list_store_append (self->clients_list, client);
+
+        if (!self->disable_auto_login)
+          cm_client_enable_as_in_store (client);
+      }
     }
+
+  if (g_object_get_data (G_OBJECT (self->secret_store), "force-save")) {
+    GTask *task;
+
+    task = g_task_new (self, NULL, NULL, NULL);
+    g_task_set_task_data (task, g_ptr_array_ref (clients), (GDestroyNotify)g_ptr_array_unref);
+    matrix_save_client (NULL, NULL, task);
+  }
 }
 
 static void
@@ -439,7 +462,7 @@ matrix_store_load_cb (GObject      *object,
   self = g_task_get_source_object (task);
   g_assert (CM_IS_MATRIX (self));
 
-  accounts = cm_secret_store_load_finish (result, &error);
+  accounts = cm_secret_store_load_finish (self->secret_store, result, &error);
   self->is_opening = FALSE;
   if (!error)
     self->secrets_loaded = TRUE;
@@ -536,7 +559,8 @@ cm_matrix_open_async (CmMatrix            *self,
   if (!self->secrets_loaded)
     {
       g_debug ("(%p) Load secrets", self);
-      cm_secret_store_load_async (cancellable,
+      cm_secret_store_load_async (self->secret_store,
+                                  cancellable,
                                   matrix_store_load_cb,
                                   g_steal_pointer (&task));
     }
