@@ -392,6 +392,10 @@ load_accounts_from_secrets (CmMatrix  *self,
       g_autoptr(CmClient) client = NULL;
 
       client = cm_client_new_from_secret (accounts->pdata[i], self->cm_db);
+
+      if (!client)
+        continue;
+
       g_ptr_array_add (clients, client);
 
       if (!g_object_get_data (G_OBJECT (self->secret_store), "force-save")) {
