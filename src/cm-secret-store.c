@@ -27,6 +27,8 @@
 struct _CmSecretStore
 {
   GObject    parent_instance;
+
+  gboolean   tried_once;
 };
 
 
@@ -91,6 +93,30 @@ secret_load_cb (GObject      *object,
   g_assert (CM_IS_SECRET_STORE (self));
 
   secrets = secret_password_search_finish (result, &error);
+
+  /* Try again in case items are not properly unlocked in the first request */
+  /* xxx: gnome-keyring seems to return NULL or so if the keyring
+   * was unlocked some other way midst an active unlock prompt
+   */
+  if (!self->tried_once) {
+    GCancellable *cancellable;
+    const SecretSchema *schema;
+
+    self->tried_once = TRUE;
+    schema = secret_store_get_schema ();
+    cancellable = g_task_get_cancellable (task);
+
+    /** With using SECRET_SCHEMA_DONT_MATCH_NAME we need some other attribute
+     *  (apart from the schema name itself) to use for the lookup.
+     *  The protocol attribute seems like a reasonable choice.
+     */
+    secret_password_search (schema,
+                            SECRET_SEARCH_ALL | SECRET_SEARCH_UNLOCK | SECRET_SEARCH_LOAD_SECRETS,
+                            cancellable, secret_load_cb, g_steal_pointer (&task),
+                            CM_PROTOCOL_ATTRIBUTE, PROTOCOL_MATRIX_STR,
+                            NULL);
+    return;
+  }
 
   if (error) {
     g_task_return_error (task, error);
