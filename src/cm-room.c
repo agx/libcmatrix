@@ -867,6 +867,31 @@ cm_room_get_unread_notification_counts (CmRoom *self)
 }
 
 static void
+room_avatar_file_read_cb (GObject      *object,
+                          GAsyncResult *result,
+                          gpointer      user_data)
+{
+  CmRoom *self;
+  g_autoptr(GTask) task = user_data;
+  GInputStream *istream;
+  GError *error = NULL;
+
+  g_assert (G_IS_TASK (task));
+
+  self = g_task_get_source_object (task);
+  g_assert (CM_IS_ROOM (self));
+
+  istream = (GInputStream *)g_file_read_finish (self->avatar_file, result, &error);
+  g_object_set_data_full (G_OBJECT (self->avatar_file), "stream",
+                          istream, g_object_unref);
+
+  if (error)
+    g_task_return_error (task, error);
+  else
+    g_task_return_pointer (task, g_object_ref (istream), g_object_unref);
+}
+
+static void
 room_get_avatar_cb (GObject      *object,
                     GAsyncResult *result,
                     gpointer      user_data)
@@ -890,13 +915,9 @@ room_get_avatar_cb (GObject      *object,
     g_task_return_error (task, error);
   else if (self->avatar_file)
     {
-      GInputStream *istream;
-
-      istream = (GInputStream *)g_file_read (self->avatar_file, NULL, NULL);
-      g_object_set_data_full (G_OBJECT (self->avatar_file), "stream",
-                              istream, g_object_unref);
-      g_task_return_pointer (task, g_object_ref (istream), g_object_unref);
-      g_object_notify (G_OBJECT (self), "name");
+      g_file_read_async (self->avatar_file, G_PRIORITY_DEFAULT, NULL,
+                         room_avatar_file_read_cb,
+                         g_steal_pointer (&task));
       return;
     }
   else
@@ -941,12 +962,9 @@ cm_room_get_avatar_async (CmRoom              *self,
 
   if (self->avatar_file)
     {
-      GInputStream *istream;
-
-      istream = (GInputStream *)g_file_read (self->avatar_file, NULL, NULL);
-      g_object_set_data_full (G_OBJECT (self->avatar_file), "stream",
-                              istream, g_object_unref);
-      g_task_return_pointer (task, g_object_ref (istream), g_object_unref);
+      g_file_read_async (self->avatar_file, G_PRIORITY_DEFAULT, NULL,
+                         room_avatar_file_read_cb,
+                         g_steal_pointer (&task));
       return;
     }
 
