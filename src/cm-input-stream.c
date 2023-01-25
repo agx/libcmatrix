@@ -1,4 +1,3 @@
-/* -*- mode: c; c-basic-offset: 2; indent-tabs-mode: nil; -*- */
 /* cm-input-stream.c
  *
  * Copyright 2022 Purism SPC

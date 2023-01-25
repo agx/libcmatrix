@@ -1,4 +1,3 @@
-/* -*- mode: c; c-basic-offset: 2; indent-tabs-mode: nil; -*- */
 /* cm-secret-store.h
  *
  * Copyright 2022 Purism SPC

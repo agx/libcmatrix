@@ -1,4 +1,3 @@
-/* -*- mode: c; c-basic-offset: 2; indent-tabs-mode: nil; -*- */
 /* cm-room-member-private.h
  *
  * Copyright 2022 Purism SPC
