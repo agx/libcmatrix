@@ -341,8 +341,9 @@ cm_room_event_list_add_events (CmRoomEventList *self,
                                GPtrArray       *events,
                                gboolean         append)
 {
+  g_autoptr(CmEvent) last_event = NULL;
   CmClient *client;
-  guint position = 0;
+  guint position = 0, index;
 
   g_assert (CM_IS_ROOM_EVENT_LIST (self));
   g_assert (CM_IS_ROOM (self->room));
@@ -362,6 +363,26 @@ cm_room_event_list_add_events (CmRoomEventList *self,
 
       user = cm_room_find_user (self->room, cm_event_get_sender_id (event), TRUE);
       cm_event_set_sender (event, user);
+    }
+
+  /* Get the last item index */
+  index = g_list_model_get_n_items (G_LIST_MODEL (self->events_list));
+  if (index)
+    index--;
+
+  last_event = g_list_model_get_item (G_LIST_MODEL (self->events_list), index);
+
+  /* Remove events that matches the last event so as to avoid duplicates. */
+  for (guint i = 0; last_event && i < events->len;)
+    {
+      CmEvent *event;
+
+      event = events->pdata[i];
+
+      if (g_strcmp0 (cm_event_get_id (event), cm_event_get_id (last_event)) == 0)
+        g_ptr_array_remove_index (events, i);
+      else
+        i++;
     }
 
   if (append)
