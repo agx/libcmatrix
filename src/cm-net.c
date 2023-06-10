@@ -279,9 +279,14 @@ queue_data (CmNet      *self,
 #if SOUP_MAJOR_VERSION == 2
     soup_uri_set_query_from_form (uri, query);
 #else
-    old_uri = uri;
-    uri = soup_uri_copy (old_uri, SOUP_URI_QUERY, soup_form_encode_hash (query), SOUP_URI_NONE);
-    g_clear_pointer (&old_uri, g_uri_unref);
+    {
+      g_autofree char *query_hash = NULL;
+
+      old_uri = uri;
+      query_hash = soup_form_encode_hash (query);
+      uri = soup_uri_copy (old_uri, SOUP_URI_QUERY, query_hash, SOUP_URI_NONE);
+      g_clear_pointer (&old_uri, g_uri_unref);
+    }
 #endif
     g_hash_table_unref (query);
   }
