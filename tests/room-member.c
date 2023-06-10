@@ -43,6 +43,7 @@ test_room_member_new (void)
   g_assert_cmpstr (cm_user_get_id (user), ==, "@alice:example.co");
 
   g_assert_finalize_object (room);
+  g_assert_finalize_object (member);
 }
 
 int
