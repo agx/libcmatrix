@@ -661,9 +661,10 @@ cm_client_new_from_secret (gpointer  secret_retrievable,
   SecretRetrievable *item = secret_retrievable;
   g_autoptr(SecretValue) value = NULL;
   const char *homeserver, *credentials = NULL;
-  const char *username, *login_username;
+  const char *login_username;
   char *password, *token, *device_id;
   char *password_str = NULL, *token_str = NULL;
+  g_autofree char *username = NULL;
   g_autofree char *enabled = NULL;
 
   g_return_val_if_fail (SECRET_IS_RETRIEVABLE (item), NULL);
