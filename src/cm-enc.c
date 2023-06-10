@@ -627,6 +627,9 @@ cm_enc_create_one_time_keys (CmEnc  *self,
     buffer = gcry_random_bytes (length, GCRY_STRONG_RANDOM);
   err = olm_account_generate_one_time_keys (self->account, count, buffer, length);
 
+  if (buffer)
+    gcry_free (buffer);
+
   if (err == olm_error ())
     {
       g_warning ("Error creating one time keys: %s", olm_account_last_error (self->account));
@@ -746,7 +749,7 @@ cm_enc_get_one_time_keys_json (CmEnc *self)
   g_autoptr(JsonObject) object = NULL;
   g_autoptr(JsonObject) root = NULL;
   g_autoptr(GList) members = NULL;
-  JsonObject *keys, *child;
+  JsonObject *keys, *child, *obj;
 
   g_return_val_if_fail (CM_IS_ENC (self), NULL);
 
@@ -756,8 +759,8 @@ cm_enc_get_one_time_keys_json (CmEnc *self)
     return NULL;
 
   keys = json_object_new ();
-  object = json_object_get_object_member (object, "curve25519");
-  members = json_object_get_members (object);
+  obj = json_object_get_object_member (object, "curve25519");
+  members = json_object_get_members (obj);
 
   for (GList *item = members; item; item = item->next)
     {
@@ -765,7 +768,7 @@ cm_enc_get_one_time_keys_json (CmEnc *self)
       const char *value;
 
       child = json_object_new ();
-      value = json_object_get_string_member (object, item->data);
+      value = json_object_get_string_member (obj, item->data);
       json_object_set_string_member (child, "key", value);
       cm_enc_sign_json_object (self, child);
 
