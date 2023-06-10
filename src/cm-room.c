@@ -438,12 +438,16 @@ cm_room_finalize (GObject *object)
   g_hash_table_unref (self->joined_members_table);
   g_clear_object (&self->joined_members);
 
+  g_clear_pointer (&self->changed_devices, g_hash_table_unref);
+  g_ptr_array_unref (self->changed_users);
+
   g_hash_table_unref (self->invited_members_table);
   g_clear_object (&self->invited_members);
 
   g_clear_pointer (&self->one_time_keys, g_ptr_array_unref);
 
   g_clear_object (&self->client);
+  g_clear_object (&self->room_event);
   g_free (self->room_id);
 
   g_free (self->name);
