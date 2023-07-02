@@ -2758,6 +2758,9 @@ matrix_start_sync (CmClient *self,
     {
       g_assert (self->cm_db);
       g_assert (self->callback);
+      if (!self->is_sync) {
+        client_set_login_state (self, TRUE, FALSE);
+      }
       matrix_take_red_pill (self, g_steal_pointer (&task));
     }
 }
