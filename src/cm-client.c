@@ -1937,7 +1937,6 @@ upload_key_cb (GObject      *obj,
   g_autoptr(JsonObject) root = NULL;
   g_autoptr(GError) error = NULL;
   JsonObject *object = NULL;
-  g_autofree char *json_str = NULL;
 
   g_assert (CM_IS_CLIENT (self));
   g_assert (G_IS_TASK (result));
@@ -1945,19 +1944,15 @@ upload_key_cb (GObject      *obj,
   root = g_task_propagate_pointer (G_TASK (result), &error);
   g_debug ("(%p) Upload key %s", self, CM_LOG_SUCCESS (!error));
 
-  if (error)
-    {
-      self->sync_failed = TRUE;
-      handle_matrix_glitches (self, error);
-      g_debug ("Error uploading key: %s", error->message);
-      return;
-    }
-
-  json_str = cm_utils_json_object_to_string (root, FALSE);
-  cm_enc_publish_one_time_keys (self->cm_enc);
+  if (!error) {
+    cm_enc_publish_one_time_keys (self->cm_enc);
+  } else {
+    self->sync_failed = TRUE;
+    handle_matrix_glitches (self, error);
+    g_warning ("Error uploading key: %s", error->message);
+  }
 
   object = cm_utils_json_object_get_object (root, "one_time_key_counts");
-
   if (!handle_one_time_keys (self, object))
     matrix_start_sync (self, NULL);
 }
