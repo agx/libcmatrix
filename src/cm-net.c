@@ -240,13 +240,9 @@ queue_data (CmNet      *self,
             GTask      *task)
 {
   g_autoptr(SoupMessage) message = NULL;
-#if SOUP_MAJOR_VERSION == 2
-  g_autoptr(SoupURI) uri = NULL;
-#else
   g_autoptr(GUri) uri = NULL;
   GUri *old_uri;
   g_autoptr(GBytes) content_data = NULL;
-#endif
   GCancellable *cancellable;
   SoupMessagePriority msg_priority;
   int priority = 0;
@@ -260,24 +256,16 @@ queue_data (CmNet      *self,
             method == SOUP_METHOD_POST ||
             method == SOUP_METHOD_PUT);
 
-#if SOUP_MAJOR_VERSION == 2
-  uri = soup_uri_new (self->homeserver);
-  soup_uri_set_path (uri, uri_path);
-#else
   uri = g_uri_parse (self->homeserver, SOUP_HTTP_URI_FLAGS, NULL);
   old_uri = uri;
   uri = soup_uri_copy (old_uri, SOUP_URI_PATH, uri_path, SOUP_URI_NONE);
   g_clear_pointer (&old_uri, g_uri_unref);
-#endif
 
   if (self->access_token) {
     if (!query)
       query = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
 
     g_hash_table_replace (query, g_strdup ("access_token"), g_strdup (self->access_token));
-#if SOUP_MAJOR_VERSION == 2
-    soup_uri_set_query_from_form (uri, query);
-#else
     {
       g_autofree char *query_hash = NULL;
 
@@ -286,16 +274,11 @@ queue_data (CmNet      *self,
       uri = soup_uri_copy (old_uri, SOUP_URI_QUERY, query_hash, SOUP_URI_NONE);
       g_clear_pointer (&old_uri, g_uri_unref);
     }
-#endif
     g_hash_table_unref (query);
   }
 
   message = soup_message_new_from_uri (method, uri);
-#if SOUP_MAJOR_VERSION == 2
-  soup_message_headers_append (message->request_headers, "Accept-Encoding", "gzip");
-#else
   soup_message_headers_append (soup_message_get_request_headers (message), "Accept-Encoding", "gzip");
-#endif
 
   priority = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (task), "priority"));
 
@@ -312,26 +295,16 @@ queue_data (CmNet      *self,
 
   soup_message_set_priority (message, msg_priority);
 
-  if (data)
-    {
-#if SOUP_MAJOR_VERSION == 2
-      soup_message_set_request (message, "application/json", SOUP_MEMORY_TAKE, data, size);
-#else
+  if (data) {
       content_data = g_bytes_new_take (data, size);
       soup_message_set_request_body_from_bytes (message, "application/json", content_data);
-#endif
-    }
+  }
 
   cancellable = g_task_get_cancellable (task);
   g_task_set_task_data (task, g_object_ref (message), g_object_unref);
 
-#if SOUP_MAJOR_VERSION == 2
-  soup_session_send_async (self->soup_session, message, cancellable,
-                           session_send_cb, task);
-#else
   soup_session_send_async (self->soup_session, message, msg_priority, cancellable,
                            session_send_cb, task);
-#endif
 }
 
 static void
@@ -576,13 +549,8 @@ cm_net_get_file_async (CmNet                 *self,
   g_object_set_data (G_OBJECT (task), "file", enc_file);
   g_object_set_data_full (G_OBJECT (task), "msg", msg, g_object_unref);
 
-#if SOUP_MAJOR_VERSION == 2
-  soup_session_send_async (self->soup_session, msg, cancellable,
-                           net_get_file_stream_cb, task);
-#else
   soup_session_send_async (self->file_session, msg, 0, cancellable,
                            net_get_file_stream_cb, task);
-#endif
 }
 
 GInputStream *
@@ -635,49 +603,10 @@ put_file_async_cb (GObject      *obj,
     }
 }
 
-#if SOUP_MAJOR_VERSION == 2
-static void
-put_file_chunk (GTask       *task,
-                SoupMessage *msg)
-{
-  CmNet *self;
-  GInputStream *stream;
-  char buffer[8 * 1024];
-  gssize n_read;
-
-  g_assert (G_IS_TASK (task));
-  g_assert (SOUP_IS_MESSAGE (msg));
-
-  self = g_task_get_source_object (task);
-  g_assert (CM_IS_NET (self));
-
-  stream = g_object_get_data (G_OBJECT (task), "stream");
-  n_read = g_input_stream_read (stream, buffer, 8 * 1024, NULL, NULL);
-
-  if (n_read == 0)
-    {
-      soup_message_body_complete (msg->request_body);
-    }
-  else if (n_read == -1)
-    {
-      soup_session_cancel_message (self->file_session, msg, SOUP_STATUS_CANCELLED);
-    }
-  else
-    {
-      soup_message_body_append (msg->request_body, SOUP_MEMORY_COPY, buffer, n_read);
-    }
-}
-#endif
-
 static void
 wrote_body_data_cb (GTask       *task,
                     SoupMessage *msg,
-#if SOUP_MAJOR_VERSION == 2
-                    SoupBuffer  *chunk
-#else
-                    guint       chunk_size
-#endif
-                    )
+                    guint       chunk_size)
 {
   GFileProgressCallback progress_cb;
   gpointer progress_user_data;
@@ -726,15 +655,6 @@ cm_net_put_file_async (CmNet                 *self,
   url = g_strconcat (self->homeserver, "/_matrix/media/r0/upload", NULL);
   msg = soup_message_new (SOUP_METHOD_POST, url);
 
-#if SOUP_MAJOR_VERSION == 2
-  soup_uri_set_query_from_form (soup_message_get_uri (msg), query);
-  soup_message_headers_set_encoding (msg->request_headers, SOUP_ENCODING_CHUNKED);
-  soup_message_body_set_accumulate (msg->request_body, FALSE);
-  soup_message_headers_set_content_length (msg->request_headers,
-                                           cm_input_stream_get_size (cm_stream));
-  soup_message_headers_set_content_type (msg->request_headers,
-                                         cm_input_stream_get_content_type (cm_stream), NULL);
-#else
   soup_message_set_uri (msg, soup_uri_copy (soup_message_get_uri (msg), SOUP_URI_QUERY,
                                             soup_form_encode_hash (query), SOUP_URI_NONE));
 
@@ -743,7 +663,6 @@ cm_net_put_file_async (CmNet                 *self,
                                  cm_input_stream_get_content_type (cm_stream),
                                  G_INPUT_STREAM (cm_stream),
                                  cm_input_stream_get_size (cm_stream));
-#endif
 
   g_task_set_task_data (task, g_object_ref (file), g_object_unref);
   g_object_set_data_full (G_OBJECT (task), "msg", msg, g_object_unref);
@@ -752,24 +671,12 @@ cm_net_put_file_async (CmNet                 *self,
   local_task = g_task_new (self, cancellable, put_file_async_cb, self);
   g_task_set_task_data (local_task, task, g_object_unref);
 
-#if SOUP_MAJOR_VERSION == 2
-  g_signal_connect_object (msg, "wrote-headers",
-                           G_CALLBACK (put_file_chunk), task, G_CONNECT_SWAPPED);
-  g_signal_connect_object (msg, "wrote-chunk",
-                           G_CALLBACK (put_file_chunk), task, G_CONNECT_SWAPPED);
-#endif
-
   if (progress_callback)
     g_signal_connect_object (msg, "wrote-body-data",
                              G_CALLBACK (wrote_body_data_cb), task, G_CONNECT_SWAPPED);
 
-#if SOUP_MAJOR_VERSION == 2
-  soup_session_send_async (self->soup_session, msg, cancellable,
-                           session_send_cb, task);
-#else
   soup_session_send_async (self->file_session, msg, 0, cancellable,
                            session_send_cb, local_task);
-#endif
 }
 
 char *

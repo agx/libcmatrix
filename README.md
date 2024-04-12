@@ -34,7 +34,7 @@ which may change in the future.
 ## Dependencies
    - glib >= 2.66
    - gio >= 2.66
-   - libsoup-2
+   - libsoup-3
    - ligbcrypt
    - libolm3
    - libsqlite3 >= 3.34

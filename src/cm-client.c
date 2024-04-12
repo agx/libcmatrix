@@ -334,14 +334,8 @@ handle_matrix_glitches (CmClient *self,
    */
   if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_NETWORK_UNREACHABLE) ||
       g_error_matches (error, G_IO_ERROR, G_IO_ERROR_TIMED_OUT) ||
-#if SOUP_MAJOR_VERSION == 2
-      (error->domain == SOUP_HTTP_ERROR &&
-       error->code <= SOUP_STATUS_TLS_FAILED &&
-       error->code > SOUP_STATUS_CANCELLED) ||
-#else
       error->domain == SOUP_TLD_ERROR ||
       error->domain == G_TLS_ERROR ||
-#endif
       /* Should we handle connection_refused, or just keep it for localhost? */
       g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CONNECTION_REFUSED) ||
       error->domain == G_RESOLVER_ERROR ||
@@ -1318,11 +1312,7 @@ gboolean
 cm_client_set_homeserver (CmClient   *self,
                           const char *homeserver)
 {
-#if SOUP_MAJOR_VERSION == 2
-  g_autoptr(SoupURI) uri = NULL;
-#else
   g_autoptr(GUri) uri = NULL;
-#endif
   GString *server;
 
   g_return_val_if_fail (CM_IS_CLIENT (self), FALSE);
