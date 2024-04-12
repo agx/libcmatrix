@@ -534,7 +534,6 @@ void
 cm_olm_sas_set_key_verification (CmOlmSas            *self,
                                  CmVerificationEvent *event)
 {
-  g_autoptr(JsonObject) json = NULL;
   CmEventType type;
   gint64 minutes;
 

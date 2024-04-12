@@ -45,7 +45,6 @@ static JsonObject *
 room_message_generate_json (CmRoomMessageEvent *self,
                             CmRoom             *room)
 {
-  g_autofree char *uri = NULL;
   const char *body, *room_id;
   CmClient *client;
   JsonObject *root;
@@ -330,8 +329,6 @@ message_file_stream_cb (GObject      *obj,
     g_task_return_pointer (task, NULL, NULL);
   else
     {
-      g_autofree char *file_name = NULL;
-
       self->file_istream = (GInputStream *)g_file_read (out_file, NULL, NULL);
       g_object_set_data_full (G_OBJECT (self->file_istream), "out-file",
                               out_file, g_object_unref);

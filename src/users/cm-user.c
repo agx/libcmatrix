@@ -608,7 +608,6 @@ cm_user_set_devices (CmUser     *self,
   for (GList *member = members; member; member = member->next)
     {
       g_autoptr(CmDevice) device = NULL;
-      g_autofree char *device_name = NULL;
       const char *device_id, *user;
 
       child = cm_utils_json_object_get_object (root, member->data);

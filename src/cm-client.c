@@ -1312,7 +1312,6 @@ gboolean
 cm_client_set_homeserver (CmClient   *self,
                           const char *homeserver)
 {
-  g_autoptr(GUri) uri = NULL;
   GString *server;
 
   g_return_val_if_fail (CM_IS_CLIENT (self), FALSE);
@@ -1887,7 +1886,6 @@ room_loaded_cb (GObject      *obj,
                 GAsyncResult *result,
                 gpointer      user_data)
 {
-  g_autoptr(CmClient) self = user_data;
   g_autoptr(GError) error = NULL;
   CmRoom *room = CM_ROOM (obj);
 
