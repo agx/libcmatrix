@@ -801,6 +801,16 @@ cm_utils_json_object_dup_string (JsonObject *object,
   return g_strdup (str);
 }
 
+/**
+ * cm_utils_json_object_get_object:
+ * @object: a JSON object
+ * @member: The object to get
+ *
+ * Retrieves the object stored inside another JSON object.
+ * If there's no object of that name `NULL` is returned.
+ *
+ * Return value: (transfer none) (nullable): the JSON object
+ */
 JsonObject *
 cm_utils_json_object_get_object (JsonObject *object,
                                  const char *member)
