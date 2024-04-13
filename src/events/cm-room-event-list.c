@@ -48,7 +48,7 @@ struct _CmRoomEventList
 
   JsonObject   *local_json;
 
-  gboolean      save_pending: 1;
+  gboolean      save_pending;
 };
 
 G_DEFINE_TYPE (CmRoomEventList, cm_room_event_list, G_TYPE_OBJECT)
