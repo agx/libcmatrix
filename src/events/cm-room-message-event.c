@@ -231,6 +231,17 @@ cm_room_message_event_new_from_json (JsonObject *root)
   else if (g_strcmp0 (type, "m.notice") == 0)
     self->type = CM_CONTENT_TYPE_NOTICE;
 
+  if ((self->type == CM_CONTENT_TYPE_IMAGE ||
+       self->type == CM_CONTENT_TYPE_FILE ||
+       self->type == CM_CONTENT_TYPE_AUDIO) &&
+      !self->mxc_uri)
+    {
+      JsonObject *file = cm_utils_json_object_get_object (child, "file");
+
+      if (file)
+	self->mxc_uri = cm_utils_json_object_dup_string (file, "url");
+    }
+
   return CM_ROOM_EVENT (self);
 }
 
