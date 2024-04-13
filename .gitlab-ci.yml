@@ -2,35 +2,6 @@ stages:
   - build
   - deploy
 
-build-soup2:
-  tags:
-    - librem5
-  image: debian:bullseye
-  stage: build
-  variables:
-    CCACHE_DIR: "${CI_PROJECT_DIR}/_ccache"
-    MESON_ARGS: "--buildtype=debugoptimized"
-  before_script:
-    - apt-get update -qq && apt-get install -qq ccache meson gcovr gcc
-      libsoup2.4-dev libsqlite3-dev libjson-glib-dev libgcrypt20-dev
-      libolm-dev libsecret-1-dev
-  script:
-    - meson ${MESON_ARGS} -Db_coverage=true _build
-    - ccache --zero-stats
-    - meson test -C _build
-    - ccache --show-stats
-    - mkdir -p _build/meson-logs/coveragereport
-    - ninja -C _build coverage-html
-  coverage: '/^\s+lines\.+:\s+([\d.]+\%)\s+/'
-  cache:
-    key: build-cmatrix-soup2
-    paths:
-      - _ccache/
-  artifacts:
-    when: always
-    paths:
-      - _build
-
 build-soup3:
   tags:
     - librem5:arm64
