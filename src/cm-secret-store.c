@@ -45,10 +45,10 @@ secret_store_get_schema (void)
   if (!secret_id)
     secret_id = g_strconcat (cm_matrix_get_app_id (), ".CMatrix", NULL);
 
-  /** SECRET_SCHEMA_DONT_MATCH_NAME is used as a workaround for a bug in gnome-keyring
-   *  which prevents cold keyrings from being searched (and hence does not prompt for unlocking)
-   *  see https://gitlab.gnome.org/GNOME/gnome-keyring/-/issues/89 and
-   *  https://gitlab.gnome.org/GNOME/libsecret/-/issues/7 for more information
+  /* SECRET_SCHEMA_DONT_MATCH_NAME is used as a workaround for a bug in gnome-keyring
+   * which prevents cold keyrings from being searched (and hence does not prompt for unlocking)
+   * see https://gitlab.gnome.org/GNOME/gnome-keyring/-/issues/89 and
+   * https://gitlab.gnome.org/GNOME/libsecret/-/issues/7 for more information
    */
   schema = secret_schema_new (secret_id, SECRET_SCHEMA_DONT_MATCH_NAME,
                               CM_USERNAME_ATTRIBUTE, SECRET_SCHEMA_ATTRIBUTE_STRING,
@@ -105,9 +105,9 @@ secret_load_cb (GObject      *object,
     schema = secret_store_get_schema ();
     cancellable = g_task_get_cancellable (task);
 
-    /** With using SECRET_SCHEMA_DONT_MATCH_NAME we need some other attribute
-     *  (apart from the schema name itself) to use for the lookup.
-     *  The protocol attribute seems like a reasonable choice.
+    /* With using SECRET_SCHEMA_DONT_MATCH_NAME we need some other attribute
+     * (apart from the schema name itself) to use for the lookup.
+     * The protocol attribute seems like a reasonable choice.
      */
     secret_password_search (schema,
                             SECRET_SEARCH_ALL | SECRET_SEARCH_UNLOCK | SECRET_SEARCH_LOAD_SECRETS,
@@ -176,9 +176,9 @@ cm_secret_store_load_async (CmSecretStore       *self,
   schema = secret_store_get_schema ();
   task = g_task_new (self, cancellable, callback, user_data);
 
-  /** With using SECRET_SCHEMA_DONT_MATCH_NAME we need some other attribute
-   *  (apart from the schema name itself) to use for the lookup.
-   *  The protocol attribute seems like a reasonable choice.
+  /* With using SECRET_SCHEMA_DONT_MATCH_NAME we need some other attribute
+   * (apart from the schema name itself) to use for the lookup.
+   * The protocol attribute seems like a reasonable choice.
    */
   secret_password_search (schema,
                           SECRET_SEARCH_ALL | SECRET_SEARCH_UNLOCK | SECRET_SEARCH_LOAD_SECRETS,
