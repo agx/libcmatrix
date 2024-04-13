@@ -33,14 +33,11 @@
 #define KEY_LABEL_SIZE    6
 #define STRING_ALLOCATION 512
 
-/*
- * SECTION: cm-enc
- * @title: CmEnc
- * @short_description: An abstraction for E2EE
- * @include: "cm-enc.h"
- */
-
-/*
+/**
+ * CmEnc:
+ *
+ * An abstraction for E2EE
+ *
  * Documentations:
  *   https://matrix.org/docs/guides/end-to-end-encryption-implementation-guide
  *
@@ -136,7 +133,7 @@ ma_create_olm_out_session (CmEnc      *self,
   return session;
 }
 
-/*
+/**
  * cm_enc_load_identity_keys:
  * @self: A #CmEnc
  *

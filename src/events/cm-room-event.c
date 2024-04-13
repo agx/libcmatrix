@@ -352,7 +352,7 @@ cm_room_event_user_has_power (CmRoomEvent *self,
   return user_power >= cm_utils_json_object_get_int (content, "events_default");
 }
 
-/*
+/**
  * cm_room_event_get_power_level_admins:
  * @self: A #CmRoomEvent
  *
@@ -387,7 +387,7 @@ cm_room_event_get_admin_ids (CmRoomEvent *self)
   return admin_ids;
 }
 
-/*
+/**
  * cm_room_event_set_admin_users:
  * @self: A #CmRoomEvent
  * @users: (transfer full): An array of #CmUser

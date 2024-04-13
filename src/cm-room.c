@@ -519,7 +519,7 @@ cm_room_new (const char *room_id)
   return self;
 }
 
-/*
+/**
  * cm_room_new_from_json:
  * @room_id: room id string
  * @root: (nullable): A JsonObject with "local" object
@@ -589,7 +589,7 @@ room_generate_json (CmRoom *self)
   return json;
 }
 
-/*
+/**
  * cm_room_get_json:
  *
  * Get the json which is to be stored
@@ -607,7 +607,7 @@ cm_room_get_json (CmRoom *self)
   return cm_utils_json_object_to_string (json, FALSE);
 }
 
-/*
+/**
  * cm_room_get_replacement_room:
  * @self: A #CmRoom
  *
@@ -1159,7 +1159,7 @@ cm_room_set_data (CmRoom     *self,
   return g_steal_pointer (&events);
 }
 
-/*
+/**
  * cm_room_user_changed:
  * @self: A #CmRoom
  * @changed_users: An array of #CmUser

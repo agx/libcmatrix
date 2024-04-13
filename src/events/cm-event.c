@@ -601,8 +601,9 @@ cm_event_get_json_str (CmEvent  *self,
   return NULL;
 }
 
-/*
+/**
  * cm_event_get_json:
+ * @self: The event
  *
  * Can return %NULL, eg: when the event is encrypted,
  * and was not able to decrypt.

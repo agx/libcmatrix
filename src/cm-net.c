@@ -23,10 +23,9 @@
 #include "cm-net-private.h"
 
 /**
- * SECTION: cm-net
- * @title: CmNet
- * @short_description: Matrix Network related methods
- * @include: "cm-net.h"
+ * CmNet:
+ *
+ * Matrix Network related methods
  */
 
 #define MAX_CONNECTIONS     4

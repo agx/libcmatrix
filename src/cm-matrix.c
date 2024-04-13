@@ -27,13 +27,6 @@
 #include "cm-matrix.h"
 #include "cm-matrix-private.h"
 
-/**
- * SECTION: cm-matrix
- * @title: CmMatrix
- * @short_description:
- * @include: "cm-matrix.h"
- */
-
 struct _CmMatrix
 {
   GObject parent_instance;

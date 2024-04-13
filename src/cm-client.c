@@ -969,7 +969,7 @@ db_load_client_cb (GObject      *obj,
   matrix_start_sync (self, g_steal_pointer (&task));
 }
 
-/*
+/**
  * cm_client_pop_event_id:
  * @self: A #CmClient
  *
@@ -989,7 +989,7 @@ cm_client_pop_event_id (CmClient *self)
   return self->event_id - 1;
 }
 
-/*
+/**
  * cm_client_get_db:
  * @self: A #CmClient
  *
@@ -1006,7 +1006,7 @@ cm_client_get_db (CmClient *self)
   return self->cm_db;
 }
 
-/*
+/**
  * cm_client_get_net:
  * @self: A #CmClient
  *
@@ -1022,7 +1022,7 @@ cm_client_get_net (CmClient *self)
   return self->cm_net;
 }
 
-/*
+/**
  * cm_client_get_enc:
  * @self: A #CmClient
  *
@@ -1039,7 +1039,7 @@ cm_client_get_enc (CmClient *self)
   return self->cm_enc;
 }
 
-/*
+/**
  * cm_client_set_db:
  * @self: A #CmClient
  * @db: A #CmDb
@@ -1140,7 +1140,7 @@ db_save_cb (GObject      *object,
   cm_client_save (self);
 }
 
-/*
+/**
  * cm_client_set_enabled:
  * @self: A #CmClient
  * @force: Whether to force saving to db
@@ -1465,7 +1465,7 @@ cm_client_get_access_token (CmClient *self)
   return cm_net_get_access_token (self->cm_net);
 }
 
-/*
+/**
  * cm_client_get_next_batch:
  * @self: A #CmClient
  *

@@ -28,10 +28,9 @@
 #include "cm-user-list-private.h"
 
 /**
- * SECTION: cm-user-list
- * @title: CmUserList
- * @short_description: Track all users that belongs to the account
- * @include: "cm-user-list.h"
+ * CmUserList:
+ *
+ * Track all users that belongs to the account
  *
  * #CmUserList tracks all users associated with the account, instead
  * of tracking them per room individually. Please note that only
@@ -448,7 +447,7 @@ cm_user_list_find_user (CmUserList *self,
   return user;
 }
 
-/*
+/**
  * cm_user_list_set_account:
  * @self: A #CmUserList
  * @account: A #CmAccount
