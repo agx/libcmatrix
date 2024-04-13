@@ -2088,7 +2088,9 @@ verification_send_key_cb (GObject      *object,
                           GAsyncResult *result,
                           gpointer      user_data)
 {
-  g_autoptr(CmClient) self = user_data;
+  CmClient *self = CM_CLIENT (user_data);
+
+  g_object_unref (self);
 }
 
 static void
