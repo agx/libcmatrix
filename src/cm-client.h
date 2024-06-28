@@ -16,6 +16,7 @@
 G_BEGIN_DECLS
 
 #include "cm-enums.h"
+#include "cm-pusher.h"
 #include "cm-types.h"
 #include "users/cm-account.h"
 
@@ -85,4 +86,28 @@ GListModel   *cm_client_get_joined_rooms              (CmClient            *self
 GListModel   *cm_client_get_invited_rooms             (CmClient            *self);
 GListModel   *cm_client_get_key_verifications         (CmClient            *self);
 
+
+GPtrArray    *cm_client_get_pushers_finish            (CmClient            *self,
+                                                       GAsyncResult        *result,
+                                                       GError             **error);
+void          cm_client_get_pushers_async             (CmClient            *self,
+                                                       GCancellable        *cancellable,
+                                                       GAsyncReadyCallback  callback,
+                                                       gpointer             user_data);
+gboolean      cm_client_add_pusher_finish             (CmClient            *self,
+                                                       GAsyncResult        *result,
+                                                       GError             **error);
+void          cm_client_add_pusher_async              (CmClient            *self,
+                                                       CmPusher            *pusher,
+                                                       GCancellable        *cancellable,
+                                                       GAsyncReadyCallback  callback,
+                                                       gpointer             user_data);
+gboolean      cm_client_remove_pusher_finish          (CmClient            *self,
+                                                       GAsyncResult        *result,
+                                                       GError             **error);
+void          cm_client_remove_pusher_async           (CmClient            *self,
+                                                       CmPusher            *pusher,
+                                                       GCancellable        *cancellable,
+                                                       GAsyncReadyCallback  callback,
+                                                       gpointer             user_data);
 G_END_DECLS

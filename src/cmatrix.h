@@ -26,6 +26,7 @@ G_BEGIN_DECLS
 #include "cm-common.h"
 #include "cm-client.h"
 #include "cm-matrix.h"
+#include "cm-pusher.h"
 #include "cm-room.h"
 #include "events/cm-room-message-event.h"
 #include "events/cm-verification-event.h"

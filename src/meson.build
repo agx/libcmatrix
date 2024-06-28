@@ -8,6 +8,7 @@ libcmatrix_sources = [
   'cm-olm-sas.c',
   'cm-matrix.c',
   'cm-net.c',
+  'cm-pusher.c',
   'cm-room.c',
   'cm-secret-store.c',
   'cm-input-stream.c',

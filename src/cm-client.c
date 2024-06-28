@@ -29,6 +29,7 @@
 #include "events/cm-event-private.h"
 #include "events/cm-verification-event.h"
 #include "events/cm-verification-event-private.h"
+#include "cm-pusher.h"
 #include "users/cm-room-member-private.h"
 #include "users/cm-user-private.h"
 #include "users/cm-user-list-private.h"
@@ -2984,4 +2985,278 @@ cm_client_get_file_finish (CmClient      *self,
   g_return_val_if_fail (!error || !*error, FALSE);
 
   return g_task_propagate_pointer (G_TASK (result), error);
+}
+
+
+static void
+get_pushers_cb (GObject      *obj,
+                GAsyncResult *result,
+                gpointer      user_data)
+{
+  CmAccount *self;
+  g_autoptr(GTask) task = G_TASK (user_data);
+  g_autoptr(JsonObject) object = NULL;
+  g_autoptr(GPtrArray) pushers = g_ptr_array_new_full (1, g_object_unref);
+  GError *error = NULL;
+  JsonArray *elems;
+  guint length;
+
+  g_assert (G_IS_TASK (task));
+
+  self = g_task_get_source_object (task);
+  g_assert (CM_IS_CLIENT (self));
+
+  object = g_task_propagate_pointer (G_TASK (result), &error);
+  if (error) {
+    g_task_return_error (task, error);
+    return;
+  }
+
+  elems = json_object_get_array_member (object, "pushers");
+  if (!pushers) {
+    g_task_return_pointer (task, NULL, NULL);
+    return;
+  }
+
+  length = json_array_get_length (elems);
+  if (!length) {
+    g_task_return_pointer (task, NULL, NULL);
+    return;
+  }
+
+  for (guint i = 0; i < length; i++)
+    {
+      g_autoptr(CmPusher) pusher = cm_pusher_new ();
+      JsonObject *elem;
+      const char *str;
+
+      elem = json_array_get_object_element (elems, i);
+      if (!elem)
+        continue;
+
+      str = json_object_get_string_member_with_default (elem, "kind", NULL);
+      cm_pusher_set_kind_from_string (pusher, str);
+
+      str = json_object_get_string_member (elem, "app_display_name");
+      cm_pusher_set_app_display_name (pusher, str);
+
+      str = json_object_get_string_member (elem, "app_id");
+      cm_pusher_set_app_id (pusher, str);
+
+      str = json_object_get_string_member (elem, "device_display_name");
+      cm_pusher_set_device_display_name (pusher, str);
+
+      str = json_object_get_string_member (elem, "lang");
+      cm_pusher_set_lang (pusher, str);
+
+      str = json_object_get_string_member (elem, "profile_tag");
+      cm_pusher_set_profile_tag (pusher, str);
+
+      str = json_object_get_string_member (elem, "pushkey");
+      cm_pusher_set_pushkey (pusher, str);
+
+      if (cm_pusher_get_kind (pusher) == CM_PUSHER_KIND_HTTP)
+	{
+	  JsonObject *data_elem = json_object_get_object_member (elem, "data");
+
+	  str = json_object_get_string_member_with_default (data_elem, "url", NULL);
+	  cm_pusher_set_url (pusher, str);
+	}
+
+      g_ptr_array_add (pushers, g_steal_pointer (&pusher));
+    }
+
+  g_task_return_pointer (task, g_steal_pointer (&pushers),
+			 (GDestroyNotify)g_ptr_array_unref);
+}
+
+void
+cm_client_get_pushers_async (CmClient              *self,
+                             GCancellable          *cancellable,
+                             GAsyncReadyCallback    callback,
+                             gpointer               user_data)
+{
+  g_autoptr(GTask) task = NULL;
+
+  g_return_if_fail (CM_IS_CLIENT (self));
+  g_return_if_fail (!cancellable || G_IS_CANCELLABLE (cancellable));
+
+  task = g_task_new (self, cancellable, callback, user_data);
+
+  cm_net_send_data_async (self->cm_net, 0, NULL, 0,
+                          "/_matrix/client/r0/pushers", SOUP_METHOD_GET,
+                          NULL, self->cancellable, get_pushers_cb,
+                          g_steal_pointer (&task));
+}
+
+GPtrArray *
+cm_client_get_pushers_finish (CmClient      *self,
+                              GAsyncResult  *result,
+                              GError       **error)
+{
+  g_return_val_if_fail (CM_IS_CLIENT (self), FALSE);
+  g_return_val_if_fail (G_IS_TASK (result), FALSE);
+  g_return_val_if_fail (!error || !*error, FALSE);
+
+  return g_task_propagate_pointer (G_TASK (result), error);
+}
+
+static void
+add_pusher_cb (GObject      *obj,
+               GAsyncResult *result,
+               gpointer      user_data)
+{
+  g_autoptr(GTask) task = G_TASK (user_data);
+  g_autoptr(JsonObject) object = NULL;
+  GError *error = NULL;
+
+  object = g_task_propagate_pointer (G_TASK (result), &error);
+
+  if (error) {
+    g_task_return_error (task, error);
+    return;
+  }
+
+  g_task_return_boolean (task, TRUE);
+}
+
+
+static JsonObject *
+build_pusher_json (CmPusher *pusher)
+{
+  JsonObject *object = json_object_new ();
+
+  json_object_set_string_member (object, "kind", cm_pusher_get_kind_as_string (pusher));
+  json_object_set_string_member (object, "app_display_name", cm_pusher_get_app_display_name (pusher));
+  json_object_set_string_member (object, "app_id", cm_pusher_get_app_id (pusher));
+  json_object_set_string_member (object, "device_display_name", cm_pusher_get_device_display_name (pusher));
+  json_object_set_string_member (object, "lang", cm_pusher_get_lang (pusher));
+  json_object_set_string_member (object, "profile_tag", cm_pusher_get_profile_tag (pusher));
+  json_object_set_string_member (object, "pushkey", cm_pusher_get_pushkey (pusher));
+
+  if (cm_pusher_get_kind (pusher) == CM_PUSHER_KIND_HTTP)
+    {
+      JsonObject *data = json_object_new ();
+
+      json_object_set_string_member (data, "url", cm_pusher_get_url (pusher));
+      json_object_set_string_member (data, "format", "event_id_only");
+      json_object_set_object_member (object, "data", data);
+    }
+
+  return object;
+}
+
+/**
+ * cm_client_add_pusher_async:
+ * @self: The client
+ * @pusher: The pusher to set
+ * @cancellable: (nullable): A #Gcancellable
+ * @callback: A #GAsyncReadyCallback
+ * @user_data: The user data for @callback.
+ *
+ * Adds a pusher to the list of pushers for this client.
+ */
+void
+cm_client_add_pusher_async (CmClient              *self,
+                            CmPusher              *pusher,
+                            GCancellable          *cancellable,
+                            GAsyncReadyCallback    callback,
+                            gpointer               user_data)
+{
+  g_autoptr(GTask) task = NULL;
+  JsonObject *object = NULL;
+
+  g_return_if_fail (CM_IS_CLIENT (self));
+  g_return_if_fail (CM_IS_PUSHER (pusher));
+  g_return_if_fail (!cancellable || G_IS_CANCELLABLE (cancellable));
+
+  task = g_task_new (self, cancellable, callback, user_data);
+  g_task_set_source_tag (task, cm_client_add_pusher_async);
+
+  object = build_pusher_json (pusher);
+
+  cm_net_send_json_async (self->cm_net, 0, object,
+                          "/_matrix/client/r0/pushers/set", SOUP_METHOD_POST,
+                          NULL, self->cancellable, add_pusher_cb,
+                          g_steal_pointer (&task));
+}
+
+gboolean
+cm_client_add_pusher_finish (CmClient      *self,
+                             GAsyncResult  *result,
+                             GError       **error)
+{
+  g_return_val_if_fail (CM_IS_CLIENT (self), FALSE);
+  g_return_val_if_fail (G_IS_TASK (result), FALSE);
+  g_return_val_if_fail (!error || !*error, FALSE);
+
+  return g_task_propagate_boolean (G_TASK (result), error);
+}
+
+static void
+remove_pusher_cb (GObject      *obj,
+                  GAsyncResult *result,
+                  gpointer      user_data)
+{
+  g_autoptr(GTask) task = G_TASK (user_data);
+  g_autoptr(JsonObject) object = NULL;
+  GError *error = NULL;
+
+  object = g_task_propagate_pointer (G_TASK (result), &error);
+
+  if (error) {
+    g_task_return_error (task, error);
+    return;
+  }
+
+  g_task_return_boolean (task, TRUE);
+}
+
+/**
+ * cm_client_remove_pusher_async:
+ * @self: The client
+ * @pusher: The pusher to remove
+ * @cancellable: (nullable): A #Gcancellable
+ * @callback: A #GAsyncReadyCallback
+ * @user_data: The user data for @callback.
+ *
+ * Remove a pusher from the list of pushers known to the client.
+ */
+void
+cm_client_remove_pusher_async (CmClient              *self,
+                               CmPusher              *pusher,
+                               GCancellable          *cancellable,
+                               GAsyncReadyCallback    callback,
+                               gpointer               user_data)
+{
+  g_autoptr(GTask) task = NULL;
+  JsonObject *object = NULL;
+
+  g_return_if_fail (CM_IS_CLIENT (self));
+  g_return_if_fail (CM_IS_PUSHER (pusher));
+  g_return_if_fail (!cancellable || G_IS_CANCELLABLE (cancellable));
+
+  task = g_task_new (self, cancellable, callback, user_data);
+  g_task_set_source_tag (task, cm_client_remove_pusher_async);
+
+  object = build_pusher_json (pusher);
+  /* NULL means delete: */
+  json_object_set_string_member(object, "kind", NULL);
+
+  cm_net_send_json_async (self->cm_net, 0, object,
+                          "/_matrix/client/r0/pushers/set", SOUP_METHOD_POST,
+                          NULL, self->cancellable, remove_pusher_cb,
+                          g_steal_pointer (&task));
+}
+
+gboolean
+cm_client_remove_pusher_finish (CmClient      *self,
+                                GAsyncResult  *result,
+                                GError       **error)
+{
+  g_return_val_if_fail (CM_IS_CLIENT (self), FALSE);
+  g_return_val_if_fail (G_IS_TASK (result), FALSE);
+  g_return_val_if_fail (!error || !*error, FALSE);
+
+  return g_task_propagate_boolean (G_TASK (result), error);
 }
