@@ -10,3 +10,8 @@ build
 GPATH
 GTAGS
 GRTAGS
+
+debian/.debhelper/
+debian/debhelper-build-stamp
+debian/libcmatrix-doc.debhelper.log
+debian/libcmatrix-doc/

@@ -1,0 +1,41 @@
+Source: libcmatrix
+Priority: optional
+Maintainer: Mohammed Sadiq <sadiq@sadiqpk.org>
+Build-Depends:
+ debhelper-compat (= 13),
+ gi-docgen <!nodoc>,
+ libgirepository1.0-dev,
+ libglib2.0-dev,
+ libjson-glib-dev,
+ meson,
+ pkgconf,
+Standards-Version: 4.6.2
+Section: libs
+Homepage: https://source.puri.sm/Librem5/libcmatrix
+Rules-Requires-Root: no
+
+Package: libcmatrix-dev
+Section: doc
+Architecture: any
+Multi-Arch: foreign
+Depends: ${misc:Depends}
+Recommends: libglib2.0-doc,
+Suggests: devhelp
+Description: A matrix client library
+ libcmatrix is a library is a Matrix client client library written in
+ GObjectified C
+ .
+ This package contains the development headers
+
+Package: libcmatrix-doc
+Section: doc
+Architecture: all
+Multi-Arch: foreign
+Depends: ${misc:Depends}
+Recommends: libglib2.0-doc,
+Suggests: devhelp
+Description: documentation for the libcmatrix library
+ libcmatrix is a library is a Matrix client client library written in
+ GObjectified C
+ .
+ This package contains the HTML documentation for the cmatrix library.
