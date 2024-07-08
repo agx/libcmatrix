@@ -43,7 +43,7 @@ Issues and Feature Requests: [GitLab][issues]
 
 These applications use libcmatrix:
 
-- [Chatty][chatty]: An istant messaging app
+- [Chatty][chatty]: An instant messaging app
 
 
 <!-- Links referenced elsewhere -->
