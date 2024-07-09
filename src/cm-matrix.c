@@ -27,6 +27,12 @@
 #include "cm-matrix.h"
 #include "cm-matrix-private.h"
 
+/**
+ * CmMatrix:
+ *
+ * The main matrix object. This object needs to be created after calling
+ * [func@init] and  before adding any [type@Client]s.
+ */
 struct _CmMatrix
 {
   GObject parent_instance;
@@ -333,7 +339,7 @@ cm_matrix_new (const char *data_dir,
  * @init_gcrypt: Whether to initialize gcrypt
  *
  * This function should be called to initialize the library.
- * You may call this in main()
+ * You may call this in `main()`
  *
  * If you don't initialize gcrypt, you should do it yourself
  */
@@ -505,7 +511,7 @@ matrix_store_load_cb (GObject      *object,
  * Open the matrix E2EE db which shall be used by clients
  * when required.
  *
- * Run cm_matrix_open_finish() to get the result.
+ * Run [method@Matrix.open_finish] to get the result.
  */
 void
 cm_matrix_open_async (CmMatrix            *self,
@@ -636,9 +642,8 @@ cm_matrix_has_client_with_id (CmMatrix   *self,
  * cm_matrix_client_new:
  * @self: A #CmMatrix
  *
- * Create a new #CmClient.  It's an error
- * to create a new client before opening
- the db with cm_matrix_open_async()
+ * Create a new [type@Client]. It's an error to create a new client
+ * before opening the db with [method@Matrix.open_async].
  *
  * Returns: (transfer full): A #CmClient
  */
