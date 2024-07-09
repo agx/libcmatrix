@@ -599,6 +599,14 @@ cm_matrix_is_ready (CmMatrix *self)
   return self->db_loaded || self->secrets_loaded;
 }
 
+/**
+ * cm_matrix_get_clients_list:
+ * @self: The matrix
+ *
+ * Get the list of clients.
+ *
+ * Returns:(transfer none): The clients as list model.
+ */
 GListModel *
 cm_matrix_get_clients_list (CmMatrix *self)
 {
@@ -881,6 +889,15 @@ matrix_save_client (GObject      *object,
                                 g_steal_pointer (&task));
 }
 
+/**
+ * cm_matrix_add_clients_async:
+ * @self: The matrix to add the clients to
+ * @secrets:(element-type SecretRetrievable): The secrets to build the clients from
+ * @callback: A `GAsyncReadyCallback` to call when the request is satisfied.
+ * @user_data: The data to pass to callback function.
+ *
+ * Add clients identified by their secrets.
+ */
 void
 cm_matrix_add_clients_async (CmMatrix            *self,
                              GPtrArray           *secrets,
