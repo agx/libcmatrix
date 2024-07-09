@@ -851,6 +851,14 @@ cm_room_is_encrypted (CmRoom *self)
   return !!event;
 }
 
+/**
+ * cm_room_get_joined_members:
+ * @self: The room
+ *
+ * Get the currently joined members of a room.
+ *
+ * Returns:(transfer none): The members as list model.
+ */
 GListModel *
 cm_room_get_joined_members (CmRoom *self)
 {
@@ -1024,6 +1032,16 @@ cm_room_get_avatar_async (CmRoom              *self,
     g_task_return_pointer (task, NULL, NULL);
 }
 
+/**
+ * cm_room_get_avatar_finish:
+ * @self: The room
+ * @result: `GAsyncResult`
+ * @error: The return location for a recoverable error.
+ *
+ * Finishes an asynchronous operation started with [method@Room.get_avatar_async].
+ *
+ * Returns:(transfer full): The input stream
+ */
 GInputStream *
 cm_room_get_avatar_finish (CmRoom        *self,
                            GAsyncResult  *result,
@@ -1781,6 +1799,19 @@ cm_room_send_text_finish (CmRoom       *self,
   return g_task_propagate_pointer (G_TASK (result), error);
 }
 
+/**
+ * cm_room_send_file_async:
+ * @self: The room
+ * @progress_callback:(scope async): The callback to run when ready
+ * @progress_user_data: user data for @progress_callback
+ * @cancellable: (nullable): A #GCancellable
+ * @callback: The callback to run when ready
+ * @user_data: user data for @callback
+ *
+ * Send a file.
+ *
+ * Run [method@Room.send_file_finish] to get the result.
+ */
 const char *
 cm_room_send_file_async (CmRoom                *self,
                          GFile                 *file,

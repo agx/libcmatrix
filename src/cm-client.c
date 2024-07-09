@@ -1289,7 +1289,7 @@ cm_client_set_user_id (CmClient   *self,
  * login has succeeded and may return %NULL
  * otherwise.
  *
- * Returns: (nullable) (transfer none): The matrix user ID of the client
+ * Returns: The matrix user ID of the client
  */
 GRefString *
 cm_client_get_user_id (CmClient *self)
