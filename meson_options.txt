@@ -3,7 +3,6 @@ option('package_subdir', type: 'string',
   description: 'Subdirectory to append to all installed files, for use as subproject'
 )
 option('build-examples', type: 'boolean', value: true, description : 'Build examples')
-option('soup2', type: 'boolean', value: false, description: 'Whether to build with libsoup2')
 
 option('gtk_doc',
        type: 'boolean', value: false,
