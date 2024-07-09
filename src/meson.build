@@ -70,6 +70,7 @@ if get_option('gtk_doc')
                 includes: ['Gio-2.0', 'Soup-3.0', 'Secret-1'],
                  install: false,
               extra_args: libcmatrix_gir_extra_args,
+          fatal_warnings: true,
    )
 
 endif
