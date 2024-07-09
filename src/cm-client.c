@@ -857,6 +857,14 @@ cm_client_delete_secrets_finish (CmClient      *self,
   return g_task_propagate_boolean (G_TASK (result), error);
 }
 
+/**
+ * cm_client_get_account:
+ * @self: The client
+ *
+ * Get the account associated with the client.
+ *
+ * Returns:(transfer none): The account
+ */
 CmAccount *
 cm_client_get_account (CmClient *self)
 {
@@ -2893,6 +2901,14 @@ cm_client_get_invited_rooms (CmClient *self)
   return G_LIST_MODEL (self->invited_rooms);
 }
 
+/**
+ * cm_client_get_key_verifications:
+ * @self: The client
+ *
+ * Get the key verifications
+ *
+ * Returns:(transfer none): Get the key verifications as list model
+ */
 GListModel *
 cm_client_get_key_verifications (CmClient *self)
 {
