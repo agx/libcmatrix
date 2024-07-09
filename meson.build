@@ -129,3 +129,11 @@ subdir('doc')
 if (get_option('build-examples'))
   subdir('examples')
 endif
+
+
+summary({
+    'Examples': get_option('build-examples'),
+    'Documentation': get_option('gtk_doc'),
+  },
+  bool_yn: true,
+)
