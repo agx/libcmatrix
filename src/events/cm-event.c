@@ -493,6 +493,14 @@ cm_event_get_sender_id (CmEvent *self)
   return priv->sender_id;
 }
 
+/**
+ * cm_event_get_sender:
+ * @self: The event
+ *
+ * Get the sender of the event
+ *
+ * Returns:(transfer none): The sender
+ */
 CmUser *
 cm_event_get_sender (CmEvent *self)
 {
