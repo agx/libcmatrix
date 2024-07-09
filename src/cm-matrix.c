@@ -31,7 +31,9 @@
  * CmMatrix:
  *
  * The main matrix object. This object needs to be created after calling
- * [func@init] and  before adding any [type@Client]s.
+ * [func@init] and  before adding any [type@Client]s. After creating the
+ * object you can open the database and load known clients via
+ * [method@Matrix.open_async].
  */
 struct _CmMatrix
 {
@@ -508,8 +510,7 @@ matrix_store_load_cb (GObject      *object,
  * @callback: The callback to run when ready
  * @user_data: user data for @callback
  *
- * Open the matrix E2EE db which shall be used by clients
- * when required.
+ * Open the matrix db and loads already known clients.
  *
  * Run [method@Matrix.open_finish] to get the result.
  */
