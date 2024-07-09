@@ -31,6 +31,12 @@
 #define KEY_TIMEOUT         10000 /* milliseconds */
 #define TYPING_TIMEOUT      4     /* seconds */
 
+/**
+ * CmRoom:
+ *
+ * A Matrix room. This class provides access to properties of the room
+ * including a list of events maintained as a `GListModel`.
+ */
 struct _CmRoom
 {
   GObject parent_instance;
@@ -853,6 +859,14 @@ cm_room_get_joined_members (CmRoom *self)
   return G_LIST_MODEL (self->joined_members);
 }
 
+/**
+ * cm_room_get_events_list:
+ * @self: The room
+ *
+ * Get a list model of currently known room events.
+ *
+ * Returns:(transfer none): The room event list
+ */
 GListModel *
 cm_room_get_events_list (CmRoom *self)
 {
