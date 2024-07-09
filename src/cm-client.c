@@ -1136,13 +1136,10 @@ db_save_cb (GObject      *object,
 }
 
 /**
- * cm_client_set_enabled:
+ * cm_client_save:
  * @self: A #CmClient
- * @force: Whether to force saving to db
  *
  * Save the changes to associated CmDb.
- * Set @force to %TRUE to force saving to
- * db even when no changes are made
  */
 void
 cm_client_save (CmClient *self)
