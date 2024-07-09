@@ -26,7 +26,7 @@ simple_account_sync_cb (gpointer   object,
                         GPtrArray *events,
                         GError    *err)
 {
-  puts ("\n\n\n");
+  g_message ("\n");
 
   if (room && events)
     {
@@ -35,12 +35,12 @@ simple_account_sync_cb (gpointer   object,
           gpointer event;
 
           event = events->pdata[i];
-          g_warning ("here: %d", cm_event_get_m_type (event));
+          g_message ("here: %d", cm_event_get_m_type (event));
 
           if (CM_IS_ROOM_MESSAGE_EVENT (event) &&
               cm_room_message_event_get_msg_type (event))
             {
-              g_warning ("text message: %s", cm_room_message_event_get_body (event));
+              g_message ("text message: %s", cm_room_message_event_get_body (event));
             }
         }
     }
@@ -48,7 +48,7 @@ simple_account_sync_cb (gpointer   object,
   if (err)
     g_warning ("client error: %s", err->message);
 
-  puts ("\n\n\n");
+  g_message ("\n");
 }
 
 static void
@@ -80,15 +80,15 @@ simple_get_homeserver_cb (GObject      *object,
 
   /* It's okay to not able to get homeserver from username */
   if (error)
-    g_message ("Failed to guess/verify homeserver: %s", error->message);
+    g_warning ("Failed to guess/verify homeserver: %s", error->message);
   else if (server)
-    g_warning ("autofetched homeserver: %s", server);
+    g_message ("autofetched homeserver: %s", server);
 
   /* Not having a homeserver set means we failed to guess it from provided login id */
   /* So ask user for one. */
   while (!cm_client_get_homeserver (client))
     {
-      printf ("input your Matrix homeserver address: ");
+      printf ("Input your Matrix homeserver address: ");
       scanf ("%s", homeserver);
       if (!cm_client_set_homeserver (client, homeserver))
         g_warning ("'%s' is not a valid homeserver uri (did you forget to "
@@ -111,10 +111,10 @@ simple_joined_rooms_changed_cb (GListModel *list,
                                 guint       added,
                                 gpointer    user_data)
 {
-  puts ("\n\n\n");
+  g_print ("\n\n\n");
 
-  g_warning ("joined rooms changed");
-  g_warning ("total number of items: %u", g_list_model_get_n_items (list));
+  g_message ("joined rooms changed");
+  g_message ("total number of items: %u", g_list_model_get_n_items (list));
 
   for (guint i = 0; i < g_list_model_get_n_items (list); i++)
     {
@@ -122,12 +122,12 @@ simple_joined_rooms_changed_cb (GListModel *list,
 
       room = g_list_model_get_item (list, i);
 
-      g_warning ("room name: %s, room id: %s",
+      g_message ("room name: %s, room id: %s",
                  cm_room_get_name (room),
                  cm_room_get_id (room));
     }
 
-  puts ("\n\n\n");
+  g_print ("\n\n\n\n");
 }
 
 static void
@@ -143,11 +143,11 @@ simple_matrix_open_cb (GObject      *object,
   if (!cm_matrix_open_finish (matrix, result, &error))
     g_error ("Error opening db: %s", error->message);
 
-  printf ("input your Matrix username: ");
+  g_print ("input your Matrix username: ");
   scanf ("%s", username);
-  printf ("input your Matrix password: ");
+  g_print ("input your Matrix password: ");
   scanf ("%s", password);
-  puts ("");
+  g_print ("\n");
 
   g_message ("username: %s, password: %s", username, password);
 
