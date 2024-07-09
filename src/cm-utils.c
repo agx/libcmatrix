@@ -1128,11 +1128,11 @@ cm_utils_get_homeserver_async (const char          *username,
   g_task_set_source_tag (task, cm_utils_get_homeserver_async);
 
   if (!cm_utils_user_name_valid (username))
-{
-    g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_INVALID_FILENAME,
-                             "Username '%s' is not a complete matrix id", username);
-    return;
-  }
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_INVALID_FILENAME,
+                               "Username '%s' is not a complete matrix id", username);
+      return;
+    }
 
   url = cm_utils_get_url_from_user_id (username);
   uri = g_strconcat ("https://", url, "/.well-known/matrix/client", NULL);
