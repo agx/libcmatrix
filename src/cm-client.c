@@ -3102,6 +3102,16 @@ cm_client_get_pushers_async (CmClient              *self,
                           g_steal_pointer (&task));
 }
 
+/**
+ * cm_client_get_pushers_finish:
+ * @self: The client
+ * @result: `GAsyncResult`
+ * @error: The return location for a recoverable error.
+ *
+ * Finishes an asynchronous operation started with [method@Client.get_pushers_async].
+ *
+ * Returns:(transfer full)(element-type CmPusher): The array of pushers stream.
+ */
 GPtrArray *
 cm_client_get_pushers_finish (CmClient      *self,
                               GAsyncResult  *result,
