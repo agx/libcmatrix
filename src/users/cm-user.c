@@ -426,6 +426,16 @@ cm_user_get_avatar_async (CmUser              *self,
     g_task_return_pointer (task, NULL, NULL);
 }
 
+/**
+ * cm_user_get_avatar_finish:
+ * @self: The user
+ * @result: `GAsyncResult`
+ * @error: The return location for a recoverable error.
+ *
+ * Finishes an asynchronous operation started with [method@User.get_avatar_async].
+ *
+ * Returns:(transfer full): The input stream.
+ */
 GInputStream *
 cm_user_get_avatar_finish (CmUser        *self,
                            GAsyncResult  *result,
