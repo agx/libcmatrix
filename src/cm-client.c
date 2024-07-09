@@ -1211,7 +1211,8 @@ cm_client_get_enabled (CmClient *self)
  * @callback_data_destroy: (nullable): The method to destroy @callback_data
  *
  * Set the sync callback which shall be executed for the
- * events happening in @self.
+ * events happening in @self. Set this early after creating the client
+ * so any async callbacks can invoke it already.
  *
  * @callback_data_destroy() shall be executead only if @callback_data
  * is not NULL.
@@ -1289,10 +1290,10 @@ cm_client_set_user_id (CmClient   *self,
  * cm_client_get_user_id:
  * @self: A #CmClient
  *
- * Get the matrix user ID of the client @self.
- * user ID may be available only after the
- * login has succeeded and may return %NULL
+ * Get the matrix user ID of the client @self.  The User ID may be
+ * available only after the login has succeeded and may return %NULL
  * otherwise.
+ * If you need the login id before that use [method@Account.get_login_id].
  *
  * Returns: The matrix user ID of the client
  */
@@ -1545,7 +1546,7 @@ cm_client_set_device_name (CmClient   *self,
  * @self: A #CmClient
  *
  * Get the device name of the client @self
- * as set with cm_client_set_device_name().
+ * as set with [method@Client.set_device_name].
  *
  * Returns: (nullable): The Device name string
  */
@@ -1669,6 +1670,18 @@ cm_client_join_room_by_id_finish (CmClient      *self,
   return g_task_propagate_boolean (G_TASK (result), error);
 }
 
+/**
+ * cm_client_get_homeserver_async:
+ * @self: The client
+ * @cancellable: (nullable): A #Gcancellable
+ * @callback: A #GAsyncReadyCallback
+ * @user_data: The user data for @callback.
+ *
+ * Tries to determine the home server based on the user data set on
+ * the [type@Account].
+ *
+ * Run [method@Client.get_homeserver_finish] to get the result.
+ */
 void
 cm_client_get_homeserver_async (CmClient            *self,
                                 GCancellable        *cancellable,
@@ -1710,6 +1723,16 @@ cm_client_get_homeserver_async (CmClient            *self,
   matrix_start_sync (self, g_steal_pointer (&task));
 }
 
+/**
+ * cm_client_get_homeserver_finish:
+ * @self: The client
+ * @result: `GAsyncResult`
+ * @error: The return location for a recoverable error.
+ *
+ * Finishes an asynchronous operation started with [method@Client.get_homeserver_async].
+ *
+ * Returns:(transfer none): The home server
+ */
 const char *
 cm_client_get_homeserver_finish (CmClient      *self,
                                  GAsyncResult  *result,
