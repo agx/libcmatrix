@@ -386,6 +386,18 @@ cm_account_get_3pids_async (CmAccount           *self,
                           g_steal_pointer (&task));
 }
 
+/**
+ * cm_account_get_3pids_finish:
+ * @self: The account
+ * @emails:(out)(element-type char*): The emails
+ * @phones:(out)(element-type char*): The phone numbers
+ * @result: `GAsyncResult`
+ * @error: The return location for a recoverable error.
+ *
+ * Finishes an asynchronous operation started with [method@Account.get_3pids_async].
+ *
+ * Returns: `TRUE` if the operation was successful
+ */
 gboolean
 cm_account_get_3pids_finish (CmAccount     *self,
                              GPtrArray    **emails,
