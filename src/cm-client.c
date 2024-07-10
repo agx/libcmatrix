@@ -403,6 +403,7 @@ client_login_with_password_async (CmClient            *self,
   json_object_set_object_member (object, "identifier", child);
 
   task = g_task_new (self, cancellable, callback, user_data);
+  g_task_set_source_tag (task, client_login_with_password_async);
   cm_net_send_json_async (self->cm_net, 2, object,
                           "/_matrix/client/r0/login", SOUP_METHOD_POST,
                           NULL, cancellable, send_json_cb,
@@ -764,6 +765,7 @@ cm_client_save_secrets_async (CmClient            *self,
   g_return_if_fail (CM_IS_CLIENT (self));
 
   task = g_task_new (self, NULL, callback, user_data);
+  g_task_set_source_tag (task, cm_client_save_secrets_async);
 
   if (g_object_get_data (G_OBJECT (self), "no-save"))
     {
@@ -841,6 +843,7 @@ cm_client_delete_secrets_async (CmClient            *self,
   g_return_if_fail (CM_IS_CLIENT (self));
 
   task = g_task_new (self, NULL, callback, user_data);
+  g_task_set_source_tag (task, cm_client_delete_secrets_async);
   cm_client_set_enabled (self, FALSE);
   cm_secret_store_delete_async (NULL, self, NULL,
                                 delete_secrets_cb, task);
@@ -1651,6 +1654,7 @@ cm_client_join_room_by_id_async (CmClient            *self,
     cancellable = self->cancellable;
 
   task = g_task_new (self, cancellable, callback, user_data);
+  g_task_set_source_tag (task, cm_client_join_room_by_id_async);
   uri = g_strconcat ("/_matrix/client/r0/join/", room_id, NULL);
   cm_net_send_data_async (self->cm_net, 2, NULL, 0,
                           uri, SOUP_METHOD_POST, NULL,
@@ -2664,6 +2668,7 @@ matrix_start_sync (CmClient *self,
   if (!task)
     {
       task = g_task_new (self, self->cancellable, NULL, NULL);
+      g_task_set_source_tag (task, matrix_start_sync);
       cancellable = self->cancellable;
     }
 
@@ -3005,6 +3010,7 @@ cm_client_get_file_async (CmClient              *self,
   g_return_if_fail (uri && *uri);
 
   task = g_task_new (self, cancellable, callback, user_data);
+  g_task_set_source_tag (task, cm_client_get_file_async);
   g_task_set_task_data (task, g_strdup (uri), g_free);
 
   cm_enc_find_file_enc_async (self->cm_enc, uri,
@@ -3118,6 +3124,7 @@ cm_client_get_pushers_async (CmClient              *self,
   g_return_if_fail (!cancellable || G_IS_CANCELLABLE (cancellable));
 
   task = g_task_new (self, cancellable, callback, user_data);
+  g_task_set_source_tag (task, cm_client_get_pushers_async);
 
   cm_net_send_data_async (self->cm_net, 0, NULL, 0,
                           "/_matrix/client/r0/pushers", SOUP_METHOD_GET,
