@@ -252,6 +252,14 @@ cm_user_set_details (CmUser     *self,
     g_signal_emit (self, signals[CHANGED], 0);
 }
 
+/**
+ * cm_user_get_id:
+ * @self: The user
+ *
+ * Get the user's matrix id
+ *
+ * Returns: The user's matrix id
+ */
 GRefString *
 cm_user_get_id (CmUser *self)
 {
@@ -262,6 +270,14 @@ cm_user_get_id (CmUser *self)
   return priv->user_id;
 }
 
+/**
+ * cm_user_get_display_name:
+ * @self: The user
+ *
+ * Get the user's human readable display name
+ *
+ * Returns:(nullable): The user's display name
+ */
 const char *
 cm_user_get_display_name (CmUser *self)
 {

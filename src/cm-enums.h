@@ -75,6 +75,12 @@ typedef enum {
   CM_STATUS_KNOCK
 } CmStatus;
 
+/**
+ * CmContentType:
+ * @CM_CONTENT_TYPE_UNKNOWN: The content type is unknown
+ * @CM_CONTENT_TYPE_TEXT: The event has a text content
+ * @CM_CONTENT_TYPE_IMAGE: The event has an image content
+ */
 typedef enum {
   CM_CONTENT_TYPE_UNKNOWN,
   CM_CONTENT_TYPE_TEXT,
@@ -88,6 +94,18 @@ typedef enum {
   CM_CONTENT_TYPE_SERVER_NOTICE,
 } CmContentType;
 
+/**
+ * CmEventType:
+ * @CM_M_UNKNOWN: The event type is unknown
+ * @CM_M_ROOM_MESSAGE: An event representing a message sent to a room.
+ *    See [class@RoomMessageEvent].
+ * @CM_M_ROOM_ENCRYPTED: An event in an encypted room. This is the majority
+ *    of events when a room is encrypted.
+ *
+ * The type of a Matrix event.
+ *
+ * See [method@Event.get_m_type].
+ */
 /*
  * The order of the enum items SHOULD NEVER
  * be changed as they are used in database.

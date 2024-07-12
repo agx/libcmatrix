@@ -244,6 +244,14 @@ cm_room_message_event_new_from_json (JsonObject *root)
   return CM_ROOM_EVENT (self);
 }
 
+/**
+ * cm_room_message_event_get_msg_type:
+ * @self: The message
+ *
+ * Gets the content type (like text or image) of a room message.
+ *
+ * Returns: The message's content type
+ */
 CmContentType
 cm_room_message_event_get_msg_type (CmRoomMessageEvent *self)
 {

@@ -15,6 +15,14 @@
 
 G_BEGIN_DECLS
 
+/**
+ * CmPusherKind:
+ * @CM_PUSHER_KIND_UNKNOWN: The type of the pusher is unknown
+ * @CM_PUSHER_KIND_HTTP: A pusher that forwards messages via http
+ * @CM_PUSHER_KIND_EMAIL: A pusher that forwards messages via email
+ *
+ * The type of a [class@Pusher]
+ */
 typedef enum _CmPusherKind {
   CM_PUSHER_KIND_UNKNOWN  = 0,
   CM_PUSHER_KIND_HTTP     = 1,

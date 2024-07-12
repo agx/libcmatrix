@@ -2542,6 +2542,15 @@ client_get_homeserver_cb (GObject      *obj,
   matrix_start_sync (self, g_steal_pointer (&task));
 }
 
+/**
+ * cm_client_get_logging_in:
+ *
+ * Gets whether the user is currently being logged in.
+ *
+ * See [method@Client.get_logged_in].
+ *
+ * Returns: `TRUE` when logging in is in progress.
+ */
 gboolean
 cm_client_get_logging_in (CmClient *self)
 {
@@ -2550,6 +2559,21 @@ cm_client_get_logging_in (CmClient *self)
   return self->is_logging_in;
 }
 
+/**
+ * cm_client_get_logged_in:
+ *
+ * Gets whether the user is currently logged in.
+ *
+ * Logging in with libcmatrix is a multi step process. This function
+ * returns `TRUE` when all steps (like connecting to the home server,
+ * logging in with password, getting an access token, …) were
+ * performed successfully.
+ *
+ * Use [method@Client.get_logging_in] to check whether the login process
+ * is currently ongoing.
+ *
+ * Returns: `TRUE` when log in was successful, otherwise `FALSE`.
+ */
 gboolean
 cm_client_get_logged_in (CmClient *self)
 {

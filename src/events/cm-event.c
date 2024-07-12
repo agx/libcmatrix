@@ -294,6 +294,18 @@ cm_event_get_state_key (CmEvent *self)
   return NULL;
 }
 
+/**
+ * cm_event_get_m_type:
+ * @self: The event
+ *
+ * Get the Matrix type of an event.
+ *
+ * The method is called `cm_event_get_m_type()` to not conflict with
+ * `cm_event_get_type()` which gets the type in the GObject type
+ * system.
+ *
+ * Returns: The message type
+ */
 CmEventType
 cm_event_get_m_type (CmEvent *self)
 {
