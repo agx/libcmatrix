@@ -23,6 +23,7 @@ G_BEGIN_DECLS
 #include "users/cm-user.h"
 #include "users/cm-account.h"
 #include "cm-enums.h"
+#include "cm-enum-types.h"
 #include "cm-common.h"
 #include "cm-client.h"
 #include "cm-matrix.h"

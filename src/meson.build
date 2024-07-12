@@ -40,10 +40,17 @@ libcmatrix_headers = [
   'users/cm-room-member.h',
 ]
 
+cmatrix_enums = gnome.mkenums_simple(
+  'cm-enum-types',
+  sources : 'cm-enums.h',
+)
+
+cmatrix_sources = [libcmatrix_headers, libcmatrix_sources, cmatrix_enums]
+
 # Currently we do only have static library and should be
 # used only as a subproject
 cmatrix_lib = static_library('libcmatrix',
-                             [libcmatrix_headers, libcmatrix_sources],
+                             cmatrix_sources,
                              include_directories: [ root_inc, src_inc ],
                              dependencies: cmatrix_deps
 )
@@ -61,7 +68,7 @@ if get_option('gtk_doc')
    ]
 
   libcmatrix_gir = gnome.generate_gir(cmatrix_lib,
-                 sources: libcmatrix_sources + libcmatrix_headers,
+                 sources: cmatrix_sources,
                nsversion: '0',
                namespace: 'CM',
          export_packages: 'cmatrix-0',
