@@ -2683,6 +2683,26 @@ ma_finish_cb (GObject      *object,
   g_task_return_boolean (G_TASK (user_data), !error);
 }
 
+/**
+ * cm_db_wait_for_completion:
+ * @task: The task to complete
+ *
+ * Iterate the main context until the give task completes.
+ */
+static void
+cm_db_wait_for_completion (GTask *task)
+{
+  GMainContext *context;
+
+  context = g_main_context_get_thread_default ();
+  if (!context)
+    context = g_main_context_default ();
+
+  /* Wait until the task is completed */
+  while (!g_task_get_completed (task))
+    g_main_context_iteration (context, TRUE);
+}
+
 static void
 cm_db_close (CmDb *self)
 {
@@ -2696,9 +2716,7 @@ cm_db_close (CmDb *self)
   task = g_task_new (NULL, NULL, NULL, NULL);
   cm_db_close_async (self, ma_finish_cb, task);
 
-  /* Wait until the task is completed */
-  while (!g_task_get_completed (task))
-    g_main_context_iteration (NULL, TRUE);
+  cm_db_wait_for_completion (task);
 }
 
 static void
@@ -3102,8 +3120,7 @@ cm_db_add_session (CmDb     *self,
 
   g_async_queue_push_front (self->queue, task);
 
-  while (!g_task_get_completed (task))
-    g_main_context_iteration (NULL, TRUE);
+  cm_db_wait_for_completion (task);
 
   success = g_task_propagate_boolean (task, &error);
 
@@ -3215,9 +3232,7 @@ cm_db_lookup_session (CmDb          *self,
   g_async_queue_push (self->queue, task);
   g_assert (task);
 
-  /* Wait until the task is completed */
-  while (!g_task_get_completed (task))
-    g_main_context_iteration (NULL, TRUE);
+  cm_db_wait_for_completion (task);
 
   session = g_task_propagate_pointer (task, &error);
 
@@ -3271,9 +3286,7 @@ cm_db_lookup_olm_session (CmDb           *self,
   g_async_queue_push (self->queue, task);
   g_assert (task);
 
-  /* Wait until the task is completed */
-  while (!g_task_get_completed (task))
-    g_main_context_iteration (NULL, TRUE);
+  cm_db_wait_for_completion (task);
 
   pickle = g_task_propagate_pointer (task, &error);
   *out_plain_text = g_object_steal_data (G_OBJECT (task), "plaintext");
@@ -3320,9 +3333,7 @@ cm_db_mark_user_device_change (CmDb      *self,
   g_async_queue_push (self->queue, task);
   g_assert (task);
 
-  /* Wait until the task is completed */
-  while (!g_task_get_completed (task))
-    g_main_context_iteration (NULL, TRUE);
+  cm_db_wait_for_completion (task);
 
   g_task_propagate_pointer (task, &error);
   g_debug ("Saving user device change %s", CM_LOG_SUCCESS (!error));
@@ -3381,9 +3392,7 @@ cm_db_update_user_devices (CmDb       *self,
   g_async_queue_push (self->queue, task);
   g_assert (task);
 
-  /* Wait until the task is completed */
-  while (!g_task_get_completed (task))
-    g_main_context_iteration (NULL, TRUE);
+  cm_db_wait_for_completion (task);
 
   if (g_application_get_default ())
     g_application_release (g_application_get_default ());
@@ -3438,9 +3447,7 @@ cm_db_update_device (CmDb     *self,
   g_async_queue_push (self->queue, task);
   g_assert (task);
 
-  /* Wait until the task is completed */
-  while (!g_task_get_completed (task))
-    g_main_context_iteration (NULL, TRUE);
+  cm_db_wait_for_completion (task);
 
   if (g_application_get_default ())
     g_application_release (g_application_get_default ());
@@ -3490,9 +3497,7 @@ cm_db_add_room_members (CmDb      *self,
 
   g_async_queue_push (self->queue, task);
 
-  /* Wait until the task is completed */
-  while (!g_task_get_completed (task))
-    g_main_context_iteration (NULL, TRUE);
+  cm_db_wait_for_completion (task);
 
   if (g_application_get_default ())
     g_application_release (g_application_get_default ());
@@ -3549,9 +3554,7 @@ cm_db_add_room_events (CmDb      *self,
 
   g_async_queue_push (self->queue, task);
 
-  /* Wait until the task is completed */
-  while (!g_task_get_completed (task))
-    g_main_context_iteration (NULL, TRUE);
+  cm_db_wait_for_completion (task);
 
   if (g_application_get_default ())
     g_application_release (g_application_get_default ());
