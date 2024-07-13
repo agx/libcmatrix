@@ -117,6 +117,12 @@ enum {
 
 static GParamSpec *properties[N_PROPS];
 
+typedef struct
+{
+  GAsyncResult *res;
+  GMainLoop *loop;
+} CmRoomSyncData;
+
 /* static gboolean room_resend_message          (gpointer user_data); */
 static void     room_send_message_from_queue (CmRoom *self);
 
@@ -2793,4 +2799,166 @@ cm_room_update_user (CmRoom  *self,
       g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NAME]);
       self->db_save_pending = TRUE;
     }
+}
+
+static void
+room_get_event_cb (GObject      *object,
+                   GAsyncResult *result,
+                   gpointer      user_data)
+{
+  CmRoom *self;
+  g_autoptr (GPtrArray) events = NULL;
+  g_autoptr(GTask) task = user_data;
+  JsonObject *event, *root;
+  JsonArray *array;
+  GError *error = NULL;
+
+  self = g_task_get_source_object (task);
+  g_assert (CM_IS_ROOM (self));
+
+  event = g_task_propagate_pointer (G_TASK (result), &error);
+  if (error) {
+    g_task_return_error (task, error);
+    return;
+  }
+
+  /* Wrap our event in an array */
+  array = json_array_new ();
+  json_array_add_object_element (array, event);
+  root = json_object_new ();
+  json_object_set_array_member (root, "events", array);
+
+  events = g_ptr_array_new_full (1, NULL);
+  cm_room_event_list_parse_events (self->room_event, root, events, FALSE);
+  /* TODO: should we persist the event by default ? */
+
+  if (events->len == 0) {
+    g_task_return_new_error (task, CM_ERROR, CM_ERROR_BAD_JSON, "Failed to parse event");
+    return;
+  }
+
+  g_assert (events->len == 1);
+  g_task_return_pointer (task, events->pdata[0], g_object_unref);
+}
+
+/**
+ * cm_room_event_get_async:
+ * @self: The room to get the event in
+ * @event_id: The id of the event to get
+ * @cancellable: Optional GCancellable object, NULL to ignore.
+ * @callback: A `GAsyncReadyCallback` to call when the request is satisfied.
+ * @user_data: The data to pass to callback function.
+ *
+ * Get a single event.
+ *
+ * Run [method@Room.get_event_finish] to get the result.
+ */
+void
+cm_room_get_event_async (CmRoom              *self,
+                         const char          *event_id,
+                         GCancellable        *cancellable,
+                         GAsyncReadyCallback  callback,
+                         gpointer             user_data)
+{
+  g_autoptr(GTask) task = NULL;
+  g_autofree char *url = NULL;
+
+  g_return_if_fail (CM_IS_ROOM (self));
+  g_return_if_fail (event_id);
+  g_return_if_fail (!cancellable || G_IS_CANCELLABLE (cancellable));
+
+  task = g_task_new (self, cancellable, callback, user_data);
+
+  g_debug ("(%p) Fetch event %s", self, event_id);
+
+  url = g_strdup_printf ("/_matrix/client/r0/rooms/%s/event/%s", self->room_id, event_id);
+  cm_net_send_data_async (cm_client_get_net (self->client), 0, NULL, 0,
+                          url, SOUP_METHOD_GET, NULL,
+                          cancellable,
+                          room_get_event_cb,
+                          g_steal_pointer (&task));
+}
+
+/**
+ * cm_room_get_event_finish:
+ * @self: The room
+ * @result: `GAsyncResult`
+ * @error: The return location for a recoverable error.
+ *
+ * Finishes an asynchronous operation started with [method@Room.get_event_async].
+ *
+ * Gets the event. If the event is already in the list of events (see
+ * [method@Room.get_events_list]) `NULL` is returned. In case of error
+ * `NULL` is returned and `error` is set.
+ *
+ * Returns:(transfer full): A [type@Event] or `NULL`
+ */
+CmEvent *
+cm_room_get_event_finish (CmRoom        *self,
+                          GAsyncResult  *result,
+                          GError       **error)
+{
+  g_return_val_if_fail (CM_IS_ROOM (self), FALSE);
+  g_return_val_if_fail (G_IS_TASK (result), FALSE);
+  g_return_val_if_fail (!error || !*error, FALSE);
+
+  return g_task_propagate_pointer (G_TASK (result), error);
+}
+
+
+static void
+cm_room_get_event_sync_cb (GObject         *object,
+                           GAsyncResult    *res,
+                           gpointer         user_data)
+{
+  CmRoomSyncData *data = user_data;
+  data->res = g_object_ref (res);
+  g_main_loop_quit (data->loop);
+}
+
+/**
+ * cm_room_get_event_sync:
+ * @self: The room
+ * @event_id: The id of the event to get
+ * @cancellable: Optional GCancellable object, NULL to ignore.
+ * @error: The return location for a recoverable error.
+ *
+ * Get a single event.
+ *
+ * This is a synchronous method. See [method@Room.get_event_async] for
+ * an asynchronous version.
+ *
+ * Returns:(transfer full): A [type@CmEvent] or `NULL` if the operation failed.
+ */
+CmEvent *
+cm_room_get_event_sync (CmRoom        *self,
+                        const char    *event_id,
+                        GCancellable  *cancellable,
+                        GError       **error)
+{
+  CmEvent *event;
+  CmRoomSyncData data;
+  g_autoptr (GMainContext) context = g_main_context_new ();
+  g_autoptr (GMainLoop) loop = NULL;
+
+  g_main_context_push_thread_default (context);
+  loop = g_main_loop_new (context, FALSE);
+
+  data = (CmRoomSyncData) {
+    .loop = loop,
+    .res = NULL,
+  };
+
+  cm_room_get_event_async (self, event_id, cancellable,
+                           cm_room_get_event_sync_cb,
+                           &data);
+  g_main_loop_run (data.loop);
+
+  event = cm_room_get_event_finish (self, data.res, error);
+
+  if (data.res)
+    g_object_unref (data.res);
+  g_main_context_pop_thread_default (context);
+
+  return event;
 }

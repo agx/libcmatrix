@@ -108,5 +108,16 @@ void          cm_room_load_past_events_async      (CmRoom                *self,
 gboolean      cm_room_load_past_events_finish     (CmRoom                *self,
                                                    GAsyncResult          *result,
                                                    GError               **error);
+void          cm_room_get_event_async             (CmRoom                *self,
+                                                   const char            *event_id,
+                                                   GCancellable          *cancellable,
+                                                   GAsyncReadyCallback    callback,
+                                                   gpointer               user_data);
+CmEvent      *cm_room_get_event_finish            (CmRoom                *self,
+                                                   GAsyncResult          *result,
+                                                   GError               **error);
+CmEvent      *cm_room_get_event_sync              (CmRoom                *self,
+                                                   const char            *event_id,
+                                                   GCancellable          *cancellable,
+                                                   GError               **error);
 G_END_DECLS
-
