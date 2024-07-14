@@ -116,6 +116,12 @@ struct _CmClient
 
 G_DEFINE_TYPE (CmClient, cm_client, G_TYPE_OBJECT)
 
+typedef struct
+{
+  GAsyncResult *res;
+  GMainLoop *loop;
+} CmClientSyncData;
+
 enum {
   PROP_0,
   PROP_HOME_SERVER,
@@ -3182,6 +3188,64 @@ cm_client_get_pushers_finish (CmClient      *self,
   return g_task_propagate_pointer (G_TASK (result), error);
 }
 
+
+static void
+cm_client_get_pushers_sync_cb (GObject         *object,
+                               GAsyncResult    *res,
+                               gpointer         user_data)
+{
+  CmClientSyncData *data = user_data;
+  data->res = g_object_ref (res);
+
+  g_main_loop_quit (data->loop);
+}
+
+/**
+ * cm_client_get_pushers_sync:
+ * @self: The client
+ * @cancellable: Optional GCancellable object, NULL to ignore.
+ * @error: The return location for a recoverable error.
+ *
+ * Get the currently configured push servers.
+ *
+ * This is a synchronous method. See [method@Client.get_pushers_async] for
+ * an asynchronous version.
+ *
+ * Returns:(transfer full)(element-type CmPusher): The array of pushers stream.
+ */
+GPtrArray *
+cm_client_get_pushers_sync (CmClient              *self,
+                            GCancellable          *cancellable,
+                            GError               **error)
+{
+  GPtrArray *pushers;
+  CmClientSyncData data;
+  g_autoptr (GMainContext) context = g_main_context_new ();
+  g_autoptr (GMainLoop) loop = NULL;
+
+  g_main_context_push_thread_default (context);
+  loop = g_main_loop_new (context, FALSE);
+
+  data = (CmClientSyncData) {
+    .loop = loop,
+    .res = NULL,
+  };
+
+  cm_client_get_pushers_async (self, cancellable,
+                               cm_client_get_pushers_sync_cb,
+                               &data);
+  g_main_loop_run (data.loop);
+
+  pushers = cm_client_get_pushers_finish (self, data.res, error);
+
+  if (data.res)
+    g_object_unref (data.res);
+  g_main_context_pop_thread_default (context);
+
+  return pushers;
+}
+
+
 static void
 add_pusher_cb (GObject      *obj,
                GAsyncResult *result,
@@ -3286,6 +3350,66 @@ cm_client_add_pusher_finish (CmClient      *self,
 }
 
 static void
+cm_client_add_pusher_sync_cb (GObject         *object,
+                                 GAsyncResult    *res,
+                                 gpointer         user_data)
+{
+  CmClientSyncData *data = user_data;
+  data->res = g_object_ref (res);
+
+  g_main_loop_quit (data->loop);
+}
+
+/**
+ * cm_client_add_pusher_sync:
+ * @self: The client
+ * @pusher: The pusher to add
+ * @cancellable: Optional GCancellable object, NULL to ignore.
+ * @error: The return location for a recoverable error.
+ *
+ * Add a pusher to the list of pushers known for this client.
+ *
+ * This is a synchronous method. See [method@Client.add_pusher_async] for
+ * an asynchronous version.
+ *
+ * Returns: `TRUE` if the operation was successful otherwise `FALSE`
+ */
+gboolean
+cm_client_add_pusher_sync (CmClient              *self,
+                           CmPusher              *pusher,
+                           GCancellable          *cancellable,
+                           GError               **error)
+{
+  gboolean success;
+  CmClientSyncData data;
+  g_autoptr (GMainContext) context = g_main_context_new ();
+  g_autoptr (GMainLoop) loop = NULL;
+
+  g_main_context_push_thread_default (context);
+  loop = g_main_loop_new (context, FALSE);
+
+  data = (CmClientSyncData) {
+    .loop = loop,
+    .res = NULL,
+  };
+
+  cm_client_add_pusher_async (self, pusher,
+                              cancellable,
+                              cm_client_add_pusher_sync_cb,
+                              &data);
+  g_main_loop_run (data.loop);
+
+  success = cm_client_add_pusher_finish (self, data.res, error);
+
+  if (data.res)
+    g_object_unref (data.res);
+  g_main_context_pop_thread_default (context);
+
+  return success;
+}
+
+
+static void
 remove_pusher_cb (GObject      *obj,
                   GAsyncResult *result,
                   gpointer      user_data)
@@ -3362,4 +3486,63 @@ cm_client_remove_pusher_finish (CmClient      *self,
   g_return_val_if_fail (!error || !*error, FALSE);
 
   return g_task_propagate_boolean (G_TASK (result), error);
+}
+
+static void
+cm_client_remove_pusher_sync_cb (GObject         *object,
+                                 GAsyncResult    *res,
+                                 gpointer         user_data)
+{
+  CmClientSyncData *data = user_data;
+  data->res = g_object_ref (res);
+
+  g_main_loop_quit (data->loop);
+}
+
+/**
+ * cm_client_remove_pusher_sync:
+ * @self: The client
+ * @pusher: The pusher to remove
+ * @cancellable: Optional GCancellable object, NULL to ignore.
+ * @error: The return location for a recoverable error.
+ *
+ * Remove a pusher from the list of pushers known for the client.
+ *
+ * This is a synchronous method. See [method@Client.remove_pusher_async] for
+ * an asynchronous version.
+ *
+ * Returns: `TRUE` if the operation was successful otherwise `FALSE`
+ */
+gboolean
+cm_client_remove_pusher_sync (CmClient              *self,
+                              CmPusher              *pusher,
+                              GCancellable          *cancellable,
+                              GError               **error)
+{
+  gboolean success;
+  CmClientSyncData data;
+  g_autoptr (GMainContext) context = g_main_context_new ();
+  g_autoptr (GMainLoop) loop = NULL;
+
+  g_main_context_push_thread_default (context);
+  loop = g_main_loop_new (context, FALSE);
+
+  data = (CmClientSyncData) {
+    .loop = loop,
+    .res = NULL,
+  };
+
+  cm_client_remove_pusher_async (self, pusher,
+                                 cancellable,
+                                 cm_client_remove_pusher_sync_cb,
+                                 &data);
+  g_main_loop_run (data.loop);
+
+  success = cm_client_remove_pusher_finish (self, data.res, error);
+
+  if (data.res)
+    g_object_unref (data.res);
+  g_main_context_pop_thread_default (context);
+
+  return success;
 }

@@ -94,6 +94,9 @@ void          cm_client_get_pushers_async             (CmClient            *self
                                                        GCancellable        *cancellable,
                                                        GAsyncReadyCallback  callback,
                                                        gpointer             user_data);
+GPtrArray    *cm_client_get_pushers_sync              (CmClient            *self,
+                                                       GCancellable        *cancellable,
+                                                       GError             **error);
 gboolean      cm_client_add_pusher_finish             (CmClient            *self,
                                                        GAsyncResult        *result,
                                                        GError             **error);
@@ -102,6 +105,10 @@ void          cm_client_add_pusher_async              (CmClient            *self
                                                        GCancellable        *cancellable,
                                                        GAsyncReadyCallback  callback,
                                                        gpointer             user_data);
+gboolean      cm_client_add_pusher_sync               (CmClient            *self,
+                                                       CmPusher            *pusher,
+                                                       GCancellable        *cancellable,
+                                                       GError             **error);
 gboolean      cm_client_remove_pusher_finish          (CmClient            *self,
                                                        GAsyncResult        *result,
                                                        GError             **error);
@@ -110,4 +117,8 @@ void          cm_client_remove_pusher_async           (CmClient            *self
                                                        GCancellable        *cancellable,
                                                        GAsyncReadyCallback  callback,
                                                        gpointer             user_data);
+gboolean      cm_client_remove_pusher_sync            (CmClient            *self,
+                                                       CmPusher            *pusher,
+                                                       GCancellable        *cancellable,
+                                                       GError             **error);
 G_END_DECLS
