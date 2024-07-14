@@ -23,11 +23,31 @@ G_BEGIN_DECLS
 #define CM_TYPE_CLIENT (cm_client_get_type ())
 G_DECLARE_FINAL_TYPE (CmClient, cm_client, CM, CLIENT, GObject)
 
-typedef void   (*CmCallback)                        (gpointer            object,
-                                                     CmClient           *self,
+
+/**
+ * CmCallback:
+ * @self: the client that received the events
+ * @room:(nullable): The room (if any) the events belong to
+ * @events:(element-type CmEvent): The events
+ * @err:(nullable): A recoverable error
+ * @user_data: The user data passed in [method@Client.set_sync_callback]
+ *
+ * Type definition for the function that will be called when the client
+ * sees new events.
+ *
+ * Usually you don't do much in this callback. The `items-changed`
+ * signals of the list models returned from
+ * e.g. [method@Client.get_joined_rooms] or [method@Room.get_events_list]
+ * are easier to use.
+ *
+ * The `GMainContext` for these operations isn't well defined atm, see
+ * https://source.puri.sm/Librem5/libcmatrix/-/issues/24
+ */
+typedef void   (*CmCallback)                        (CmClient           *self,
                                                      CmRoom             *room,
                                                      GPtrArray          *events,
-                                                     GError             *err);
+                                                     GError             *err,
+                                                     gpointer            user_data);
 
 CmClient     *cm_client_new                           (void);
 CmAccount    *cm_client_get_account                   (CmClient            *self);
@@ -36,8 +56,8 @@ void          cm_client_set_enabled                   (CmClient            *self
 gboolean      cm_client_get_enabled                   (CmClient            *self);
 void          cm_client_set_sync_callback             (CmClient            *self,
                                                        CmCallback           callback,
-                                                       gpointer             callback_data,
-                                                       GDestroyNotify       callback_data_destroy);
+                                                       gpointer             user_data,
+                                                       GDestroyNotify       destroy_data);
 gboolean      cm_client_set_user_id                   (CmClient            *self,
                                                        const char          *matrix_user_id);
 GRefString   *cm_client_get_user_id                   (CmClient            *self);

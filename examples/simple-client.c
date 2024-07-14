@@ -20,11 +20,11 @@ CmMatrix *matrix;
 CmClient *client;
 
 static void
-simple_account_sync_cb (gpointer   object,
-                        CmClient  *cm_client,
+simple_account_sync_cb (CmClient  *cm_client,
                         CmRoom    *room,
                         GPtrArray *events,
-                        GError    *err)
+                        GError    *err,
+                        gpointer   unused)
 {
   g_message ("\n");
 
