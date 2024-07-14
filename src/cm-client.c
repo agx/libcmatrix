@@ -3162,9 +3162,11 @@ cm_client_get_pushers_async (CmClient              *self,
  * @result: `GAsyncResult`
  * @error: The return location for a recoverable error.
  *
- * Finishes an asynchronous operation started with [method@Client.get_pushers_async].
+ * Finishes an asynchronous operation started with
+ * [method@Client.get_pushers_async] and returns an array
+ * of configured pushers. Destroy with `g_ptr_array_unref`.
  *
- * Returns:(transfer full)(element-type CmPusher): The array of pushers stream.
+ * Returns:(transfer full)(element-type CmPusher): The array of pushers.
  */
 GPtrArray *
 cm_client_get_pushers_finish (CmClient      *self,
@@ -3258,6 +3260,17 @@ cm_client_add_pusher_async (CmClient              *self,
                           g_steal_pointer (&task));
 }
 
+/**
+ * cm_client_add_pusher_finish:
+ * @self: The client
+ * @result: `GAsyncResult`
+ * @error: The return location for a recoverable error.
+ *
+ * Finishes an asynchronous operation started with
+ * [method@Client.add_pusher_async].
+ *
+ * Returns: `TRUE` if the operation was successful otherwise `FALSE`
+ */
 gboolean
 cm_client_add_pusher_finish (CmClient      *self,
                              GAsyncResult  *result,
@@ -3297,7 +3310,7 @@ remove_pusher_cb (GObject      *obj,
  * @callback: A #GAsyncReadyCallback
  * @user_data: The user data for @callback.
  *
- * Remove a pusher from the list of pushers known to the client.
+ * Remove a pusher from the list of pushers known for the client.
  */
 void
 cm_client_remove_pusher_async (CmClient              *self,
@@ -3326,6 +3339,17 @@ cm_client_remove_pusher_async (CmClient              *self,
                           g_steal_pointer (&task));
 }
 
+/**
+ * cm_client_remove_pusher_finish:
+ * @self: The client
+ * @result: `GAsyncResult`
+ * @error: The return location for a recoverable error.
+ *
+ * Finishes an asynchronous operation started with
+ * [method@Client.remove_pusher_async].
+ *
+ * Returns: `TRUE` if the operation was successful otherwise `FALSE`
+ */
 gboolean
 cm_client_remove_pusher_finish (CmClient      *self,
                                 GAsyncResult  *result,
