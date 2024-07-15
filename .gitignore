@@ -13,5 +13,11 @@ GRTAGS
 
 debian/.debhelper/
 debian/debhelper-build-stamp
-debian/libcmatrix-doc.debhelper.log
+debian/files
+debian/libcmatrix-dev/
+debian/libcmatrix-dev.debhelper.log
+debian/libcmatrix-dev.substvars
 debian/libcmatrix-doc/
+debian/libcmatrix-doc.debhelper.log
+debian/libcmatrix-doc.substvars
+debian/tmp/
