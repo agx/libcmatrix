@@ -175,6 +175,14 @@ cm_room_event_new_from_json (gpointer    room,
   return self;
 }
 
+/**
+ * cm_room_event_get_room:
+ * @self: The room event
+ *
+ * Get the room this event belongs to
+ *
+ * Returns:(transfer none): The room
+ */
 CmRoom *
 cm_room_event_get_room (CmRoomEvent *self)
 {
@@ -252,6 +260,14 @@ cm_room_event_set_room_member (CmRoomEvent *self,
   g_ptr_array_add (priv->users, g_object_ref (user));
 }
 
+/**
+ * cm_room_event_get_room_member:
+ * @self: The room event
+ *
+ * Get the room member of this room event
+ *
+ * Returns:(transfer none):The room member
+ */
 CmUser *
 cm_room_event_get_room_member (CmRoomEvent *self)
 {
