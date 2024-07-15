@@ -35,7 +35,6 @@ libcmatrix_headers = [
   'cmatrix.h',
   'cm-client.h',
   'cm-common.h',
-  'cm-device.h',
   'cm-enums.h',
   'cm-matrix.h',
   'cm-pusher.h',
@@ -45,7 +44,6 @@ libcmatrix_headers = [
   'events/cm-verification-event.h',
   'users/cm-user.h',
   'users/cm-account.h',
-  'users/cm-room-member.h',
 ]
 
 cmatrix_sources = [libcmatrix_headers, libcmatrix_sources, cmatrix_enums]
