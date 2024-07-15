@@ -2,10 +2,12 @@ stages:
   - build
   - deploy
 
+default:
+  image: debian:trixie
+
 build-soup3:
   tags:
     - librem5:arm64
-  image: debian:bookworm
   stage: build
   variables:
     CCACHE_DIR: "${CI_PROJECT_DIR}/_ccache"
@@ -34,7 +36,6 @@ build-soup3:
 doc:
   tags:
     - librem5:arm64
-  image: debian:bookworm
   stage: build
   before_script:
     - apt-get update -qq && apt-get install -qq ccache meson gcovr gcc
