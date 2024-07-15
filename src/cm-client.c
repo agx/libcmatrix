@@ -3080,13 +3080,15 @@ get_pushers_cb (GObject      *obj,
 
   elems = json_object_get_array_member (object, "pushers");
   if (!pushers) {
-    g_task_return_pointer (task, NULL, NULL);
+    g_task_return_pointer (task, g_steal_pointer (&pushers),
+                           (GDestroyNotify)g_ptr_array_unref);
     return;
   }
 
   length = json_array_get_length (elems);
   if (!length) {
-    g_task_return_pointer (task, NULL, NULL);
+    g_task_return_pointer (task, g_steal_pointer (&pushers),
+                           (GDestroyNotify)g_ptr_array_unref);
     return;
   }
 
