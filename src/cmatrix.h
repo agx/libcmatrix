@@ -30,6 +30,7 @@ G_BEGIN_DECLS
 #include "cm-pusher.h"
 #include "cm-room.h"
 #include "events/cm-event.h"
+#include "events/cm-room-event.h"
 #include "events/cm-room-message-event.h"
 #include "events/cm-verification-event.h"
 /* these are not yet public */
