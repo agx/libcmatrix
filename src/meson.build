@@ -49,7 +49,7 @@ cmatrix_sources = [libcmatrix_headers, libcmatrix_sources, cmatrix_enums]
 
 # Currently we do only have static library and should be
 # used only as a subproject
-cmatrix_lib = static_library('libcmatrix',
+cmatrix_lib = static_library('cmatrix',
                              cmatrix_sources,
                              include_directories: [ root_inc, src_inc ],
                              dependencies: cmatrix_deps
