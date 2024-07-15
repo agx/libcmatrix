@@ -24,6 +24,13 @@ libcmatrix_sources = [
   'users/cm-user-list.c',
 ]
 
+cmatrix_enums = gnome.mkenums_simple(
+  'cm-enum-types',
+  sources : 'cm-enums.h',
+  install_dir: includedir,
+  install_header : install_lib,
+)
+
 libcmatrix_headers = [
   'cmatrix.h',
   'cm-client.h',
@@ -41,11 +48,6 @@ libcmatrix_headers = [
   'users/cm-room-member.h',
 ]
 
-cmatrix_enums = gnome.mkenums_simple(
-  'cm-enum-types',
-  sources : 'cm-enums.h',
-)
-
 cmatrix_sources = [libcmatrix_headers, libcmatrix_sources, cmatrix_enums]
 
 # Currently we do only have static library and should be
@@ -53,7 +55,8 @@ cmatrix_sources = [libcmatrix_headers, libcmatrix_sources, cmatrix_enums]
 cmatrix_lib = static_library('cmatrix',
                              cmatrix_sources,
                              include_directories: [ root_inc, src_inc ],
-                             dependencies: cmatrix_deps
+                             dependencies: cmatrix_deps,
+                             install: install_lib,
 )
 
 libcmatrix_dep = declare_dependency(
@@ -65,6 +68,23 @@ libcmatrix_dep = declare_dependency(
   dependencies: cmatrix_deps,
   link_with: cmatrix_lib
 )
+
+if install_lib
+  install_headers (
+    libcmatrix_headers,
+    preserve_path: true,
+    subdir: 'libcmatrix',
+  )
+
+  pkgconfig.generate(
+    cmatrix_lib,
+    subdirs: 'libcmatrix',
+    name: 'libcmatrix',
+    version : meson.project_version(),
+    description: 'Matrix client library',
+    url: 'https://source.puri.sm/Librem5/libcmatrix',
+  )
+endif
 
 if get_option('gtk_doc')
   libcmatrix_gir_extra_args = [

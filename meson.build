@@ -1,12 +1,13 @@
 project('libcmatrix', 'c',
           version: '0.0.0',
           license: 'LGPL-2.1-or-later',
-    meson_version: '>= 0.56.0',
+    meson_version: '>= 0.63.0',
   default_options: [ 'warning_level=2', 'buildtype=debugoptimized', 'c_std=gnu18' ],
 )
 
-gnome = import('gnome')
-i18n  = import('i18n')
+gnome     = import('gnome')
+i18n      = import('i18n')
+pkgconfig = import('pkgconfig')
 
 VERSION = meson.project_version()
 ABI_MAJOR = VERSION.split('.')[0]
@@ -18,6 +19,7 @@ bindir = join_paths(prefix, get_option('bindir'))
 datadir = join_paths(prefix, get_option('datadir'))
 localedir = join_paths(prefix, get_option('localedir'))
 libdir = join_paths(prefix, get_option('libdir'))
+includedir = prefix / get_option('includedir') / 'libcmatrix'
 
 cc = meson.get_compiler('c')
 
@@ -105,6 +107,8 @@ configure_file(
   configuration: config_h,
 )
 
+install_lib = not meson.is_subproject()
+
 root_inc = include_directories('.')
 src_inc = include_directories('src')
 
@@ -134,6 +138,7 @@ endif
 summary({
     'Examples': get_option('build-examples'),
     'Documentation': get_option('gtk_doc'),
+    'Install lib': install_lib,
   },
   bool_yn: true,
 )
