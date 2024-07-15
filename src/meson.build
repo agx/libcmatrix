@@ -35,6 +35,7 @@ libcmatrix_headers = [
   'cm-room.h',
   'events/cm-event.h',
   'events/cm-room-message-event.h',
+  'events/cm-verification-event.h',
   'users/cm-user.h',
   'users/cm-account.h',
   'users/cm-room-member.h',
