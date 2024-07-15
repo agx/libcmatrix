@@ -60,6 +60,18 @@ check-lib:
     paths:
       - _build
 
+check-pkg:
+  tags:
+    - librem5:arm64
+  stage: check
+  needs: []
+  before_script:
+    - apt-get update -qq &&
+      apt-get -y install build-essential &&
+      apt-get -y build-dep .
+  script:
+    - dpkg-buildpackage -uc -us -rfakeroot
+
 doc:
   tags:
     - librem5:arm64
