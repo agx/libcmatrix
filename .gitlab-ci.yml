@@ -1,9 +1,15 @@
 stages:
   - build
+  - check
   - deploy
 
 default:
   image: debian:trixie
+
+variables:
+  PKGS: ccache meson gcovr gcc
+      libsqlite3-dev libjson-glib-dev libgcrypt20-dev
+      libsoup-3.0-dev libolm-dev libsecret-1-dev
 
 build-soup3:
   tags:
@@ -13,9 +19,7 @@ build-soup3:
     CCACHE_DIR: "${CI_PROJECT_DIR}/_ccache"
     MESON_ARGS: "--buildtype=debugoptimized"
   before_script:
-    - apt-get update -qq && apt-get install -qq ccache meson gcovr gcc
-      libsqlite3-dev libjson-glib-dev libgcrypt20-dev
-      libsoup-3.0-dev libolm-dev libsecret-1-dev
+    - apt-get update -qq && apt-get install -qq $PKGS
   script:
     - meson ${MESON_ARGS} -Db_coverage=true _build
     - ccache --zero-stats
@@ -33,15 +37,36 @@ build-soup3:
     paths:
       - _build
 
+check-lib:
+  tags:
+    - librem5:arm64
+  stage: check
+  needs: []
+  variables:
+    CCACHE_DIR: "${CI_PROJECT_DIR}/_ccache"
+  before_script:
+    - apt-get update -qq && apt-get install -qq $PKGS
+  script:
+    - meson setup _build-inst
+    - meson install -C _build-inst
+    # Ensure cmatrix headers are self contained and we can link against the lib
+    - gcc -Wall examples/simple-client.c $(pkgconf --cflags libcmatrix) $(pkgconf --libs libcmatrix)
+  cache:
+    key: build-cmatrix-check-lib
+    paths:
+      - _ccache/
+  artifacts:
+    when: always
+    paths:
+      - _build
+
 doc:
   tags:
     - librem5:arm64
   stage: build
   before_script:
-    - apt-get update -qq && apt-get install -qq ccache meson gcovr gcc
-      libsqlite3-dev libjson-glib-dev libgcrypt20-dev
-      libolm-dev gi-docgen libgirepository1.0-dev libsecret-1-dev
-      libsoup-3.0-dev
+    - apt-get update -qq && apt-get install -qq $PKGS
+      gi-docgen libgirepository1.0-dev
   variables:
     BUILD_OPTS: >-
       -Dgtk_doc=true
