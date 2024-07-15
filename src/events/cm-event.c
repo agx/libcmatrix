@@ -152,6 +152,13 @@ cm_event_class_init (CmEventClass *klass)
   event_class->generate_json = cm_event_real_generate_json;
   event_class->get_api_url = cm_event_real_get_api_url;
 
+  /**
+   * CmEvent::updated:
+   * @self: The event
+   *
+   * Emitted when the state of the event changed. See
+   * [type@EventState] and [method@Event.get_state].
+   */
   signals [UPDATED] =
     g_signal_new ("updated",
                   G_TYPE_FROM_CLASS (klass),
