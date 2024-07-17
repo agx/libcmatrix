@@ -1,3 +1,123 @@
+libcmatrix (0.0.1) experimental; urgency=medium
+
+  * secret-store: Don't use gtk-doc style comments ('/**')
+    Use regular '/*' to silence the
+     ../src/cm-secret-store.c:48: Warning: CM: GTK-Doc comment block start token "/**" should not be followed by comment text:
+    warnings
+  * treewide: Fix various doc comments.
+    This allows them to get picked up by gir.
+  * utils: Add transfer annotation for cm_utils_json_object_get_object.
+    It's troublesome to guess or always look it up.
+  * room-message-event: Fix attachment download.
+    In case of an `image`, `file` and `audio` the `file` element has the
+    `uri` not the `body` itself.
+    Without this we see
+      15:12:07.2632 cm-room-message-event[981607]:CRITICAL: cm_room_message_event_get_file_async: assertion 'self->mxc_uri' failed
+    in the logs and the download spinner never stops.
+    With this I can download images pasted with Element 1.11.64
+  * client: Use g_object_unref()
+    This avoids an unused variable warnings
+  * treewide: Be more careful with one bit wide fields.
+    Use plain gboolean to avoid implicit truncation to -1 which can give
+    confusing results. We don't waste much space either.
+  * ci: Drop libsoup2 build
+  * treewide: Drop support for libsoup2.
+    Chatty has long moved on.
+  * treewide: Remove unused variables
+  * cm-client: Don't give up when uploading keys failed.
+    Otherwise we won't receive any future messages.
+  * Package documentation.
+    This makes it easy to use with devhelp
+  * client: Allow to get, set and parse pushers.
+    This follows
+      https://spec.matrix.org/legacy/push_gateway/r0.1.1#post-matrix-push-v1-notify
+      https://spec.matrix.org/v1.11/client-server-api/#post_matrixclientv3pushersset
+    (we use /r0/ for the API version like other URLs in libcmatrix atm)
+  * README: Fix broken image link.
+    Fix the broken image link at the very top, update some versions
+    while at that.
+  * simple-client: Use g_warning and g_message consistently.
+    Use g_message for status messages and g_warning for warnings
+  * build: Drop last bits of soup2 support.
+    Fixes: 365aaf1 ("treewide: Drop support for libsoup2")
+  * build: Add summary
+  * build: Add Secret-1 as include for the introspections.
+    We're using types from there
+  * build: Add missing headers.
+    This allows the type to be resolved when generating bindings
+  * room, matrix, client, users, pusher, event: Add some doc strings and
+    transfer annotations
+  * build: Make doc build warnings fatal. It's tedious to play catch up.
+  * build: Enable fatal warnings when building gir.
+    Let's not regress on documentation again. It's a library after all.
+  * client: Add more doc strings
+  * matrix: Improve docs
+  * room-event-message: Add to headers.
+    It's public api and we want it to show up in the introspection data and
+    docs.
+  * enums: Use negative values for our custom errors.
+    This makes them easier to distinguish and keeps them out of matrix
+    errors which would break ABI when Matrix adds new errors.
+  * client: Set a source tag for all tasks.
+    This makes it a lot simpler to identify what went wrong.
+  * treewide: Document more methods and enums
+  * build: Generate enum types.
+    This allows clients to use them via the type system and allows to lookup
+    text representations for the values.
+  * db: Don't blindly iterate the NULL context.
+    We need to take the current threads default context into account as
+    otherwise iterating a nested loop (for e.g. sync calls) doesn't work
+  * client: Clarify return type of cm_client_get_pushers_async.
+    Document the finish functions while at that
+  * client: Return empty array when there are no pushers.
+    This distinguishes the error case better from the "no pushers" case
+  * client: Allow to get/add/remove pushers synchronously.
+    Useful for tests and cli tools
+  * build: Make lib depend on generated headers.
+    Otherwise they might not yet be there in a subproject build
+    Fixes: 1d897a8 ("build: Generate enum types")
+  * gitignore more generated files
+  * room-event: Add missing transfer annotations
+  * packaging: Add missing build-deps.
+    And fix some other small packaging nits
+  * build: Name resulting library libcmatrix
+    liblibcmatrix looks odd
+  * ci: Use Debian trixie. Bookworm is rather old
+  * example: Use libcmatrix_dep.
+    This avoids duplication and makes sure that `libcmatrix_dep`
+    works as intended.
+  * build: Add verification-event to list of public headers.
+    It's referenced in cmatrix.h
+  * build: Allow to install headers and libraries.
+    Testing whether the public headers are self contained is
+    easiest when building against them without the library sources
+    around. Make that possible.
+    This also eases usage in e.g. flatpaks where we can't fetch the library
+    during the build.
+  * packaging: Install headers and static lib into dev package
+  * build: Remove device and room-member from pubic headers.
+    They're not yet marked as public API in cmatrix.h
+  * build: Make event public API.
+    It's indirectly included via cm-room and chatty uses e.g.
+    cm_room_set_read_marker_async which gets a `CMEvent` passed so it's
+    public API anyway already.
+  * build: Add cm-types to list of public headers.
+    It's referenced by several other public headers
+  * build: Make room-event public.
+    It's the parent class of room-message-event
+  * ci: Check that we can build and link against the library.
+    This makes sure we have all the necessary headers marked as public.
+    This in turn ensures we have all the classes in the docs.
+  * ci: Check package build.
+    Now that the dev package is non-empty lets verify that too.
+  * room: Allow to fetch single events
+    this will be useful with push notifications. If the event was already
+    fetched before `NULL` is returned. This is useful to distinguish as in
+    the push notification case we don't want to do anything when that
+    happens.
+
+ -- Guido Günther <agx@sigxcpu.org>  Thu, 18 Jul 2024 13:44:26 +0200
+
 libcmatrix (0.0.0) experimental; urgency=medium
 
   * Initial release

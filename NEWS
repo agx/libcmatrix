@@ -1,0 +1,28 @@
+libcmatrix 0.0.1
+----------------
+Released July 2024
+* Fix various introspection and doc build issues allowing us to enable
+  --fatal-warnings to catch these in CI
+* New API:
+  - Allow to set, get and list pushers (sync and async)
+  - Allow to fetch single events (useful for push notifications)
+* Fix attachment download
+* Fix context iterations in db thread
+* Internal cleanups and robustness fixes
+* Drop support for libsoup2
+* Make it simple to build deb packages from doc and development files
+* Start documenting some classes and methods
+* Fix public and private header separation and test that in CI
+* Contributors:
+    * Guido Günther
+
+libcmatrix 0.0.0
+----------------
+* Never formally released.
+* Contributors:
+    * Anthony PERARD
+    * Evangelos Ribeiro Tzaras
+    * Guido Günther
+    * marcin
+    * Mohammed Sadiq
+    * Newbyte
