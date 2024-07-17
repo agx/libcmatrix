@@ -56,6 +56,10 @@ cmatrix_lib = static_library('libcmatrix',
 )
 
 libcmatrix_dep = declare_dependency(
+  sources: [
+    # Ensure the resources are available to indirect users too
+    cmatrix_enums[1],
+  ],
   include_directories: include_directories('.'),
   dependencies: cmatrix_deps,
   link_with: cmatrix_lib
