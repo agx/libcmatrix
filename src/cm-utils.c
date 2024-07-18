@@ -645,12 +645,12 @@ utils_json_canonical_array (JsonArray *array,
 
   /* The order of array members shouldn’t be changed */
   for (GList *item = elements; item; item = item->next)
-{
-    utils_handle_node (item->data, out);
+    {
+      utils_handle_node (item->data, out);
 
-    if (item->next)
-      g_string_append_c (out, ',');
-  }
+      if (item->next)
+        g_string_append_c (out, ',');
+    }
 
   g_string_append_c (out, ']');
 }
@@ -681,17 +681,17 @@ cm_utils_json_get_canonical (JsonObject *object,
   members = g_list_sort (members, (GCompareFunc)g_strcmp0);
 
   for (GList *item = members; item; item = item->next)
-{
-    JsonNode *node;
+    {
+      JsonNode *node;
 
-    g_string_append_printf (out, "\"%s\":", (char *)item->data);
+      g_string_append_printf (out, "\"%s\":", (char *)item->data);
 
-    node = json_object_get_member (object, item->data);
-    utils_handle_node (node, out);
+      node = json_object_get_member (object, item->data);
+      utils_handle_node (node, out);
 
-    if (item->next)
-      g_string_append_c (out, ',');
-  }
+      if (item->next)
+        g_string_append_c (out, ',');
+    }
 
   g_string_append_c (out, '}');
 
@@ -918,33 +918,33 @@ uri_file_read_cb (GObject      *object,
     return;
 
   if (error)
-{
-    g_task_return_error (task, error);
-    return;
-  }
+    {
+      g_task_return_error (task, error);
+      return;
+    }
 
   err_flags = soup_message_get_tls_peer_certificate_errors (message);
 
   if (message && err_flags)
-{
-    guint timeout_id, timeout;
+    {
+      guint timeout_id, timeout;
 
-    timeout = GPOINTER_TO_UINT (g_object_get_data (G_OBJECT (task), "timeout"));
-    timeout_id = GPOINTER_TO_UINT (g_object_get_data (G_OBJECT (task), "timeout-id"));
-    g_clear_handle_id (&timeout_id, g_source_remove);
-    g_object_unref (task);
+      timeout = GPOINTER_TO_UINT (g_object_get_data (G_OBJECT (task), "timeout"));
+      timeout_id = GPOINTER_TO_UINT (g_object_get_data (G_OBJECT (task), "timeout-id"));
+      g_clear_handle_id (&timeout_id, g_source_remove);
+      g_object_unref (task);
 
-    /* fixme: handle SSL errors */
-    /* if (cm_utils_handle_ssl_error (message)) */
-    /*   { */
-    /*     g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_CANCELLED, */
-    /*                              "Cancelled"); */
-    /*     return; */
-    /*   } */
+      /* fixme: handle SSL errors */
+      /* if (cm_utils_handle_ssl_error (message)) */
+      /*   { */
+      /*     g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_CANCELLED, */
+      /*                              "Cancelled"); */
+      /*     return; */
+      /*   } */
 
-    timeout_id = g_timeout_add_seconds (timeout, cancel_read_uri, g_object_ref (task));
-    g_object_set_data (G_OBJECT (task), "timeout-id", GUINT_TO_POINTER (timeout_id));
-  }
+      timeout_id = g_timeout_add_seconds (timeout, cancel_read_uri, g_object_ref (task));
+      g_object_set_data (G_OBJECT (task), "timeout-id", GUINT_TO_POINTER (timeout_id));
+    }
 
   cancellable = g_task_get_cancellable (task);
   parser = json_parser_new ();
@@ -1013,11 +1013,11 @@ cm_utils_read_uri_async (const char          *uri,
 
   message = soup_message_new (SOUP_METHOD_GET, uri);
   if (!message)
-{
-    g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_INVALID_FILENAME,
-                             "%s is not a valid uri", uri);
-    return;
-  }
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_INVALID_FILENAME,
+                               "%s is not a valid uri", uri);
+      return;
+    }
 
   soup_message_set_flags (message, SOUP_MESSAGE_NO_REDIRECT);
   g_object_set_data_full (G_OBJECT (task), "message", g_object_ref (message), g_object_unref);
@@ -1069,7 +1069,7 @@ get_homeserver_cb (GObject      *obj,
         g_task_return_pointer (task, NULL, NULL);
 
       return;
-  }
+    }
 
   g_object_set_data_full (G_OBJECT (task), "address",
                           g_object_steal_data (G_OBJECT (result), "address"),
@@ -1187,14 +1187,14 @@ api_get_version_cb (GObject      *obj,
   if (!root ||
       g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED) ||
       g_error_matches (error, G_IO_ERROR, G_IO_ERROR_TIMED_OUT))
-{
-    if (error)
-      g_task_return_error (task, error);
-    else
-      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED,
-                               "Failed to get version for server '%s'", server);
-    return;
-  }
+    {
+      if (error)
+        g_task_return_error (task, error);
+      else
+        g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED,
+                                 "Failed to get version for server '%s'", server);
+      return;
+    }
 
   g_object_set_data_full (G_OBJECT (task), "address",
                           g_object_steal_data (G_OBJECT (result), "address"),
@@ -1205,30 +1205,30 @@ api_get_version_cb (GObject      *obj,
   valid = FALSE;
 
   if (array)
-{
-    g_autoptr(GString) versions = NULL;
-    guint length;
+    {
+      g_autoptr(GString) versions = NULL;
+      guint length;
 
-    versions = g_string_new ("");
-    length = json_array_get_length (array);
+      versions = g_string_new ("");
+      length = json_array_get_length (array);
 
-    for (guint i = 0; i < length; i++)
-{
-      const char *version;
+      for (guint i = 0; i < length; i++)
+        {
+          const char *version;
 
-      version = json_array_get_string_element (array, i);
-      g_string_append_printf (versions, " %s", version);
+          version = json_array_get_string_element (array, i);
+          g_string_append_printf (versions, " %s", version);
 
-      /* We have tested only with r0.6.x and r0.5.0 */
-      if (g_str_has_prefix (version, "r0.5.") ||
-          g_str_has_prefix (version, "r0.6.") ||
-          g_str_has_prefix (version, "v1."))
-        valid = TRUE;
+          /* We have tested only with r0.6.x and r0.5.0 */
+          if (g_str_has_prefix (version, "r0.5.") ||
+              g_str_has_prefix (version, "r0.6.") ||
+              g_str_has_prefix (version, "v1."))
+            valid = TRUE;
+        }
+
+      g_debug ("'%s' has versions:%s, valid: %d",
+               server, versions->str, valid);
     }
-
-    g_debug ("'%s' has versions:%s, valid: %d",
-             server, versions->str, valid);
-  }
 
   g_task_return_boolean (task, valid);
 }
@@ -1252,12 +1252,12 @@ cm_utils_verify_homeserver_async (const char          *server,
 
   if (!server || !*server ||
       !g_str_has_prefix (server, "http"))
-{
-    g_task_return_new_error (task, G_IO_ERROR,
-                             G_IO_ERROR_INVALID_DATA,
-                             "URI '%s' is invalid", server);
-    return;
-  }
+    {
+      g_task_return_new_error (task, G_IO_ERROR,
+                               G_IO_ERROR_INVALID_DATA,
+                               "URI '%s' is invalid", server);
+      return;
+    }
 
   uri = g_strconcat (server, "/_matrix/client/versions", NULL);
   cm_utils_read_uri_async (uri, timeout, cancellable,
