@@ -296,7 +296,7 @@ send_json_cb (GObject      *obj,
   g_task_return_pointer (task, g_steal_pointer (&root), (GDestroyNotify)json_object_unref);
 }
 
-static gboolean
+static void
 schedule_resync (gpointer user_data)
 {
   CmClient *self = user_data;
@@ -310,10 +310,8 @@ schedule_resync (gpointer user_data)
   if (sync_now)
     matrix_start_sync (self, NULL);
   else
-    self->resync_id = g_timeout_add_seconds (URI_REQUEST_TIMEOUT,
-                                             schedule_resync, self);
-
-  return G_SOURCE_REMOVE;
+    self->resync_id = g_timeout_add_seconds_once (URI_REQUEST_TIMEOUT,
+                                                  schedule_resync, self);
 }
 
 static gboolean
@@ -356,8 +354,8 @@ handle_matrix_glitches (CmClient *self,
           CM_TRACE ("(%p) Handle glitch, network error", self);
           g_clear_handle_id (&self->resync_id, g_source_remove);
 
-          self->resync_id = g_timeout_add_seconds (URI_REQUEST_TIMEOUT,
-                                                   schedule_resync, self);
+          self->resync_id = g_timeout_add_seconds_once (URI_REQUEST_TIMEOUT,
+                                                        schedule_resync, self);
           return TRUE;
         }
     }
