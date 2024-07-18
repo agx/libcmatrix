@@ -8,25 +8,30 @@ If you need to build libcmatrix, get the source from
 
 ## Bundling the library
 
-libcmatrix is not meant to be used as a shared library. It should be embedded in your source
-tree as a git submodule instead:
+libcmatrix is not yet meant to be used as a shared library. It should be embedded in your source
+code as a meson subproject. Add this as `subprojects/libcmatrix.wrap`:
 
 ```
-git submodule add https://source.puri.sm/Librem5/libcmatrix.git subprojects/libcmatrix
+[wrap-git]
+directory=libcmatrix
+url=https://source.puri.sm/agx/libcmatrix
+revision=main
+depth=1
 ```
 
 Add this to your `meson.build`:
 
 ```meson
-libcmatrix = subproject('libcmatrix',
+add_project_arguments([
+  '-DCMATRIX_USE_EXPERIMENTAL_API',
+], language: 'c')
+
+
+libcmatrix_dep = dependency('libcmatrix',
+  fallback: ['libcmatrix', 'libcmatrix_dep'],
   default_options: [
-    'package_name=' + meson.project_name(),
-    'package_version=' + meson.project_version(),
-    'pkgdatadir=' + pkgdatadir,
-    'pkglibdir=' + pkglibdir,
-    'examples=false',
+    'build-examples=false',
     'gtk_doc=false',
-    'tests=false',
   ])
-libcmatrix_dep = libcmatrix.get_variable('libcmatrix_dep')
 ```
+
