@@ -128,7 +128,7 @@ matrix_has_client (CmMatrix *self,
   return FALSE;
 }
 
-static gboolean
+static void
 matrix_reconnect (gpointer user_data)
 {
   CmMatrix *self = user_data;
@@ -151,8 +151,6 @@ matrix_reconnect (gpointer user_data)
     else
       cm_client_stop_sync (client);
   }
-
-  return G_SOURCE_REMOVE;
 }
 
 static void
@@ -167,8 +165,8 @@ matrix_network_changed_cb (CmMatrix        *self,
     return;
 
   g_clear_handle_id (&self->network_change_id, g_source_remove);
-  self->network_change_id = g_timeout_add (RECONNECT_TIMEOUT,
-                                           matrix_reconnect, self);
+  self->network_change_id = g_timeout_add_once (RECONNECT_TIMEOUT,
+                                                matrix_reconnect, self);
 }
 
 static void
