@@ -112,6 +112,7 @@ enum {
   PROP_0,
   PROP_ENCRYPTED,
   PROP_NAME,
+  PROP_UNREAD_COUNT,
   N_PROPS
 };
 
@@ -432,6 +433,10 @@ cm_room_get_property (GObject    *object,
       g_value_set_string (value, cm_room_get_name (self));
       break;
 
+    case PROP_UNREAD_COUNT:
+      g_value_set_uint (value, cm_room_get_unread_notification_counts (self));
+      break;
+
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -491,6 +496,15 @@ cm_room_class_init (CmRoomClass *klass)
                          "The room name",
                          NULL,
                          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
+  /**
+   * CmRoom::unread-count:
+   *
+   * The number of unread notifications in this room
+   */
+  properties[PROP_UNREAD_COUNT] =
+    g_param_spec_int ("unread-count", "", "",
+                       0, G_MAXINT, 0,
+                       G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
   g_object_class_install_properties (object_class, N_PROPS, properties);
 }
@@ -547,6 +561,7 @@ cm_room_new_from_json (const char *room_id,
 {
   g_autoptr(GString) str = NULL;
   CmRoom *self;
+  gint old_unread;
 
   self = cm_room_new (room_id);
 
@@ -554,6 +569,7 @@ cm_room_new_from_json (const char *room_id,
   cm_utils_anonymize (str, room_id);
   CM_TRACE ("(%p) new room '%s' from json", self, str->str);
 
+  old_unread = self->unread_count;
   if (root)
     {
       JsonObject *local, *child;
@@ -574,6 +590,9 @@ cm_room_new_from_json (const char *room_id,
       if (last_event)
         g_debug ("(%p) Added 1 event from db", self);
     }
+
+  if (old_unread != self->unread_count)
+    g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_UNREAD_COUNT]);
 
   return self;
 }
@@ -1128,12 +1147,14 @@ cm_room_set_data (CmRoom     *self,
   JsonObject *child, *local;
   JsonArray *array;
   guint length = 0;
+  gint old_unread;
 
   g_return_val_if_fail (CM_IS_ROOM (self), NULL);
   g_return_val_if_fail (object, NULL);
 
   child = cm_utils_json_object_get_object (object, "unread_notifications");
 
+  old_unread = self->unread_count;
   if (child)
     {
       local = cm_room_event_list_get_local_json (self->room_event);
@@ -1193,6 +1214,9 @@ cm_room_set_data (CmRoom     *self,
 
   self->initial_sync_done = TRUE;
   cm_room_save (self);
+
+  if (old_unread != self->unread_count)
+    g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_UNREAD_COUNT]);
 
   return g_steal_pointer (&events);
 }
