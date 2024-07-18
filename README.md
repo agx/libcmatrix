@@ -35,9 +35,10 @@ Issues and Feature Requests: [GitLab][issues]
 ## Getting started
 
    See `examples` directory for examples on how to use the library.
-   You shall have to use libcmatrix as a subproject.  Currently
-   libcmatrix provides no API nor ABI guarantee until it's stable
-   enough.
+   You typically use it as a [meson subproject](./doc/build-howto.md).
+
+   Currently libcmatrix provides no API nor ABI guarantee until it's
+   stable enough.
 
 ## Known users
 
