@@ -2695,6 +2695,9 @@ matrix_start_sync (CmClient *self,
 
   self->sync_failed = FALSE;
 
+  if (self->db_loading || self->room_list_loading || self->direct_room_list_loading)
+    return;
+
   if (!task)
     {
       task = g_task_new (self, self->cancellable, NULL, NULL);
@@ -2703,9 +2706,6 @@ matrix_start_sync (CmClient *self,
     }
 
   cancellable = g_task_get_cancellable (task);
-
-  if (self->db_loading || self->room_list_loading || self->direct_room_list_loading)
-    return;
 
   if (!self->db_loaded)
     {
