@@ -45,6 +45,7 @@ Issues and Feature Requests: [GitLab][issues]
 These applications use libcmatrix:
 
 - [Chatty][chatty]: An instant messaging app
+- [Eigenvalue][eigenvalue]: A client to test libcmatrix
 
 
 <!-- Links referenced elsewhere -->
@@ -53,3 +54,4 @@ These applications use libcmatrix:
 [gitlab]: https://source.puri.sm/Librem5/libcmatrix/
 [issues]: https://source.puri.sm/Librem5/libcmatrix/issues
 [chatty]: https://gitlab.gnome.org/World/Chatty
+[eigenvalue]: https://github.com/agx/eigenvalue
