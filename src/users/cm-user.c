@@ -731,7 +731,8 @@ cm_user_add_one_time_keys (CmUser     *self,
 
       if (!child)
         {
-          g_debug ("device '%s' doesn't have any keys", device_id);
+          g_debug ("device '%s' of user '%s' doesn't have any keys",
+                   device_id, priv->user_id);
           continue;
         }
 
