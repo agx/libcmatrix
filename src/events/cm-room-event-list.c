@@ -34,16 +34,16 @@ struct _CmRoomEventList
   CmClient     *client;
 
   GListStore   *events_list;
-  CmEvent      *room_create_event;
-  CmEvent      *room_name_event;
-  CmEvent      *room_avatar_event;
   CmEvent      *canonical_alias_event;
-  CmEvent      *room_topic_event;
-  CmEvent      *power_level_event;
   CmEvent      *encryption_event;
   CmEvent      *guest_access_event;
-  CmEvent      *join_rules_event;
   CmEvent      *history_visibility_event;
+  CmEvent      *join_rules_event;
+  CmEvent      *power_level_event;
+  CmEvent      *room_avatar_event;
+  CmEvent      *room_create_event;
+  CmEvent      *room_name_event;
+  CmEvent      *room_topic_event;
   CmEvent      *tombstone_event;
 
   JsonObject   *local_json;
@@ -149,16 +149,16 @@ room_event_list_generate_json (CmRoomEventList *self)
   json_object_set_boolean_member (child, "direct", cm_room_is_direct (self->room));
   json_object_set_int_member (child, "encryption", cm_room_is_encrypted (self->room));
 
+  set_json_from_event (self->canonical_alias_event, child);
+  set_json_from_event (self->encryption_event, child);
+  set_json_from_event (self->guest_access_event, child);
+  set_json_from_event (self->history_visibility_event, child);
+  set_json_from_event (self->join_rules_event, child);
+  set_json_from_event (self->power_level_event, child);
+  set_json_from_event (self->room_avatar_event, child);
   set_json_from_event (self->room_create_event, child);
   set_json_from_event (self->room_name_event, child);
-  set_json_from_event (self->room_avatar_event, child);
-  set_json_from_event (self->canonical_alias_event, child);
   set_json_from_event (self->room_topic_event, child);
-  set_json_from_event (self->encryption_event, child);
-  set_json_from_event (self->power_level_event, child);
-  set_json_from_event (self->guest_access_event, child);
-  set_json_from_event (self->join_rules_event, child);
-  set_json_from_event (self->history_visibility_event, child);
   set_json_from_event (self->tombstone_event, child);
 
   /* todo */
@@ -174,17 +174,19 @@ cm_room_event_list_finalize (GObject *object)
   CmRoomEventList *self = (CmRoomEventList *)object;
 
   g_clear_object (&self->events_list);
-  g_clear_object (&self->room_create_event);
-  g_clear_object (&self->room_name_event);
-  g_clear_object (&self->room_avatar_event);
+
   g_clear_object (&self->canonical_alias_event);
-  g_clear_object (&self->room_topic_event);
-  g_clear_object (&self->power_level_event);
   g_clear_object (&self->encryption_event);
   g_clear_object (&self->guest_access_event);
-  g_clear_object (&self->join_rules_event);
   g_clear_object (&self->history_visibility_event);
+  g_clear_object (&self->join_rules_event);
+  g_clear_object (&self->power_level_event);
+  g_clear_object (&self->room_avatar_event);
+  g_clear_object (&self->room_create_event);
+  g_clear_object (&self->room_name_event);
+  g_clear_object (&self->room_topic_event);
   g_clear_object (&self->tombstone_event);
+
   g_clear_pointer (&self->local_json, json_object_unref);
 
   G_OBJECT_CLASS (cm_room_event_list_parent_class)->finalize (object);
@@ -255,17 +257,8 @@ cm_room_event_list_get_event (CmRoomEventList *self,
 {
   g_return_val_if_fail (CM_IS_ROOM_EVENT_LIST (self), NULL);
 
-  if (type == CM_M_ROOM_CREATE)
-    return self->room_create_event;
-
-  if (type == CM_M_ROOM_NAME)
-    return self->tombstone_event;
-
   if (type == CM_M_ROOM_CANONICAL_ALIAS)
     return self->canonical_alias_event;
-
-  if (type == CM_M_ROOM_POWER_LEVELS)
-    return self->power_level_event;
 
   if (type == CM_M_ROOM_ENCRYPTION)
     return self->encryption_event;
@@ -273,17 +266,30 @@ cm_room_event_list_get_event (CmRoomEventList *self,
   if (type == CM_M_ROOM_GUEST_ACCESS)
     return self->guest_access_event;
 
+  if (type == CM_M_ROOM_HISTORY_VISIBILITY)
+    return self->history_visibility_event;
+
   if (type == CM_M_ROOM_JOIN_RULES)
     return self->join_rules_event;
 
-  if (type == CM_M_ROOM_HISTORY_VISIBILITY)
-    return self->history_visibility_event;
+  if (type == CM_M_ROOM_POWER_LEVELS)
+    return self->power_level_event;
+
+  if (type == CM_M_ROOM_AVATAR)
+    return self->room_avatar_event;
+
+  if (type == CM_M_ROOM_CREATE)
+    return self->room_create_event;
+
+  if (type == CM_M_ROOM_NAME)
+    return self->tombstone_event;
+
+  if (type == CM_M_ROOM_TOPIC)
+    return self->room_topic_event;
 
   if (type == CM_M_ROOM_TOMBSTONE)
     return self->tombstone_event;
 
-  if (type == CM_M_ROOM_AVATAR)
-    return self->room_avatar_event;
 
   return NULL;
 }
@@ -430,17 +436,17 @@ cm_room_event_list_set_local_json (CmRoomEventList *self,
   self->local_json = json_object_ref (root);
   local = cm_utils_json_object_get_object (root, "local");
 
-  set_event_from_json (room, self->room_name_event, local, CM_M_ROOM_NAME);
-  set_event_from_json (room, self->room_avatar_event, local, CM_M_ROOM_AVATAR);
-  set_event_from_json (room, self->room_topic_event, local, CM_M_ROOM_TOPIC);
-  set_event_from_json (room, self->room_create_event, local, CM_M_ROOM_CREATE);
-  set_event_from_json (room, self->tombstone_event, local, CM_M_ROOM_TOMBSTONE);
+  set_event_from_json (room, self->canonical_alias_event, local, CM_M_ROOM_CANONICAL_ALIAS);
   set_event_from_json (room, self->encryption_event, local, CM_M_ROOM_ENCRYPTION);
+  set_event_from_json (room, self->guest_access_event, local, CM_M_ROOM_GUEST_ACCESS);
+  set_event_from_json (room, self->history_visibility_event, local, CM_M_ROOM_HISTORY_VISIBILITY);
   set_event_from_json (room, self->join_rules_event, local, CM_M_ROOM_JOIN_RULES);
   set_event_from_json (room, self->power_level_event, local, CM_M_ROOM_POWER_LEVELS);
-  set_event_from_json (room, self->guest_access_event, local, CM_M_ROOM_GUEST_ACCESS);
-  set_event_from_json (room, self->canonical_alias_event, local, CM_M_ROOM_CANONICAL_ALIAS);
-  set_event_from_json (room, self->history_visibility_event, local, CM_M_ROOM_HISTORY_VISIBILITY);
+  set_event_from_json (room, self->room_avatar_event, local, CM_M_ROOM_AVATAR);
+  set_event_from_json (room, self->room_create_event, local, CM_M_ROOM_CREATE);
+  set_event_from_json (room, self->room_name_event, local, CM_M_ROOM_NAME);
+  set_event_from_json (room, self->room_topic_event, local, CM_M_ROOM_TOPIC);
+  set_event_from_json (room, self->tombstone_event, local, CM_M_ROOM_TOMBSTONE);
 }
 
 static JsonObject *
@@ -544,42 +550,42 @@ cm_room_event_list_parse_events (CmRoomEventList *self,
 
       type = cm_event_get_m_type (event);
 
-      if (type == CM_M_ROOM_NAME)
+      if (type == CM_M_ROOM_AVATAR)
+        g_set_object (&self->room_avatar_event, event);
+      else if (type == CM_M_ROOM_CANONICAL_ALIAS)
+        g_set_object (&self->canonical_alias_event, event);
+      else if (type == CM_M_ROOM_ENCRYPTION)
+        g_set_object (&self->encryption_event, event);
+      else if (type == CM_M_ROOM_GUEST_ACCESS)
+        g_set_object (&self->guest_access_event, event);
+      else if (type == CM_M_ROOM_HISTORY_VISIBILITY)
+        g_set_object (&self->history_visibility_event, event);
+      else if (type == CM_M_ROOM_JOIN_RULES)
+        g_set_object (&self->join_rules_event, event);
+      else if (type == CM_M_ROOM_NAME)
         {
           g_set_object (&self->room_name_event, event);
           value = cm_room_event_get_room_name (CM_ROOM_EVENT (event));
           cm_room_set_name (self->room, value);
         }
-      else if (type == CM_M_ROOM_AVATAR)
-        g_set_object (&self->room_avatar_event, event);
-      else if (type == CM_M_ROOM_MEMBER)
-        cm_room_update_user (self->room, event);
       else if (type == CM_M_ROOM_POWER_LEVELS)
         g_set_object (&self->power_level_event, event);
-      else if (type == CM_M_ROOM_ENCRYPTION)
-        g_set_object (&self->encryption_event, event);
-      else if (type == CM_M_ROOM_CANONICAL_ALIAS)
-        g_set_object (&self->canonical_alias_event, event);
+      else if (type == CM_M_ROOM_MEMBER)
+        cm_room_update_user (self->room, event);
       else if (type == CM_M_ROOM_TOPIC)
         g_set_object (&self->room_topic_event, event);
-      else if (type == CM_M_ROOM_GUEST_ACCESS)
-        g_set_object (&self->guest_access_event, event);
-      else if (type == CM_M_ROOM_JOIN_RULES)
-        g_set_object (&self->join_rules_event, event);
-      else if (type == CM_M_ROOM_HISTORY_VISIBILITY)
-        g_set_object (&self->history_visibility_event, event);
       else if (type == CM_M_ROOM_TOMBSTONE)
         g_set_object (&self->tombstone_event, event);
 
-      if (type == CM_M_ROOM_NAME ||
-          type == CM_M_ROOM_AVATAR ||
-          type == CM_M_ROOM_POWER_LEVELS ||
-          type == CM_M_ROOM_ENCRYPTION ||
+      if (type == CM_M_ROOM_AVATAR ||
           type == CM_M_ROOM_CANONICAL_ALIAS ||
-          type == CM_M_ROOM_TOPIC ||
+          type == CM_M_ROOM_ENCRYPTION ||
           type == CM_M_ROOM_GUEST_ACCESS ||
-          type == CM_M_ROOM_JOIN_RULES ||
           type == CM_M_ROOM_HISTORY_VISIBILITY ||
+          type == CM_M_ROOM_JOIN_RULES ||
+          type == CM_M_ROOM_NAME ||
+          type == CM_M_ROOM_POWER_LEVELS ||
+          type == CM_M_ROOM_TOPIC ||
           type == CM_M_ROOM_TOMBSTONE)
         {
           set_local_json_event (self->local_json, event);
