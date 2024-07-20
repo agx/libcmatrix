@@ -36,6 +36,7 @@ void          cm_room_event_set_admin_users         (CmRoomEvent         *self,
                                                      GPtrArray           *users);
 CmStatus      cm_room_event_get_status              (CmRoomEvent         *self);
 const char   *cm_room_event_get_replacement_room_id (CmRoomEvent         *self);
+const char   *cm_room_event_get_topic               (CmRoomEvent         *self);
 guint         cm_room_event_get_rotation_count      (CmRoomEvent         *self);
 gint64        cm_room_event_get_rotation_time       (CmRoomEvent         *self);
 

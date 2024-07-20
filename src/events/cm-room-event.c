@@ -42,6 +42,7 @@ typedef struct
   /* Content fetched for different events */
   union {
     char        *replacement_room_id;
+    char        *topic;
   } c;
 
   guint          enc_rotation_count;
@@ -79,11 +80,16 @@ cm_room_event_finalize (GObject *object)
   g_clear_pointer (&priv->json, json_object_unref);
 
 #pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wswitch"
+#pragma GCC diagnostic ignored "-Wswitch-enum"
   switch (cm_event_get_m_type (CM_EVENT (self)))
     {
       case CM_M_ROOM_TOMBSTONE:
         g_clear_pointer (&priv->c.replacement_room_id, g_free);
+        break;
+      case CM_M_ROOM_TOPIC:
+        g_clear_pointer (&priv->c.topic, g_free);
+        break;
+      default:
         break;
     }
 #pragma GCC diagnostic pop
@@ -194,6 +200,11 @@ cm_room_event_new_from_json (gpointer    room,
     {
       value = cm_utils_json_object_get_string (child, "replacement_room");
       priv->c.replacement_room_id = g_strdup (value);
+    }
+  else if (type == CM_M_ROOM_TOPIC)
+    {
+      value = cm_utils_json_object_get_string (child, "topic");
+      priv->c.topic = g_strdup (value);
     }
 
   return self;
@@ -512,4 +523,15 @@ cm_room_event_get_rotation_time (CmRoomEvent *self)
   ret_val_if_fail (self, CM_M_ROOM_ENCRYPTION, 0, 100);
 
   return priv->enc_rotation_time;
+}
+
+const char *
+cm_room_event_get_topic (CmRoomEvent *self)
+{
+  CmRoomEventPrivate *priv = cm_room_event_get_instance_private (self);
+
+  g_return_val_if_fail (CM_IS_ROOM_EVENT (self), NULL);
+  ret_val_if_fail (self, CM_M_ROOM_TOPIC, 0, NULL);
+
+  return priv->c.topic;
 }

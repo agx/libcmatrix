@@ -3064,3 +3064,25 @@ cm_room_get_event_sync (CmRoom        *self,
 
   return event;
 }
+
+/**
+ * cm_room_get_topic:
+ * @self: A #CmRoom
+ *
+ * Get matrix room's topic.
+ *
+ * Returns:(nullable): The room topic
+ */
+const char *
+cm_room_get_topic (CmRoom *self)
+{
+  CmEvent *event;
+
+  g_return_val_if_fail (CM_IS_ROOM (self), NULL);
+
+  event = cm_room_event_list_get_event (self->room_event, CM_M_ROOM_TOPIC);
+  if (!event)
+    return NULL;
+
+  return cm_room_event_get_topic (CM_ROOM_EVENT (event));
+}
