@@ -35,10 +35,14 @@ typedef struct
   char          *room_name;
   char          *encryption;
   GRefString    *member_id;
-  char          *replacement_room_id;
   GPtrArray     *users;
   JsonObject    *json;
   CmStatus       member_status;
+
+  /* Content fetched for different events */
+  union {
+    char        *replacement_room_id;
+  } c;
 
   guint          enc_rotation_count;
   guint          enc_rotation_time;
@@ -71,9 +75,18 @@ cm_room_event_finalize (GObject *object)
   g_free (priv->room_name);
   g_free (priv->encryption);
   g_clear_pointer (&priv->member_id, g_ref_string_release);
-  g_free (priv->replacement_room_id);
   g_clear_pointer (&priv->users, g_ptr_array_unref);
   g_clear_pointer (&priv->json, json_object_unref);
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wswitch"
+  switch (cm_event_get_m_type (CM_EVENT (self)))
+    {
+      case CM_M_ROOM_TOMBSTONE:
+        g_clear_pointer (&priv->c.replacement_room_id, g_free);
+        break;
+    }
+#pragma GCC diagnostic pop
 
   G_OBJECT_CLASS (cm_room_event_parent_class)->finalize (object);
 }
@@ -180,7 +193,7 @@ cm_room_event_new_from_json (gpointer    room,
   else if (type == CM_M_ROOM_TOMBSTONE)
     {
       value = cm_utils_json_object_get_string (child, "replacement_room");
-      priv->replacement_room_id = g_strdup (value);
+      priv->c.replacement_room_id = g_strdup (value);
     }
 
   return self;
@@ -476,7 +489,7 @@ cm_room_event_get_replacement_room_id (CmRoomEvent *self)
   g_return_val_if_fail (CM_IS_ROOM_EVENT (self), NULL);
   ret_val_if_fail (self, CM_M_ROOM_TOMBSTONE, 0, NULL);
 
-  return priv->replacement_room_id;
+  return priv->c.replacement_room_id;
 }
 
 guint
