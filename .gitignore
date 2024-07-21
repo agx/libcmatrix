@@ -21,3 +21,5 @@ debian/libcmatrix-doc/
 debian/libcmatrix-doc.debhelper.log
 debian/libcmatrix-doc.substvars
 debian/tmp/
+
+.meson-subproject-wrap-hash.txt
