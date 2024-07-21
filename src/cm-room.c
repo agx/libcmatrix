@@ -2414,6 +2414,18 @@ room_load_sync_cb (GObject      *object,
   cm_room_load_past_events_async (self, callback, cb_user_data);
 }
 
+/**
+ * cm_room_load_past_events_async:
+ * @self: The room
+ * @callback: A `GAsyncReadyCallback` to call when the request is satisfied.
+ * @user_data: The data to pass to callback function.
+ *
+ * Get the next batch of past events from the database. If the room
+ * wasn't ever synced from the server, do that first. A batch is
+ * currently 30 events.
+ *
+ * Run [method@Room.load_past_events_finish] to get the result.
+ */
 void
 cm_room_load_past_events_async (CmRoom              *self,
                                 GAsyncReadyCallback  callback,
@@ -2458,6 +2470,18 @@ cm_room_load_past_events_async (CmRoom              *self,
                                g_steal_pointer (&task));
 }
 
+/**
+ * cm_room_load_past_events_finish:
+ * @self: The room
+ * @result: `GAsyncResult`
+ * @error: The return location for a recoverable error.
+ *
+ * Finishes an asynchronous operation started with [method@Room.load_past_events_async].
+ *
+ * In case of error `FALSE` is returned and `error` is set.
+ *
+ * Returns: `TRUE` if the load succeeded, otherwise `FALSE`
+ */
 gboolean
 cm_room_load_past_events_finish (CmRoom        *self,
                                  GAsyncResult  *result,
