@@ -108,6 +108,8 @@ void          cm_room_load_past_events_async      (CmRoom                *self,
 gboolean      cm_room_load_past_events_finish     (CmRoom                *self,
                                                    GAsyncResult          *result,
                                                    GError               **error);
+gboolean      cm_room_load_past_events_sync       (CmRoom                *self,
+                                                   GError               **error);
 void          cm_room_get_event_async             (CmRoom                *self,
                                                    const char            *event_id,
                                                    GCancellable          *cancellable,

@@ -2495,6 +2495,60 @@ cm_room_load_past_events_finish (CmRoom        *self,
 }
 
 static void
+cm_room_load_past_events_sync_cb (GObject         *object,
+                                  GAsyncResult    *res,
+                                  gpointer         user_data)
+{
+  CmRoomSyncData *data = user_data;
+  data->res = g_object_ref (res);
+  g_main_loop_quit (data->loop);
+}
+
+/**
+ * cm_room_load_past_events_sync:
+ * @self: The room
+ * @error: The return location for a recoverable error.
+ *
+ * Load past events.
+ *
+ * This is a synchronous method. See [method@Room.load_past_events_async] for
+ * an asynchronous version.
+ *
+ * Returns: `TRUE` if the load succeeded, otherwise `FALSE`
+ */
+gboolean
+cm_room_load_past_events_sync (CmRoom        *self,
+                               GError       **error)
+{
+  CmRoomSyncData data;
+  g_autoptr (GMainContext) context = g_main_context_new ();
+  g_autoptr (GMainLoop) loop = NULL;
+  gboolean success;
+
+  g_main_context_push_thread_default (context);
+  loop = g_main_loop_new (context, FALSE);
+
+  data = (CmRoomSyncData) {
+    .loop = loop,
+    .res = NULL,
+  };
+
+  cm_room_load_past_events_async (self,
+                                  cm_room_load_past_events_sync_cb,
+                                  &data);
+  g_main_loop_run (data.loop);
+
+  success = cm_room_load_past_events_finish (self, data.res, error);
+
+  if (data.res)
+    g_object_unref (data.res);
+  g_main_context_pop_thread_default (context);
+
+  return success;
+}
+
+
+static void
 get_joined_members_cb (GObject      *obj,
                        GAsyncResult *result,
                        gpointer      user_data)
