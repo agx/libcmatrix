@@ -18,6 +18,17 @@
 #include "cm-room-event-private.h"
 #include "cm-room-event.h"
 
+/**
+ * CmRoomEvent:
+ *
+ * An event that is associated with a matrix room like e.g. a
+ * topic change or member event. Basically Matrix message of type
+ * `m.room.*`.
+ *
+ * This class somewhat confusingly represents different room event
+ * types and is *also* used as base class for more specific room events
+ * like `CmRoomMessageEvent`.
+ */
 typedef struct
 {
   CmRoom        *room;
