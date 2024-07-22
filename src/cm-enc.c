@@ -1137,6 +1137,9 @@ cm_enc_handle_join_room_encrypted (CmEnc      *self,
   g_return_val_if_fail (session, NULL);
 
   plaintext = cm_olm_decrypt (session, 0, ciphertext);
+  /* TODO bubble up decryption error */
+  if (!plaintext)
+    return NULL;
 
   if (strstr (plaintext, "\"key_ops\""))
     cm_enc_save_file_enc (self, plaintext);
