@@ -423,7 +423,7 @@ cm_user_get_avatar_async (CmUser              *self,
     cm_user_load_info_async (self, cancellable,
                              avatar_get_user_info_cb,
                              g_steal_pointer (&task));
-  else if (priv->avatar_url)
+  else if (priv->avatar_url && *priv->avatar_url)
     {
       g_autofree char *file_name = NULL;
       const char *path;
