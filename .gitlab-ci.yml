@@ -37,6 +37,31 @@ build-soup3:
     paths:
       - _build
 
+asan-test:
+  tags:
+    - librem5:arm64
+  stage: check
+  needs:
+    - build-soup3
+  variables:
+    CCACHE_DIR: "${CI_PROJECT_DIR}/_ccache"
+    MESON_ARGS: "--buildtype=debug -Db_sanitize=address"
+  before_script:
+    - apt-get update -qq && apt-get install -qq $PKGS
+  script:
+    - meson ${MESON_ARGS} _build-asan
+    - ccache --zero-stats
+    - meson test -C _build-asan
+    - ccache --show-stats
+  cache:
+    key: build-cmatrix-asan
+    paths:
+      - _ccache/
+  artifacts:
+    when: always
+    paths:
+      - _build-asan
+
 check-lib:
   tags:
     - librem5:arm64
