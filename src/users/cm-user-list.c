@@ -432,7 +432,7 @@ cm_user_list_find_user (CmUserList *self,
                         GRefString *user_id,
                         gboolean    create_if_missing)
 {
-  CmUser *user;
+  g_autoptr (CmUser) user = NULL;
 
   g_return_val_if_fail (CM_IS_USER_LIST (self), NULL);
   g_return_val_if_fail (user_id && *user_id == '@', NULL);
@@ -440,12 +440,13 @@ cm_user_list_find_user (CmUserList *self,
   user = g_hash_table_lookup (self->users_table, user_id);
 
   if (user || !create_if_missing)
-    return user;
+    return g_steal_pointer (&user);
 
   user = (CmUser *)cm_room_member_new (user_id);
   cm_user_set_client (user, self->client);
+
   g_hash_table_insert (self->users_table,
-                       g_ref_string_acquire (user_id), user);
+                       g_ref_string_acquire (user_id), g_object_ref (user));
 
   return user;
 }
@@ -478,7 +479,7 @@ cm_user_list_set_account (CmUserList *self,
   g_return_if_fail (g_hash_table_size (self->users_table) == 0);
 
   g_hash_table_insert (self->users_table,
-                       g_ref_string_acquire (user_id), account);
+                       g_ref_string_acquire (user_id), g_object_ref (account));
 }
 
 /**
