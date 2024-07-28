@@ -74,9 +74,7 @@ test_cm_client_new (void)
   g_assert_false (cm_client_get_logging_in (client));
   g_assert_false (cm_client_get_logged_in (client));
 
-  /* todo */
-  /* g_assert_finalize_object (client); */
-  g_object_unref (client);
+  g_assert_finalize_object (client);
 }
 
 int
