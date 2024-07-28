@@ -531,9 +531,13 @@ cm_client_finalize (GObject *object)
 
   g_clear_object (&self->cm_account);
   g_clear_object (&self->cm_net);
+  g_clear_object (&self->user_list);
 
   g_list_store_remove_all (self->joined_rooms);
   g_clear_object (&self->joined_rooms);
+
+  g_list_store_remove_all (self->invited_rooms);
+  g_clear_object (&self->invited_rooms);
 
   g_list_store_remove_all (self->key_verifications);
   g_clear_object (&self->key_verifications);
