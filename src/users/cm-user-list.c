@@ -291,7 +291,6 @@ cm_user_list_finalize (GObject *object)
 {
   CmUserList *self = (CmUserList *)object;
 
-  g_clear_object (&self->client);
   g_hash_table_unref (self->users_table);
   g_clear_object (&self->current_request);
   g_hash_table_unref (self->changed_users);
@@ -362,7 +361,8 @@ cm_user_list_new (CmClient *client)
   g_return_val_if_fail (CM_IS_CLIENT (client), NULL);
 
   self = g_object_new (CM_TYPE_USER_LIST, NULL);
-  self->client = g_object_ref (client);
+  self->client = client;
+  g_object_add_weak_pointer (G_OBJECT (client), (gpointer *)&self->client);
 
   g_debug ("(%p) New user list with client %p created", self, client);
 
