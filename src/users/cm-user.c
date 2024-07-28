@@ -180,7 +180,10 @@ cm_user_set_client (CmUser   *self,
   g_return_if_fail (CM_IS_CLIENT (client));
 
   if (!priv->cm_client)
-    priv->cm_client = g_object_ref (client);
+    {
+      priv->cm_client = client;
+      g_object_add_weak_pointer (G_OBJECT (client), (gpointer *)&priv->cm_client);
+    }
 }
 
 CmClient *
