@@ -291,9 +291,9 @@ cm_user_list_finalize (GObject *object)
 {
   CmUserList *self = (CmUserList *)object;
 
-  g_hash_table_unref (self->users_table);
+  g_clear_pointer (&self->users_table, g_hash_table_unref);
   g_clear_object (&self->current_request);
-  g_hash_table_unref (self->changed_users);
+  g_clear_pointer (&self->changed_users, g_hash_table_unref);
 
   G_OBJECT_CLASS (cm_user_list_parent_class)->finalize (object);
 }
