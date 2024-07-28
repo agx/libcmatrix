@@ -291,6 +291,9 @@ cm_user_list_finalize (GObject *object)
 {
   CmUserList *self = (CmUserList *)object;
 
+  /* TODO ideally we should cancel the tasks in the queue */
+  g_assert (g_queue_get_length (self->device_request_queue) == 0);
+  g_queue_free_full (self->device_request_queue, g_object_unref);
   g_clear_pointer (&self->users_table, g_hash_table_unref);
   g_clear_object (&self->current_request);
   g_clear_pointer (&self->changed_users, g_hash_table_unref);
@@ -502,6 +505,7 @@ cm_user_list_load_devices_async (CmUserList          *self,
   g_debug ("(%p) Queue Load %p user devices, users count: %u",
            self->client, users, users->len);
 
+  /* TODO this could use a cancellable */
   task = g_task_new (self, NULL, callback, user_data);
   g_task_set_task_data (task, g_ptr_array_ref (users),
                         (GDestroyNotify)g_ptr_array_unref);
