@@ -133,6 +133,7 @@ subdir('examples')
 
 summary({
     'Build Examples': get_option('build-examples'),
+    'Build Tests ': get_option('build-tests'),
     'Documentation': get_option('gtk_doc'),
     'Install lib': install_lib,
   },

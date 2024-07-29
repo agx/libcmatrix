@@ -1,3 +1,7 @@
+if not get_option('build-tests')
+  subdir_done()
+endif
+
 tests_inc = [
   root_inc,
   src_inc,
