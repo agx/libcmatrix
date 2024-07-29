@@ -1,3 +1,7 @@
+if not get_option('build-examples')
+  subdir_done()
+endif
+
 example_items = [
   'simple-client',
 ]

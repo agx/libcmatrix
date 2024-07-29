@@ -129,14 +129,10 @@ cmatrix_deps = [
 subdir('src')
 subdir('tests')
 subdir('doc')
-
-if (get_option('build-examples'))
-  subdir('examples')
-endif
-
+subdir('examples')
 
 summary({
-    'Examples': get_option('build-examples'),
+    'Build Examples': get_option('build-examples'),
     'Documentation': get_option('gtk_doc'),
     'Install lib': install_lib,
   },
