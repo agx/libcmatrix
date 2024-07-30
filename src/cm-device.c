@@ -48,6 +48,7 @@ cm_device_finalize (GObject *object)
   g_free (self->ed_key);
   g_free (self->curve_key);
   g_clear_pointer (&self->json, json_object_unref);
+  g_clear_weak_pointer (&self->user);
 
   G_OBJECT_CLASS (cm_device_parent_class)->finalize (object);
 }
