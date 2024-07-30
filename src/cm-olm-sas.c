@@ -360,8 +360,7 @@ cm_olm_sas_set_client (CmOlmSas *self,
   g_return_if_fail (CM_IS_OLM_SAS (self));
   g_return_if_fail (CM_IS_CLIENT (cm_client));
 
-  if (!self->cm_client)
-    g_set_weak_pointer (&self->cm_client, cm_client);
+  g_set_weak_pointer (&self->cm_client, cm_client);
 }
 
 static gboolean
