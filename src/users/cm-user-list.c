@@ -364,8 +364,7 @@ cm_user_list_new (CmClient *client)
   g_return_val_if_fail (CM_IS_CLIENT (client), NULL);
 
   self = g_object_new (CM_TYPE_USER_LIST, NULL);
-  self->client = client;
-  g_object_add_weak_pointer (G_OBJECT (client), (gpointer *)&self->client);
+  g_set_weak_pointer (&self->client, client);
 
   g_debug ("(%p) New user list with client %p created", self, client);
 
