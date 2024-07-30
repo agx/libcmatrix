@@ -76,6 +76,8 @@ cm_user_finalize (GObject *object)
   g_clear_object (&priv->avatar_file);
   g_clear_pointer (&priv->generated_json, json_object_unref);
 
+  g_clear_weak_pointer (&priv->cm_client);
+
   G_OBJECT_CLASS (cm_user_parent_class)->finalize (object);
 }
 
