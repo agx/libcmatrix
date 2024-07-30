@@ -298,6 +298,8 @@ cm_user_list_finalize (GObject *object)
   g_clear_object (&self->current_request);
   g_clear_pointer (&self->changed_users, g_hash_table_unref);
 
+  g_clear_weak_pointer (&self->client);
+
   G_OBJECT_CLASS (cm_user_list_parent_class)->finalize (object);
 }
 
