@@ -394,14 +394,14 @@ load_accounts_from_secrets (CmMatrix  *self,
       if (!client)
         continue;
 
-      g_ptr_array_add (clients, client);
-
       if (!g_object_get_data (G_OBJECT (self->secret_store), "force-save")) {
         g_list_store_append (self->clients_list, client);
 
         if (!self->disable_auto_login)
           cm_client_enable_as_in_store (client);
       }
+
+      g_ptr_array_add (clients, g_steal_pointer (&client));
     }
 
   if (g_object_get_data (G_OBJECT (self->secret_store), "force-save")) {
