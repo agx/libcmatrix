@@ -316,6 +316,8 @@ cm_olm_sas_finalize (GObject *object)
 
   g_free (self->sas_bytes);
 
+  g_clear_weak_pointer (&self->cm_client);
+
   G_OBJECT_CLASS (cm_olm_sas_parent_class)->finalize (object);
 }
 
