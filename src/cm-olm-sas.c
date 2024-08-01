@@ -316,6 +316,8 @@ cm_olm_sas_finalize (GObject *object)
 
   g_free (self->sas_bytes);
 
+  g_clear_weak_pointer (&self->cm_client);
+
   G_OBJECT_CLASS (cm_olm_sas_parent_class)->finalize (object);
 }
 
@@ -360,8 +362,7 @@ cm_olm_sas_set_client (CmOlmSas *self,
   g_return_if_fail (CM_IS_OLM_SAS (self));
   g_return_if_fail (CM_IS_CLIENT (cm_client));
 
-  if (!self->cm_client)
-    g_set_weak_pointer (&self->cm_client, cm_client);
+  g_set_weak_pointer (&self->cm_client, cm_client);
 }
 
 static gboolean

@@ -76,6 +76,8 @@ cm_user_finalize (GObject *object)
   g_clear_object (&priv->avatar_file);
   g_clear_pointer (&priv->generated_json, json_object_unref);
 
+  g_clear_weak_pointer (&priv->cm_client);
+
   G_OBJECT_CLASS (cm_user_parent_class)->finalize (object);
 }
 
@@ -179,11 +181,7 @@ cm_user_set_client (CmUser   *self,
   g_return_if_fail (CM_IS_USER (self));
   g_return_if_fail (CM_IS_CLIENT (client));
 
-  if (!priv->cm_client)
-    {
-      priv->cm_client = client;
-      g_object_add_weak_pointer (G_OBJECT (client), (gpointer *)&priv->cm_client);
-    }
+  g_set_weak_pointer (&priv->cm_client, client);
 }
 
 CmClient *

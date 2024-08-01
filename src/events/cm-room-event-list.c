@@ -189,6 +189,9 @@ cm_room_event_list_finalize (GObject *object)
 
   g_clear_pointer (&self->local_json, json_object_unref);
 
+  g_clear_weak_pointer (&self->room);
+  g_clear_weak_pointer (&self->client);
+
   G_OBJECT_CLASS (cm_room_event_list_parent_class)->finalize (object);
 }
 
