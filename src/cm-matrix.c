@@ -63,7 +63,7 @@ struct _CmMatrix
 
 #define RECONNECT_TIMEOUT    500 /* milliseconds */
 
-char *cmatrix_data_dir, *cmatrix_app_id;
+static char *cmatrix_data_dir, *cmatrix_app_id;
 
 G_DEFINE_TYPE (CmMatrix, cm_matrix, G_TYPE_OBJECT)
 
