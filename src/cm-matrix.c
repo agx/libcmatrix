@@ -722,6 +722,7 @@ matrix_save_client_cb (GObject      *object,
  * cm_matrix_save_client_async:
  * @self: The matrix
  * @client: The client to save
+ * @cancellable: A cancellable
  * @callback: The callback to call when the asynchronous task completes
  * @user_data: user data to pass to the @callback
  *
@@ -733,6 +734,7 @@ matrix_save_client_cb (GObject      *object,
 void
 cm_matrix_save_client_async (CmMatrix            *self,
                              CmClient            *client,
+                             GCancellable        *cancellable,
                              GAsyncReadyCallback  callback,
                              gpointer             user_data)
 {
@@ -765,7 +767,7 @@ cm_matrix_save_client_async (CmMatrix            *self,
   g_hash_table_insert (self->clients_to_save, g_strdup (login_id), g_object_ref (client));
   g_object_set_data (G_OBJECT (client), "enable", GINT_TO_POINTER (TRUE));
   cm_client_save_secrets_async (client,
-                                NULL,
+                                cancellable,
                                 matrix_save_client_cb,
                                 task);
 }
@@ -806,6 +808,7 @@ cm_matrix_save_client_sync_cb (GObject      *object,
  * cm_matrix_save_client_sync:
  * @self: The matrix
  * @client: The client to save
+ * @cancellable: A cancellable
  * @error: The return location for a recoverable error
  *
  * Save client to database and keyring.
@@ -816,9 +819,10 @@ cm_matrix_save_client_sync_cb (GObject      *object,
  * Returns: `TRUE` if saving succeeded, `FALSE` otherwise.
  */
 gboolean
-cm_matrix_save_client_sync (CmMatrix *self,
-                            CmClient *client,
-                            GError  **error)
+cm_matrix_save_client_sync (CmMatrix     *self,
+                            CmClient     *client,
+                            GCancellable *cancellable,
+                            GError      **error)
 {
   CmMatrixSyncData data;
   g_autoptr (GMainContext) context = g_main_context_new ();
@@ -835,6 +839,7 @@ cm_matrix_save_client_sync (CmMatrix *self,
 
   cm_matrix_save_client_async (self,
                                client,
+                               cancellable,
                                cm_matrix_save_client_sync_cb,
                                &data);
 
@@ -886,6 +891,7 @@ matrix_delete_client_cb (GObject      *object,
 void
 cm_matrix_delete_client_async (CmMatrix            *self,
                                CmClient            *client,
+                               GCancellable        *cancellable,
                                GAsyncReadyCallback  callback,
                                gpointer             user_data)
 {
@@ -899,7 +905,7 @@ cm_matrix_delete_client_async (CmMatrix            *self,
   g_task_set_task_data (task, g_object_ref (client), g_object_unref);
 
   cm_client_delete_secrets_async (client,
-                                  NULL,
+                                  cancellable,
                                   matrix_delete_client_cb,
                                   task);
 }
