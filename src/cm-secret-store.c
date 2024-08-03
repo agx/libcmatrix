@@ -80,7 +80,6 @@ secret_load_cb (GObject      *object,
                 gpointer      user_data)
 {
   CmSecretStore *self;
-  g_autoptr(GPtrArray) old_accounts = NULL;
   g_autoptr(GPtrArray) accounts = NULL;
   g_autoptr(GTask) task = user_data;
   GError *error = NULL;
@@ -122,7 +121,6 @@ secret_load_cb (GObject      *object,
     return;
   }
 
-  old_accounts = g_ptr_array_new_full (5, g_object_unref);
   accounts = g_ptr_array_new_full (5, g_object_unref);
 
   for (GList *item = secrets; item; item = item->next) {
@@ -136,8 +134,6 @@ secret_load_cb (GObject      *object,
       continue;
 
     if (!g_str_has_prefix (label, expected)) {
-      if (item->data)
-        g_ptr_array_add (old_accounts, g_object_ref (item->data));
       continue;
     }
 
@@ -151,11 +147,6 @@ secret_load_cb (GObject      *object,
   if (accounts && accounts->len) {
     g_task_return_pointer (task,
                            g_steal_pointer (&accounts),
-                           (GDestroyNotify)g_ptr_array_unref);
-  } else if (old_accounts && old_accounts->len) {
-    g_object_set_data (G_OBJECT (self), "force-save", GINT_TO_POINTER (TRUE));
-    g_task_return_pointer (task,
-                           g_steal_pointer (&old_accounts),
                            (GDestroyNotify)g_ptr_array_unref);
   } else {
     g_task_return_pointer (task, NULL, NULL);
