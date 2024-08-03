@@ -60,6 +60,11 @@ struct _CmMatrix
   gboolean disable_auto_login;
 };
 
+typedef struct
+{
+  GAsyncResult *res;
+  GMainLoop *loop;
+} CmMatrixSyncData;
 
 #define RECONNECT_TIMEOUT    500 /* milliseconds */
 
@@ -721,6 +726,9 @@ matrix_save_client_cb (GObject      *object,
  * @user_data: user data to pass to the @callback
  *
  * Save the client to database and keyring.
+ *
+ * This is a asynchronous method. See [method@Matrix.save_client_sync]
+ * for the synchronous version.
  */
 void
 cm_matrix_save_client_async (CmMatrix            *self,
@@ -780,6 +788,65 @@ cm_matrix_save_client_finish (CmMatrix      *self,
   g_return_val_if_fail (G_IS_TASK (result), FALSE);
 
   return g_task_propagate_boolean (G_TASK (result), error);
+}
+
+static void
+cm_matrix_save_client_sync_cb (GObject      *object,
+                               GAsyncResult *res,
+                               gpointer      user_data)
+{
+  CmMatrixSyncData *data = user_data;
+
+  data->res = g_object_ref (res);
+  g_main_loop_quit (data->loop);
+}
+
+/**
+ * cm_matrix_save_client_sync:
+ * @self: The matrix
+ * @client: The client to save
+ * @error: The return location for a recoverable error
+ *
+ * Save client to database and keyring.
+ *
+ * This is a synchronous method. See [method@Matrix.save_client_async]
+ * for an asynchronous version.
+ *
+ * Returns: `TRUE` if saving succeeded, `FALSE` otherwise.
+ */
+gboolean
+cm_matrix_save_client_sync (CmMatrix *self,
+                            CmClient *client,
+                            GError  **error)
+{
+  CmMatrixSyncData data;
+  g_autoptr (GMainContext) context = g_main_context_new ();
+  g_autoptr (GMainLoop) loop = NULL;
+  gboolean success;
+
+  g_main_context_push_thread_default (context);
+  loop = g_main_loop_new (context, FALSE);
+
+  data = (CmMatrixSyncData) {
+    .loop = loop,
+    .res = NULL,
+  };
+
+  cm_matrix_save_client_async (self,
+                               client,
+                               cm_matrix_save_client_sync_cb,
+                               &data);
+
+  g_main_loop_run (data.loop);
+
+  success = cm_matrix_save_client_finish (self, data.res, error);
+
+  if (data.res)
+    g_object_unref (data.res);
+
+  g_main_context_pop_thread_default (context);
+
+  return success;
 }
 
 static void

@@ -44,6 +44,9 @@ void        cm_matrix_save_client_async    (CmMatrix            *self,
 gboolean    cm_matrix_save_client_finish   (CmMatrix            *self,
                                             GAsyncResult        *result,
                                             GError             **error);
+gboolean    cm_matrix_save_client_sync     (CmMatrix *self,
+                                            CmClient *client,
+                                            GError  **error);
 void        cm_matrix_delete_client_async  (CmMatrix            *self,
                                             CmClient            *client,
                                             GAsyncReadyCallback  callback,
