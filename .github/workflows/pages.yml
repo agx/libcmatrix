@@ -1,0 +1,37 @@
+name: Publish docs
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  docs:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Install base
+        run: sudo apt -y install build-essential
+      - name: Install deps
+        run: sudo apt -y build-dep .
+      - name: setup
+        run: meson setup -Dbuild-examples=false -Dgtk_doc=true _build
+      - name: build
+        run: meson compile -C _build
+      - name: move
+        run: mv _build/doc/libcmatrix-0/ _site
+      - name: Publish
+        uses: actions/upload-pages-artifact@v3
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
