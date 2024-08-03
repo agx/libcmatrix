@@ -3,6 +3,7 @@ option('package_subdir', type: 'string',
   description: 'Subdirectory to append to all installed files, for use as subproject'
 )
 option('build-examples', type: 'boolean', value: true, description : 'Build examples')
+option('build-tests', type: 'boolean', value: true, description : 'Build tests')
 
 option('gtk_doc',
        type: 'boolean', value: false,
