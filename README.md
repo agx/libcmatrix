@@ -40,6 +40,10 @@ Issues and Feature Requests: [GitLab][issues]
    Currently libcmatrix provides no API nor ABI guarantee until it's
    stable enough.
 
+## Documentation
+
+The API documentation can be browsed [here][]
+
 ## Known users
 
 These applications use libcmatrix:
@@ -55,3 +59,4 @@ These applications use libcmatrix:
 [issues]: https://source.puri.sm/Librem5/libcmatrix/issues
 [chatty]: https://gitlab.gnome.org/World/Chatty
 [eigenvalue]: https://github.com/agx/eigenvalue
+[here]: https://agx.github.io/libcmatrix/
