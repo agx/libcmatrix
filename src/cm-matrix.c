@@ -713,6 +713,15 @@ matrix_save_client_cb (GObject      *object,
   g_object_set_data (object, "enable", GINT_TO_POINTER (FALSE));
 }
 
+/**
+ * cm_matrix_save_client_async:
+ * @self: The matrix
+ * @client: The client to save
+ * @callback: The callback to call when the asynchronous task completes
+ * @user_data: user data to pass to the @callback
+ *
+ * Save the client to database and keyring.
+ */
 void
 cm_matrix_save_client_async (CmMatrix            *self,
                              CmClient            *client,
@@ -752,6 +761,16 @@ cm_matrix_save_client_async (CmMatrix            *self,
                                 task);
 }
 
+/**
+ * cm_matrix_save_client_finish:
+ * @self: The matrix
+ * @result: The result
+ * @error: The return location of a recoverable error
+ *
+ * Finish call to [method@Matrix.save_client_async]
+ *
+ * Returns: `TRUE` if saving the client succeeded, `FALSE` otherwise
+ */
 gboolean
 cm_matrix_save_client_finish (CmMatrix      *self,
                               GAsyncResult  *result,
