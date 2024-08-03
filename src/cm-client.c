@@ -20,6 +20,7 @@
 #include <libsoup/soup.h>
 
 #include "cm-net-private.h"
+#include "cm-utils.h"
 #include "cm-utils-private.h"
 #include "cm-common.h"
 #include "cm-db-private.h"
