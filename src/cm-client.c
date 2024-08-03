@@ -534,6 +534,8 @@ cm_client_finalize (GObject *object)
 {
   CmClient *self = (CmClient *)object;
 
+  cm_client_set_sync_callback (self, NULL, NULL, NULL);
+
   if (self->cancellable)
     g_cancellable_cancel (self->cancellable);
   g_clear_object (&self->cancellable);
