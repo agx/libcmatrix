@@ -1685,7 +1685,7 @@ cm_client_join_room_by_id_finish (CmClient      *self,
 /**
  * cm_client_get_homeserver_async:
  * @self: The client
- * @cancellable: (nullable): A #Gcancellable
+ * @cancellable: (nullable): A #GCancellable
  * @callback: A #GAsyncReadyCallback
  * @user_data: The user data for @callback.
  *
