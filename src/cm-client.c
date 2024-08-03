@@ -1228,14 +1228,16 @@ cm_client_get_enabled (CmClient *self)
 /**
  * cm_client_set_sync_callback:
  * @self: A #CmClient
- * @callback: A #CmCallback
- * @user_data: The user data passed to @callback
+ * @callback:(nullable): A #CmCallback
+ * @user_data:(nullable): The user data passed to @callback
  * @destroy_data: (nullable): Function to call when the callback is removed
  *
  * Set the sync callback which shall be executed for the events
  * happening in @self. Set this early after creating the client so any
  * async operations syncing the client state with the server can
  * invoke it already.
+ *
+ * Passing `NULL` for the callback removes an existing callback.
  */
 void
 cm_client_set_sync_callback (CmClient       *self,
@@ -1244,7 +1246,6 @@ cm_client_set_sync_callback (CmClient       *self,
                              GDestroyNotify  destroy_data)
 {
   g_return_if_fail (CM_IS_CLIENT (self));
-  g_return_if_fail (callback);
 
   if (self->cb_data &&
       self->cb_destroy)
