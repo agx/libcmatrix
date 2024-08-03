@@ -765,6 +765,7 @@ save_secrets_cb (GObject      *object,
 
 void
 cm_client_save_secrets_async (CmClient            *self,
+                              GCancellable        *cancellable,
                               GAsyncReadyCallback  callback,
                               gpointer             user_data)
 {
@@ -798,7 +799,7 @@ cm_client_save_secrets_async (CmClient            *self,
 
   cm_secret_store_save_async (NULL, self,
                               g_strdup (cm_client_get_access_token (self)),
-                              pickle_key, NULL,
+                              pickle_key, cancellable,
                               save_secrets_cb,
                               g_steal_pointer (&task));
 }
@@ -844,6 +845,7 @@ delete_secrets_cb (GObject      *object,
 
 void
 cm_client_delete_secrets_async (CmClient            *self,
+                                GCancellable        *cancellable,
                                 GAsyncReadyCallback  callback,
                                 gpointer             user_data)
 {
@@ -854,7 +856,7 @@ cm_client_delete_secrets_async (CmClient            *self,
   task = g_task_new (self, NULL, callback, user_data);
   g_task_set_source_tag (task, cm_client_delete_secrets_async);
   cm_client_set_enabled (self, FALSE);
-  cm_secret_store_delete_async (NULL, self, NULL,
+  cm_secret_store_delete_async (NULL, self, cancellable,
                                 delete_secrets_cb, task);
 }
 
@@ -1190,7 +1192,7 @@ cm_client_save (CmClient *self)
     }
 
   if (self->save_secret_pending && !self->is_saving_secret)
-    cm_client_save_secrets_async (self, NULL, NULL);
+    cm_client_save_secrets_async (self, NULL, NULL, NULL);
 }
 
 /**

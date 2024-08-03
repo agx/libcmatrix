@@ -25,12 +25,14 @@ void        cm_client_enable_as_in_store          (CmClient           *self);
 CmClient   *cm_client_new_from_secret             (gpointer            secret_retrievable,
                                                    CmDb                *db);
 void        cm_client_save_secrets_async          (CmClient            *self,
+                                                   GCancellable        *cancellable,
                                                    GAsyncReadyCallback  callback,
                                                    gpointer             user_data);
 gboolean    cm_client_save_secrets_finish         (CmClient            *self,
                                                    GAsyncResult        *result,
                                                    GError             **error);
 void        cm_client_delete_secrets_async        (CmClient            *self,
+                                                   GCancellable        *cancellable,
                                                    GAsyncReadyCallback  callback,
                                                    gpointer             user_data);
 gboolean    cm_client_delete_secrets_finish       (CmClient            *self,

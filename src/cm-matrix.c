@@ -765,6 +765,7 @@ cm_matrix_save_client_async (CmMatrix            *self,
   g_hash_table_insert (self->clients_to_save, g_strdup (login_id), g_object_ref (client));
   g_object_set_data (G_OBJECT (client), "enable", GINT_TO_POINTER (TRUE));
   cm_client_save_secrets_async (client,
+                                NULL,
                                 matrix_save_client_cb,
                                 task);
 }
@@ -898,6 +899,7 @@ cm_matrix_delete_client_async (CmMatrix            *self,
   g_task_set_task_data (task, g_object_ref (client), g_object_unref);
 
   cm_client_delete_secrets_async (client,
+                                  NULL,
                                   matrix_delete_client_cb,
                                   task);
 }
@@ -940,6 +942,7 @@ matrix_save_client (GObject      *object,
 {
   CmMatrix *self;
   g_autoptr(GTask) task = user_data;
+  GCancellable *cancellable;
   GPtrArray *clients;
   CmClient *client;
 
@@ -968,8 +971,10 @@ matrix_save_client (GObject      *object,
   client = g_ptr_array_steal_index (clients, 0);
   g_object_set_data_full (user_data, "client", client, g_object_unref);
 
+  cancellable = g_task_get_cancellable (task);
   g_debug ("(%p) Save client %p, %u left to save", self, client, clients->len);
   cm_client_save_secrets_async (client,
+                                cancellable,
                                 matrix_save_client,
                                 g_steal_pointer (&task));
 }
