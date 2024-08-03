@@ -1588,7 +1588,7 @@ room_accept_invite_cb (GObject      *object,
   gboolean success;
 
   self = g_task_get_source_object (task);
-  success = cm_client_join_room_by_id_finish (self->client, result, &error);
+  success = cm_client_join_room_finish (self->client, result, &error);
 
   self->invite_accept_success = success;
   self->is_accepting_invite = FALSE;
@@ -1648,10 +1648,10 @@ cm_room_accept_invite_async (CmRoom              *self,
 
   self->is_accepting_invite = TRUE;
 
-  cm_client_join_room_by_id_async (self->client, self->room_id,
-                                   cancellable,
-                                   room_accept_invite_cb,
-                                   g_steal_pointer (&task));
+  cm_client_join_room_async (self->client, self->room_id,
+                             cancellable,
+                             room_accept_invite_cb,
+                             g_steal_pointer (&task));
 }
 
 gboolean
