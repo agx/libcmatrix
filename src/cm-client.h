@@ -69,6 +69,9 @@ void          cm_client_join_room_async               (CmClient            *self
 gboolean      cm_client_join_room_finish              (CmClient            *self,
                                                        GAsyncResult        *result,
                                                        GError             **error);
+gboolean      cm_client_join_room_sync                (CmClient            *self,
+                                                       const char          *id_or_alias,
+                                                       GError             **error);
 void          cm_client_get_homeserver_async          (CmClient            *self,
                                                        GCancellable        *cancellable,
                                                        GAsyncReadyCallback  callback,

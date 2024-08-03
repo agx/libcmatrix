@@ -1710,6 +1710,63 @@ cm_client_join_room_finish (CmClient      *self,
   return g_task_propagate_boolean (G_TASK (result), error);
 }
 
+static void
+cm_client_join_room_sync_cb (GObject      *object,
+                             GAsyncResult *res,
+                             gpointer      user_data)
+{
+  CmClientSyncData *data = user_data;
+  data->res = g_object_ref (res);
+
+  g_main_loop_quit (data->loop);
+}
+
+/**
+ * cm_client_join_room_sync:
+ * @self: The client
+ * @id_or_alias: The id or alias of the room to join
+ * @error: The return location for a recoverable error.
+ *
+ * Returns: %TRUE if joined successfully, %FALSE otherwise.
+ *
+ * Since: 0.0.2
+ */
+gboolean
+cm_client_join_room_sync (CmClient   *self,
+                          const char *id_or_alias,
+                          GError    **error)
+{
+  g_autoptr (GMainContext) context = g_main_context_new ();
+  g_autoptr (GMainLoop) loop = NULL;
+  CmClientSyncData data;
+  gboolean success;
+
+  g_return_val_if_fail (CM_IS_CLIENT (self), FALSE);
+
+  g_main_context_push_thread_default (context);
+  loop = g_main_loop_new (context, FALSE);
+
+  data = (CmClientSyncData) {
+    .loop = loop,
+    .res = NULL,
+  };
+
+  cm_client_join_room_async (self,
+                             id_or_alias,
+                             NULL,
+                             cm_client_join_room_sync_cb,
+                             &data);
+  g_main_loop_run (data.loop);
+
+  success = cm_client_join_room_finish (self, data.res, error);
+
+  if (data.res)
+    g_object_unref (data.res);
+  g_main_context_pop_thread_default (context);
+
+  return success;
+}
+
 /**
  * cm_client_get_homeserver_async:
  * @self: The client
