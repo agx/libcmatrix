@@ -42,10 +42,12 @@
 #include "cm-client.h"
 
 /**
- * SECTION: cm-client
- * @title: CmClient
- * @short_description:
- * @include: "cm-client.h"
+ * CmClient:
+ *
+ * A Matrix client.
+ *
+ * This object is responsible for logging in a user and interfacing
+ * with the user's home server.
  */
 
 #define KEY_TIMEOUT         10000 /* milliseconds */
