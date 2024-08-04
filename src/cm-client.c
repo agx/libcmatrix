@@ -1633,9 +1633,9 @@ cm_client_get_ed25519_key (CmClient *self)
 }
 
 static void
-client_join_room_by_id_cb (GObject      *obj,
-                           GAsyncResult *result,
-                           gpointer      user_data)
+client_join_room_cb (GObject      *obj,
+                     GAsyncResult *result,
+                     gpointer      user_data)
 {
   g_autoptr(GTask) task = user_data;
   g_autoptr(JsonObject) object = NULL;
@@ -1649,42 +1649,122 @@ client_join_room_by_id_cb (GObject      *obj,
     g_task_return_boolean (task, TRUE);
 }
 
+/**
+ * cm_client_join_room_async:
+ * @self: The client
+ * @id_or_alias: The id or alias of the room to join
+ * @cancellable: (nullable): Optional #GCancellable object, %NULL to ignore.
+ * @callback: The callback to invoke
+ * @user_data: (nullable): The user data for @callback.
+ *
+ * Tries to join a room by it's room id.
+ *
+ * Run [method@Client.join_room_finish] to get the result.
+ */
 void
-cm_client_join_room_by_id_async (CmClient            *self,
-                                 const char          *room_id,
-                                 GCancellable        *cancellable,
-                                 GAsyncReadyCallback  callback,
-                                 gpointer             user_data)
+cm_client_join_room_async (CmClient            *self,
+                           const char          *id_or_alias,
+                           GCancellable        *cancellable,
+                           GAsyncReadyCallback  callback,
+                           gpointer             user_data)
 {
   g_autofree char *uri = NULL;
   GTask *task;
 
   g_return_if_fail (CM_IS_CLIENT (self));
-  g_return_if_fail (room_id && *room_id == '!');
+  g_return_if_fail (id_or_alias &&
+                    (*id_or_alias == '!' || *id_or_alias == '#'));
   g_return_if_fail (!cancellable || G_IS_CANCELLABLE (cancellable));
 
   if (!cancellable)
     cancellable = self->cancellable;
 
   task = g_task_new (self, cancellable, callback, user_data);
-  g_task_set_source_tag (task, cm_client_join_room_by_id_async);
-  uri = g_strconcat ("/_matrix/client/r0/join/", room_id, NULL);
+  g_task_set_source_tag (task, cm_client_join_room_async);
+  uri = g_strconcat ("/_matrix/client/r0/join/", id_or_alias, NULL);
   cm_net_send_data_async (self->cm_net, 2, NULL, 0,
                           uri, SOUP_METHOD_POST, NULL,
                           cancellable,
-                          client_join_room_by_id_cb,
+                          client_join_room_cb,
                           task);
 }
 
+/**
+ * cm_client_join_room_finish:
+ * @self: The client
+ * @result: The #GAsyncResult passed to your callback
+ * @error: The return location for a recoverable error.
+ *
+ * Finishes an asynchronous operation started with [method@Client.join_room_async].
+ *
+ * Returns: %TRUE if joined successfully, %FALSE otherwise.
+ */
 gboolean
-cm_client_join_room_by_id_finish (CmClient      *self,
-                                  GAsyncResult  *result,
-                                  GError       **error)
+cm_client_join_room_finish (CmClient      *self,
+                            GAsyncResult  *result,
+                            GError       **error)
 {
   g_return_val_if_fail (CM_IS_CLIENT (self), FALSE);
   g_return_val_if_fail (G_IS_TASK (result), FALSE);
 
   return g_task_propagate_boolean (G_TASK (result), error);
+}
+
+static void
+cm_client_join_room_sync_cb (GObject      *object,
+                             GAsyncResult *res,
+                             gpointer      user_data)
+{
+  CmClientSyncData *data = user_data;
+  data->res = g_object_ref (res);
+
+  g_main_loop_quit (data->loop);
+}
+
+/**
+ * cm_client_join_room_sync:
+ * @self: The client
+ * @id_or_alias: The id or alias of the room to join
+ * @error: The return location for a recoverable error.
+ *
+ * Returns: %TRUE if joined successfully, %FALSE otherwise.
+ *
+ * Since: 0.0.2
+ */
+gboolean
+cm_client_join_room_sync (CmClient   *self,
+                          const char *id_or_alias,
+                          GError    **error)
+{
+  g_autoptr (GMainContext) context = g_main_context_new ();
+  g_autoptr (GMainLoop) loop = NULL;
+  CmClientSyncData data;
+  gboolean success;
+
+  g_return_val_if_fail (CM_IS_CLIENT (self), FALSE);
+
+  g_main_context_push_thread_default (context);
+  loop = g_main_loop_new (context, FALSE);
+
+  data = (CmClientSyncData) {
+    .loop = loop,
+    .res = NULL,
+  };
+
+  cm_client_join_room_async (self,
+                             id_or_alias,
+                             NULL,
+                             cm_client_join_room_sync_cb,
+                             &data);
+  g_main_loop_run (data.loop);
+
+  success = cm_client_join_room_finish (self, data.res, error);
+
+  if (data.res)
+    g_object_unref (data.res);
+  g_main_context_pop_thread_default (context);
+
+  return success;
 }
 
 /**
