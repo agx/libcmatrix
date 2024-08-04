@@ -1,2 +1,5 @@
-/usr/include/libcmatrix/
-/usr/lib/
+usr/include/libcmatrix/
+usr/lib/*/*.a
+usr/lib/*/*.so
+usr/lib/*/pkgconfig/*.pc
+usr/share/gir-1.0/

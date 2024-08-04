@@ -3,6 +3,7 @@
 
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 
+CONFIGURE_OPTS = -Dintrospection=true
 CONFIGURE_OPTS += -Dgtk_doc=$(if $(filter nodoc,$(DEB_BUILD_PROFILES)),false,true)
 
 %:

@@ -13,13 +13,13 @@ GRTAGS
 
 debian/.debhelper/
 debian/debhelper-build-stamp
+debian/*.debhelper.log
 debian/files
+debian/gir1.2-cm-0.0/
+debian/libcmatrix0u/
 debian/libcmatrix-dev/
-debian/libcmatrix-dev.debhelper.log
-debian/libcmatrix-dev.substvars
 debian/libcmatrix-doc/
-debian/libcmatrix-doc.debhelper.log
-debian/libcmatrix-doc.substvars
+debian/*.substvars
 debian/tmp/
 
 .meson-subproject-wrap-hash.txt
