@@ -10,9 +10,7 @@
 
 #define G_LOG_DOMAIN "cm-db"
 
-#ifdef HAVE_CONFIG_H
-# include "config.h"
-#endif
+#include "cm-config.h"
 
 #include <glib.h>
 #include <fcntl.h>

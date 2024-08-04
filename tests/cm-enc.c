@@ -15,9 +15,7 @@
 #undef G_DISABLE_CAST_CHECKS
 #undef G_LOG_DOMAIN
 
-#ifdef HAVE_CONFIG_H
-# include "config.h"
-#endif
+#include "cm-config.h"
 
 #include <glib.h>
 #include <olm/olm.h>

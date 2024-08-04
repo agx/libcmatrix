@@ -4,9 +4,7 @@
  * SPDX-License-Identifier: LGPL-2.1-or-later
  */
 
-#ifdef HAVE_CONFIG_H
-# include "config.h"
-#endif
+#include "cm-config.h"
 
 #include <glib-object.h>
 #include <json-glib/json-glib.h>

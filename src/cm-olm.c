@@ -10,9 +10,7 @@
 
 #define G_LOG_DOMAIN "cm-olm"
 
-#ifdef HAVE_CONFIG_H
-# include "config.h"
-#endif
+#include "cm-config.h"
 
 #define GCRYPT_NO_DEPRECATED
 #include <gcrypt.h>

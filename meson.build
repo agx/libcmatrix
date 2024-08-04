@@ -78,7 +78,6 @@ add_project_arguments(
 )
 
 add_project_arguments([
-  '-DHAVE_CONFIG_H',
   '-DCMATRIX_COMPILATION',
   '-DCMATRIX_USE_EXPERIMENTAL_API',
 ], language: 'c')
@@ -89,7 +88,7 @@ config_h.set_quoted('GETTEXT_PACKAGE', 'libcmatrix')
 config_h.set_quoted('LOCALEDIR', localedir)
 
 configure_file(
-  output: 'config.h',
+  output: 'cm-config.h',
   configuration: config_h,
 )
 
