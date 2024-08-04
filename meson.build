@@ -88,20 +88,6 @@ config_h.set10('HAVE_EXPLICIT_BZERO', cc.has_function('explicit_bzero'))
 config_h.set_quoted('GETTEXT_PACKAGE', 'libcmatrix')
 config_h.set_quoted('LOCALEDIR', localedir)
 
-libolm_dep = cc.find_library('olm', required: true)
-
-if (cc.has_function('olm_account_unpublished_fallback_key', dependencies: libolm_dep))
-  config_h.set('OLM_ACCOUNT_PICKLE_V4', true)
-else
-  config_h.set('OLM_ACCOUNT_PICKLE_V4', false)
-endif
-
-if (cc.has_function('olm_pk_key_from_private', dependencies: libolm_dep))
-  config_h.set('HAVE_OLM3', true)
-else
-  config_h.set('HAVE_OLM2', true)
-endif
-
 configure_file(
   output: 'config.h',
   configuration: config_h,
@@ -112,6 +98,7 @@ install_lib = not meson.is_subproject()
 root_inc = include_directories('.')
 src_inc = include_directories('src')
 
+libolm_dep = dependency('olm', version: '>= 3.2.11')
 gio_dep = dependency('gio-2.0', version: '>= 2.70')
 soup_dep = dependency('libsoup-3.0', required: true)
 
