@@ -3151,6 +3151,20 @@ get_pushers_cb (GObject      *obj,
 			 (GDestroyNotify)g_ptr_array_unref);
 }
 
+/**
+ * cm_client_get_pushers_async:
+ * @self: The client
+ * @cancellable: (nullable): Optional `GCancellable` object, `NULL` to ignore.
+ * @callback: A `GAsyncReadyCallback`
+ * @user_data: The user data for @callback.
+ *
+ * Get the currently configured push servers.
+ *
+ * This is a asynchronous method. See [method@Client.get_pushers_sync] for
+ * an synchronous version.
+ *
+ * Since: 0.0.1
+ */
 void
 cm_client_get_pushers_async (CmClient              *self,
                              GCancellable          *cancellable,
@@ -3182,6 +3196,8 @@ cm_client_get_pushers_async (CmClient              *self,
  * of configured pushers. Destroy with `g_ptr_array_unref`.
  *
  * Returns:(transfer full)(element-type CmPusher): The array of pushers.
+ *
+ * Since: 0.0.1
  */
 GPtrArray *
 cm_client_get_pushers_finish (CmClient      *self,
@@ -3210,7 +3226,7 @@ cm_client_get_pushers_sync_cb (GObject         *object,
 /**
  * cm_client_get_pushers_sync:
  * @self: The client
- * @cancellable: Optional GCancellable object, NULL to ignore.
+ * @cancellable: Optional `GCancellable` object, `NULL` to ignore.
  * @error: The return location for a recoverable error.
  *
  * Get the currently configured push servers.
@@ -3219,6 +3235,8 @@ cm_client_get_pushers_sync_cb (GObject         *object,
  * an asynchronous version.
  *
  * Returns:(transfer full)(element-type CmPusher): The array of pushers stream.
+ *
+ * Since: 0.0.1
  */
 GPtrArray *
 cm_client_get_pushers_sync (CmClient              *self,
@@ -3302,7 +3320,7 @@ build_pusher_json (CmPusher *pusher)
  * cm_client_add_pusher_async:
  * @self: The client
  * @pusher: The pusher to set
- * @cancellable: (nullable): A #Gcancellable
+ * @cancellable: (nullable): Optional `GCancellable` object, `NULL` to ignore.
  * @callback: A #GAsyncReadyCallback
  * @user_data: The user data for @callback.
  *
@@ -3343,6 +3361,8 @@ cm_client_add_pusher_async (CmClient              *self,
  * [method@Client.add_pusher_async].
  *
  * Returns: `TRUE` if the operation was successful otherwise `FALSE`
+ *
+ * Since: 0.0.1
  */
 gboolean
 cm_client_add_pusher_finish (CmClient      *self,
@@ -3371,7 +3391,7 @@ cm_client_add_pusher_sync_cb (GObject         *object,
  * cm_client_add_pusher_sync:
  * @self: The client
  * @pusher: The pusher to add
- * @cancellable: Optional GCancellable object, NULL to ignore.
+ * @cancellable: Optional `GCancellable` object, `NULL` to ignore.
  * @error: The return location for a recoverable error.
  *
  * Add a pusher to the list of pushers known for this client.
@@ -3380,6 +3400,8 @@ cm_client_add_pusher_sync_cb (GObject         *object,
  * an asynchronous version.
  *
  * Returns: `TRUE` if the operation was successful otherwise `FALSE`
+ *
+ * Since: 0.0.1
  */
 gboolean
 cm_client_add_pusher_sync (CmClient              *self,
@@ -3439,11 +3461,13 @@ remove_pusher_cb (GObject      *obj,
  * cm_client_remove_pusher_async:
  * @self: The client
  * @pusher: The pusher to remove
- * @cancellable: (nullable): A #Gcancellable
- * @callback: A #GAsyncReadyCallback
+ * @cancellable: (nullable): Optional `GCancellable` object, `NULL` to ignore.
+ * @callback: Callback function to invoke when the information is ready.
  * @user_data: The user data for @callback.
  *
  * Remove a pusher from the list of pushers known for the client.
+ *
+ * Since: 0.0.1
  */
 void
 cm_client_remove_pusher_async (CmClient              *self,
@@ -3482,6 +3506,8 @@ cm_client_remove_pusher_async (CmClient              *self,
  * [method@Client.remove_pusher_async].
  *
  * Returns: `TRUE` if the operation was successful otherwise `FALSE`
+ *
+ * Since: 0.0.1
  */
 gboolean
 cm_client_remove_pusher_finish (CmClient      *self,
@@ -3510,7 +3536,7 @@ cm_client_remove_pusher_sync_cb (GObject         *object,
  * cm_client_remove_pusher_sync:
  * @self: The client
  * @pusher: The pusher to remove
- * @cancellable: Optional GCancellable object, NULL to ignore.
+ * @cancellable: Optional `GCancellable` object, `NULL` to ignore.
  * @error: The return location for a recoverable error.
  *
  * Remove a pusher from the list of pushers known for the client.
@@ -3519,6 +3545,8 @@ cm_client_remove_pusher_sync_cb (GObject         *object,
  * an asynchronous version.
  *
  * Returns: `TRUE` if the operation was successful otherwise `FALSE`
+ *
+ * Since: 0.0.1
  */
 gboolean
 cm_client_remove_pusher_sync (CmClient              *self,
