@@ -98,12 +98,13 @@ src_inc = include_directories('src')
 libolm_dep = dependency('olm', version: '>= 3.2.11')
 gio_dep = dependency('gio-2.0', version: '>= 2.70')
 soup_dep = dependency('libsoup-3.0', version: '>= 3.4.4')
+json_glib_dep = dependency('json-glib-1.0', version: '>= 1.8.0')
 
 cmatrix_deps = [
   dependency('libgcrypt'),
   dependency('libsecret-1'),
-  dependency('json-glib-1.0'),
   dependency('sqlite3', version: '>=3.26.0'),
+  json_glib_dep,
   libolm_dep,
   soup_dep,
   gio_dep,
