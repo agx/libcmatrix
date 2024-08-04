@@ -99,7 +99,7 @@ simple_get_homeserver_cb (GObject      *object,
   cm_client_set_sync_callback (client,
                                simple_account_sync_cb,
                                NULL, NULL);
-  cm_matrix_save_client_async (matrix, client,
+  cm_matrix_save_client_async (matrix, client, NULL,
                                simple_matrix_save_cb, NULL);
 
 }

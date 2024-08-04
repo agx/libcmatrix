@@ -22,6 +22,7 @@
 #include "cm-enc-private.h"
 #include "cm-enums.h"
 #include "cm-utils-private.h"
+#include "cm-utils.h"
 
 static const char *error_codes[] = {
   "", /* Index 0 is reserved for no error */
@@ -58,6 +59,11 @@ static const char *error_codes[] = {
   "M_RESOURCE_LIMIT_EXCEEDED",
   "M_CANNOT_LEAVE_SERVER_NOTICE_ROOM",
 };
+
+typedef struct {
+  GMainLoop *loop;
+  GAsyncResult *res;
+} CmUtilsSyncData;
 
 const char *
 cm_utils_log_bool_str (gboolean value,
@@ -1093,13 +1099,13 @@ get_homeserver_cb (GObject      *obj,
 
 /**
  * cm_utils_get_homeserver_async:
- * @username: A complete matrix username
+ * @username: A matrix id
  * @timeout: timeout in seconds
  * @cancellable: (nullable): A #GCancellable
  * @callback: The callback to run
  * @user_data: (nullable): The data passed to @callback
  *
- * Get homeserver from the given @username.  @userename
+ * Get homeserver from the given @username.  @username
  * should be in complete form (eg: @user:example.org)
  *
  * @timeout is clamped between 5 and 60 seconds.
@@ -1143,13 +1149,13 @@ cm_utils_get_homeserver_async (const char          *username,
 
 /**
  * cm_utils_get_homeserver_finish:
- * @result: A #GAsyncResult
- * @error: (optional): A #GError
+ * @result: The result
+ * @error: The location of a recoverable error
  *
  * Finish call to cm_utils_get_homeserver_async().
  *
- * Returns: (nullable) : The homeserver string or %NULL
- * on error.  Free with g_free().
+ * Returns: (nullable) (transfer full): The homeserver string or `NULL`
+ * on error.  Free with `g_free()`.
  */
 char *
 cm_utils_get_homeserver_finish (GAsyncResult  *result,
@@ -1161,6 +1167,68 @@ cm_utils_get_homeserver_finish (GAsyncResult  *result,
   g_return_val_if_fail (g_task_get_source_tag (task) == cm_utils_get_homeserver_async, NULL);
 
   return g_task_propagate_pointer (G_TASK (result), error);
+}
+
+static void
+cm_utils_get_homeserver_sync_cb (GObject      *object,
+                                 GAsyncResult *res,
+                                 gpointer      user_data)
+{
+  CmUtilsSyncData *data = user_data;
+
+  data->res = g_object_ref (res);
+  g_main_loop_quit (data->loop);
+}
+
+/**
+ * cm_utils_get_homeserver_sync:
+ * @username: A matrix id
+ * @error: The location of a recoverable error
+ *
+ * Get homeserver from the given @username.  @username
+ * should be in complete form (eg: @user:example.org)
+ *
+ * This is a synchronous method. See [cm_utils_get_homeserver_async]
+ * for an asynchronous version.
+ *
+ * Returns: (nullable) (transfer full): The homeserver string or `NULL`
+ * on error.  Free with `g_free()`.
+ */
+char *
+cm_utils_get_homeserver_sync (const char *username,
+                              GError    **error)
+{
+  CmUtilsSyncData data;
+  g_autoptr (GMainContext) context = g_main_context_new ();
+  g_autoptr (GMainLoop) loop = NULL;
+  char *homeserver;
+
+  g_return_val_if_fail (username && *username, NULL);
+
+  g_main_context_push_thread_default (context);
+  loop = g_main_loop_new (context, FALSE);
+
+  data = (CmUtilsSyncData) {
+    .loop = loop,
+    .res = NULL,
+  };
+
+  cm_utils_get_homeserver_async (username,
+                                 60,
+                                 NULL,
+                                 cm_utils_get_homeserver_sync_cb,
+                                 &data);
+
+  g_main_loop_run (data.loop);
+
+  homeserver = cm_utils_get_homeserver_finish (data.res, error);
+
+  if (data.res)
+    g_object_unref (data.res);
+
+  g_main_context_pop_thread_default (context);
+
+  return homeserver;
 }
 
 static void

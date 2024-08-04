@@ -25,12 +25,14 @@ void        cm_client_enable_as_in_store          (CmClient           *self);
 CmClient   *cm_client_new_from_secret             (gpointer            secret_retrievable,
                                                    CmDb                *db);
 void        cm_client_save_secrets_async          (CmClient            *self,
+                                                   GCancellable        *cancellable,
                                                    GAsyncReadyCallback  callback,
                                                    gpointer             user_data);
 gboolean    cm_client_save_secrets_finish         (CmClient            *self,
                                                    GAsyncResult        *result,
                                                    GError             **error);
 void        cm_client_delete_secrets_async        (CmClient            *self,
+                                                   GCancellable        *cancellable,
                                                    GAsyncReadyCallback  callback,
                                                    gpointer             user_data);
 gboolean    cm_client_delete_secrets_finish       (CmClient            *self,
@@ -46,14 +48,14 @@ const char *cm_client_get_filter_id               (CmClient            *self);
 void        cm_client_save                        (CmClient            *self);
 const char *cm_client_get_next_batch              (CmClient            *self);
 CmUserList *cm_client_get_user_list               (CmClient            *self);
-void          cm_client_get_file_async                (CmClient              *self,
-                                                       const char            *uri,
-                                                       GCancellable          *cancellable,
-                                                       GFileProgressCallback  progress_callback,
-                                                       gpointer               progress_user_data,
-                                                       GAsyncReadyCallback    callback,
-                                                       gpointer               user_data);
-GInputStream *cm_client_get_file_finish               (CmClient              *self,
-                                                       GAsyncResult          *result,
-                                                       GError               **error);
+void        cm_client_get_file_async              (CmClient              *self,
+                                                   const char            *uri,
+                                                   GCancellable          *cancellable,
+                                                   GFileProgressCallback  progress_callback,
+                                                   gpointer               progress_user_data,
+                                                   GAsyncReadyCallback    callback,
+                                                   gpointer               user_data);
+GInputStream *cm_client_get_file_finish           (CmClient              *self,
+                                                   GAsyncResult          *result,
+                                                   GError               **error);
 G_END_DECLS

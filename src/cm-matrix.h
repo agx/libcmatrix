@@ -39,13 +39,19 @@ gboolean    cm_matrix_has_client_with_id (CmMatrix            *self,
 CmClient   *cm_matrix_client_new         (CmMatrix            *self);
 void        cm_matrix_save_client_async    (CmMatrix            *self,
                                             CmClient            *client,
+                                            GCancellable        *cancellable,
                                             GAsyncReadyCallback  callback,
                                             gpointer             user_data);
 gboolean    cm_matrix_save_client_finish   (CmMatrix            *self,
                                             GAsyncResult        *result,
                                             GError             **error);
+gboolean    cm_matrix_save_client_sync     (CmMatrix *self,
+                                            CmClient *client,
+                                            GCancellable *cancellable,
+                                            GError  **error);
 void        cm_matrix_delete_client_async  (CmMatrix            *self,
                                             CmClient            *client,
+                                            GCancellable        *cancellable,
                                             GAsyncReadyCallback  callback,
                                             gpointer             user_data);
 gboolean    cm_matrix_delete_client_finish (CmMatrix            *self,

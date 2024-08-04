@@ -77,13 +77,6 @@ void          cm_utils_read_uri_async           (const char          *uri,
                                                  gpointer             user_data);
 gpointer      cm_utils_read_uri_finish          (GAsyncResult        *result,
                                                  GError             **error);
-void          cm_utils_get_homeserver_async     (const char          *username,
-                                                 guint                timeout,
-                                                 GCancellable        *cancellable,
-                                                 GAsyncReadyCallback  callback,
-                                                 gpointer             user_data);
-char         *cm_utils_get_homeserver_finish    (GAsyncResult        *result,
-                                                 GError             **error);
 void          cm_utils_verify_homeserver_async  (const char          *server,
                                                  guint                timeout,
                                                  GCancellable        *cancellable,
