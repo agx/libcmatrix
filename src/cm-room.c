@@ -500,6 +500,8 @@ cm_room_class_init (CmRoomClass *klass)
    * CmRoom::unread-count:
    *
    * The number of unread notifications in this room
+   *
+   * Since: 0.0.2
    */
   properties[PROP_UNREAD_COUNT] =
     g_param_spec_int ("unread-count", "", "",
@@ -2515,6 +2517,8 @@ cm_room_load_past_events_sync_cb (GObject         *object,
  * an asynchronous version.
  *
  * Returns: `TRUE` if the load succeeded, otherwise `FALSE`
+ *
+ * Since: 0.0.2
  */
 gboolean
 cm_room_load_past_events_sync (CmRoom        *self,
@@ -3072,6 +3076,8 @@ cm_room_get_event_sync (CmRoom        *self,
  * Get matrix room's topic.
  *
  * Returns:(nullable): The room topic
+ *
+ * Since: 0.0.2
  */
 const char *
 cm_room_get_topic (CmRoom *self)
