@@ -118,7 +118,8 @@ subdir('examples')
 
 summary({
     'Build Examples': get_option('build-examples'),
-    'Build Tests ': get_option('build-tests'),
+    'Build Tests': get_option('build-tests'),
+    'Introspection': get_option('introspection'),
     'Documentation': get_option('gtk_doc'),
     'Install lib': install_lib,
   },

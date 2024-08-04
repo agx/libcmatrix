@@ -87,7 +87,7 @@ if install_lib
   )
 endif
 
-if get_option('gtk_doc')
+if get_option('gtk_doc') or get_option('introspection')
   libcmatrix_gir_extra_args = [
     '-L@0@'.format(meson.current_build_dir()),
     '--quiet',
@@ -102,7 +102,7 @@ if get_option('gtk_doc')
        identifier_prefix: 'Cm',
                link_with: cmatrix_lib,
                 includes: ['Gio-2.0', 'Soup-3.0', 'Secret-1'],
-                 install: false,
+                 install: install_lib and get_option('introspection'),
               extra_args: libcmatrix_gir_extra_args,
           fatal_warnings: true,
    )
