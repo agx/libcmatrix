@@ -14,7 +14,7 @@ code as a meson subproject. Add this as `subprojects/libcmatrix.wrap`:
 ```
 [wrap-git]
 directory=libcmatrix
-url=https://source.puri.sm/agx/libcmatrix
+url=https://source.puri.sm/Librem5/libcmatrix
 revision=main
 depth=1
 ```
@@ -30,6 +30,7 @@ add_project_arguments([
 libcmatrix_dep = dependency('libcmatrix',
   fallback: ['libcmatrix', 'libcmatrix_dep'],
   default_options: [
+    'build-tests=false',
     'build-examples=false',
     'gtk_doc=false',
   ])
