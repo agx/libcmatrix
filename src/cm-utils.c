@@ -1114,6 +1114,8 @@ get_homeserver_cb (GObject      *obj,
  * network to fetch homeserver details.
  *
  * See https://matrix.org/docs/spec/client_server/r0.6.1#server-discovery
+ *
+ * Since: 0.0.2
  */
 void
 cm_utils_get_homeserver_async (const char          *username,
@@ -1156,6 +1158,8 @@ cm_utils_get_homeserver_async (const char          *username,
  *
  * Returns: (nullable) (transfer full): The homeserver string or `NULL`
  * on error.  Free with `g_free()`.
+ *
+ * Since: 0.0.2
  */
 char *
 cm_utils_get_homeserver_finish (GAsyncResult  *result,
@@ -1193,6 +1197,8 @@ cm_utils_get_homeserver_sync_cb (GObject      *object,
  *
  * Returns: (nullable) (transfer full): The homeserver string or `NULL`
  * on error.  Free with `g_free()`.
+ *
+ * Since: 0.0.2
  */
 char *
 cm_utils_get_homeserver_sync (const char *username,
