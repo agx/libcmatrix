@@ -23,9 +23,7 @@ includedir = prefix / get_option('includedir') / 'libcmatrix'
 
 cc = meson.get_compiler('c')
 
-global_c_args = [
-  '-DCMATRIX_COMPILATION',
-]
+global_c_args = []
 
 test_c_args = [
   '-Wcast-align',
