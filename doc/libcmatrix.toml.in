@@ -1,6 +1,6 @@
 [library]
 version = "@VERSION@"
-description = "A matrix client client library written in GObjectified C"
+description = "A Matrix Client Library"
 authors = "Purism SPC"
 license = "LGPL-2.1-or-later"
 browse_url = "https://source.puri.sm/Librem5/libcmatrix"
