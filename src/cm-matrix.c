@@ -817,6 +817,8 @@ cm_matrix_save_client_sync_cb (GObject      *object,
  * for an asynchronous version.
  *
  * Returns: `TRUE` if saving succeeded, `FALSE` otherwise.
+ *
+ * Since: 0.0.2
  */
 gboolean
 cm_matrix_save_client_sync (CmMatrix     *self,
