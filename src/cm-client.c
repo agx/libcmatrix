@@ -46,8 +46,14 @@
  *
  * A Matrix client.
  *
- * This object is responsible for logging in a user and interfacing
- * with the user's home server.
+ * A client represents a Matrix account on a device. See
+ * [method@Client.get_account] and [method@Client.get_device_id].
+ *
+ * Is responsible for logging in a user and interfacing with the user's home
+ * server.
+ *
+ * It can inform you about new events using a callback (see
+ * [method@Client.set_sync_callback]).
  */
 
 #define KEY_TIMEOUT         10000 /* milliseconds */
@@ -527,6 +533,8 @@ static void
 cm_client_finalize (GObject *object)
 {
   CmClient *self = (CmClient *)object;
+
+  cm_client_set_sync_callback (self, NULL, NULL, NULL);
 
   if (self->cancellable)
     g_cancellable_cancel (self->cancellable);
@@ -1222,33 +1230,32 @@ cm_client_get_enabled (CmClient *self)
 /**
  * cm_client_set_sync_callback:
  * @self: A #CmClient
- * @callback: A #CmCallback
- * @callback_data: A #GObject derived object for @callback user_data
- * @callback_data_destroy: (nullable): The method to destroy @callback_data
+ * @callback:(nullable): A #CmCallback
+ * @user_data:(nullable): The user data passed to @callback
+ * @destroy_data: (nullable): Function to call when the callback is removed
  *
- * Set the sync callback which shall be executed for the
- * events happening in @self. Set this early after creating the client
- * so any async callbacks can invoke it already.
+ * Set the sync callback which shall be executed for the events
+ * happening in @self. Set this early after creating the client so any
+ * async operations syncing the client state with the server can
+ * invoke it already.
  *
- * @callback_data_destroy() shall be executead only if @callback_data
- * is not NULL.
+ * Passing `NULL` for the callback removes an existing callback.
  */
 void
 cm_client_set_sync_callback (CmClient       *self,
                              CmCallback      callback,
-                             gpointer        callback_data,
-                             GDestroyNotify  callback_data_destroy)
+                             gpointer        user_data,
+                             GDestroyNotify  destroy_data)
 {
   g_return_if_fail (CM_IS_CLIENT (self));
-  g_return_if_fail (callback);
 
   if (self->cb_data &&
       self->cb_destroy)
     self->cb_destroy (self->cb_data);
 
   self->callback = callback;
-  self->cb_data = callback_data;
-  self->cb_destroy = callback_data_destroy;
+  self->cb_data = user_data;
+  self->cb_destroy = destroy_data;
 }
 
 /**
@@ -1892,7 +1899,7 @@ client_verify_homeserver_cb (GObject      *obj,
       g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED,
                                "Failed to verify homeserver");
       if (self->callback)
-        self->callback (self->cb_data, self, NULL, NULL, error);
+        self->callback (self, NULL, NULL, error, self->cb_data);
     }
 }
 
@@ -1931,7 +1938,7 @@ client_password_login_cb (GObject      *obj,
       client_set_login_state (self, FALSE, FALSE);
 
       if (!handle_matrix_glitches (self, error) && self->callback)
-        self->callback (self->cb_data, self, NULL, NULL, error);
+        self->callback (self, NULL, NULL, error, self->cb_data);
 
       g_task_return_error (task, g_steal_pointer (&error));
       return;
@@ -2357,7 +2364,7 @@ handle_room_join (CmClient   *self,
       cm_db_add_room_events (self->cm_db, room, events, FALSE);
 
       if (self->callback)
-        self->callback (self->cb_data, self, room, events, NULL);
+        self->callback (self, room, events, NULL, self->cb_data);
 
       cm_utils_remove_list_item (self->invited_rooms, room);
 
@@ -2396,7 +2403,7 @@ handle_room_leave (CmClient   *self,
       cm_db_add_room_events (self->cm_db, room, events, FALSE);
 
       if (self->callback)
-        self->callback (self->cb_data, self, room, events, NULL);
+        self->callback (self, room, events, NULL, self->cb_data);
 
       cm_utils_remove_list_item (self->joined_rooms, room);
     }
@@ -2439,7 +2446,7 @@ handle_room_invite (CmClient   *self,
         cm_db_add_room_events (self->cm_db, room, events, FALSE);
 
       if (self->callback)
-        self->callback (self->cb_data, self, room, events, NULL);
+        self->callback (self, room, events, NULL, self->cb_data);
     }
 }
 
@@ -2511,7 +2518,7 @@ matrix_take_red_pill_cb (GObject      *obj,
       self->sync_failed = TRUE;
       client_set_login_state (self, FALSE, FALSE);
       if (!handle_matrix_glitches (self, error))
-        self->callback (self->cb_data, self, NULL, NULL, error);
+        self->callback (self, NULL, NULL, error, self->cb_data);
       else if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
         g_debug ("Error syncing with time %s: %s", self->next_batch, error->message);
       return;
@@ -2616,7 +2623,7 @@ client_get_homeserver_cb (GObject      *obj,
       g_task_return_new_error (task, CM_ERROR, CM_ERROR_NO_HOME_SERVER,
                                "Couldn't fetch homeserver");
       if (self->callback)
-        self->callback (self->cb_data, self, NULL, NULL, error);
+        self->callback (self, NULL, NULL, error, self->cb_data);
 
       return;
     }
@@ -2845,7 +2852,7 @@ matrix_start_sync (CmClient *self,
       error = g_error_new (CM_ERROR, CM_ERROR_BAD_PASSWORD, "No Password provided");
 
       if (self->callback)
-        self->callback (self->cb_data, self, NULL, NULL, error);
+        self->callback (self, NULL, NULL, error, self->cb_data);
 
       g_task_return_error (task, error);
     }
