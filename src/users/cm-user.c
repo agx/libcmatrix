@@ -396,11 +396,17 @@ cm_user_get_avatar_async (CmUser              *self,
   if (priv->avatar_file)
     {
       GInputStream *istream;
+      GError *error = NULL;
 
-      istream = (GInputStream *)g_file_read (priv->avatar_file, NULL, NULL);
-      g_object_set_data_full (G_OBJECT (priv->avatar_file), "stream",
-                              istream, g_object_unref);
-      g_task_return_pointer (task, g_object_ref (istream), g_object_unref);
+      istream = G_INPUT_STREAM (g_file_read (priv->avatar_file, cancellable, &error));
+
+      if (istream) {
+        g_object_set_data_full (G_OBJECT (priv->avatar_file), "stream",
+                                istream, g_object_unref);
+        g_task_return_pointer (task, g_object_ref (istream), g_object_unref);
+      } else
+        g_task_return_error (task, error);
+
       return;
     }
 
@@ -423,7 +429,7 @@ cm_user_get_avatar_async (CmUser              *self,
     cm_user_load_info_async (self, cancellable,
                              avatar_get_user_info_cb,
                              g_steal_pointer (&task));
-  else if (priv->avatar_url)
+  else if (priv->avatar_url && *priv->avatar_url)
     {
       g_autofree char *file_name = NULL;
       const char *path;
