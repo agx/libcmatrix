@@ -3411,7 +3411,9 @@ build_pusher_json (CmPusher *pusher)
  * @callback: A #GAsyncReadyCallback
  * @user_data: The user data for @callback.
  *
- * Adds a pusher to the list of pushers for this client.
+ * Add a pusher to the list of pushers for this client.
+ *
+ * Since: 0.0.1
  */
 void
 cm_client_add_pusher_async (CmClient              *self,

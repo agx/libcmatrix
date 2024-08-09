@@ -30,10 +30,12 @@
 /**
  * CmMatrix:
  *
- * The main matrix object. This object needs to be created after calling
- * [func@init] and  before adding any [type@Client]s. After creating the
- * object you can open the database and load known clients via
- * [method@Matrix.open_async].
+ * The main matrix object.
+ *
+ * This object needs to be created after calling [func@init] and
+ * before adding any [type@Client]s. After creating the object you can
+ * open the database and load known clients via
+ * [method@Matrix.open_async] and and [method@Matrix.client_new].
  */
 struct _CmMatrix
 {

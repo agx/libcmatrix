@@ -25,7 +25,14 @@
 /**
  * CmPusher:
  *
- * Configuration for a push server
+ * Configuration for a server side pusher.
+ *
+ * A pusher is a worker on the homeserver that manages the sending of
+ * push notifications for a user. A user can have multiple pushers. This
+ * class allows to set the pushers properties (like the push gateway
+ * where push notifications should be sent to).
+ *
+ * Since: 0.0.1
  */
 
 struct _CmPusher
@@ -91,6 +98,8 @@ cm_pusher_init (CmPusher *self)
  * cm_pusher_new:
  *
  * Returns: (transfer full): A #CmPusher
+ *
+ * Since: 0.0.1
  */
 CmPusher *
 cm_pusher_new (void)
@@ -98,6 +107,14 @@ cm_pusher_new (void)
   return g_object_new (CM_TYPE_PUSHER, NULL);
 }
 
+/**
+ * cm_pusher_get_url:
+ * @self: The pusher
+ *
+ * Get the URL for push notifications.
+ *
+ * Since: 0.0.1
+ */
 const char *
 cm_pusher_get_url (CmPusher *self)
 {
@@ -106,6 +123,15 @@ cm_pusher_get_url (CmPusher *self)
   return self->url;
 }
 
+/**
+ * cm_pusher_set_url:
+ * @self: The pusher
+ * @url: The url to set
+ *
+ * Set the URL where push notifications should be sent to.
+ *
+ * Since: 0.0.1
+ */
 void
 cm_pusher_set_url (CmPusher *self, const char *url)
 {
@@ -115,6 +141,14 @@ cm_pusher_set_url (CmPusher *self, const char *url)
   self->url = g_strdup (url);
 }
 
+/**
+ * cm_pusher_get_kind:
+ * @self: The pusher
+ *
+ * Get the kind of the pusher.
+ *
+ * Since: 0.0.1
+ */
 CmPusherKind
 cm_pusher_get_kind (CmPusher *self)
 {
@@ -123,7 +157,14 @@ cm_pusher_get_kind (CmPusher *self)
   return self->kind;
 }
 
-
+/**
+ * cm_pusher_get_kind_as_string:
+ * @self: The pusher
+ *
+ * Get the kind of the pusher as string. E.g. `http`.
+ *
+ * Since: 0.0.1
+ */
 const char *
 cm_pusher_get_kind_as_string (CmPusher *self)
 {
@@ -140,7 +181,15 @@ cm_pusher_get_kind_as_string (CmPusher *self)
   }
 }
 
-
+/**
+ * cm_pusher_set_kind:
+ * @self: The pusher
+ * @kind: The kind of the pusher
+ *
+ * Set the kind of the pusher.
+ *
+ * Since: 0.0.1
+ */
 void
 cm_pusher_set_kind (CmPusher *self, CmPusherKind kind)
 {
@@ -149,6 +198,16 @@ cm_pusher_set_kind (CmPusher *self, CmPusherKind kind)
   self->kind = kind;
 }
 
+
+/**
+ * cm_pusher_set_kind_from_string:
+ * @self: The pusher
+ * @kind: The kind of the pusher as string
+ *
+ * Set the kind of the pusher from a string like `http`.
+ *
+ * Since: 0.0.1
+ */
 void
 cm_pusher_set_kind_from_string (CmPusher *self, const char *kind)
 {
@@ -164,6 +223,14 @@ cm_pusher_set_kind_from_string (CmPusher *self, const char *kind)
   }
 }
 
+/**
+ * cm_pusher_get_app_display_name:
+ * @self: The pusher
+ *
+ * Get the display name of the application this pusher belongs to.
+ *
+ * Since: 0.0.1
+ */
 const char *
 cm_pusher_get_app_display_name (CmPusher *self)
 {
@@ -172,6 +239,17 @@ cm_pusher_get_app_display_name (CmPusher *self)
   return self->app_display_name;
 }
 
+/**
+ * cm_pusher_set_app_display_name:
+ * @self: The pusher
+ * @app_display_name: The application's display name
+ *
+ * Set the display name of the application this pusher belongs to.
+ * This should be a user friendly name that applications can show when
+ * listing pushers.
+ *
+ * Since: 0.0.1
+ */
 void
 cm_pusher_set_app_display_name (CmPusher *self, const char *app_display_name)
 {
@@ -181,6 +259,14 @@ cm_pusher_set_app_display_name (CmPusher *self, const char *app_display_name)
   self->app_display_name = g_strdup (app_display_name);
 }
 
+/**
+ * cm_pusher_get_app_id:
+ * @self: The pusher
+ *
+ * Get the app-id of the application this pusher belongs to.
+ *
+ * Since: 0.0.1
+ */
 const char *
 cm_pusher_get_app_id (CmPusher *self)
 {
@@ -189,6 +275,17 @@ cm_pusher_get_app_id (CmPusher *self)
   return self->app_id;
 }
 
+/**
+ * cm_pusher_set_app_id:
+ * @self: The pusher
+ * @app_id: An app-id
+ *
+ * Pushers can have an app-id associated with them so an app can find
+ * the pushers it has configured. This should be in reverse DNS
+ * notation like `com.example.Client`.
+ *
+ * Since: 0.0.1
+ */
 void
 cm_pusher_set_app_id (CmPusher *self, const char *app_id)
 {
@@ -198,6 +295,14 @@ cm_pusher_set_app_id (CmPusher *self, const char *app_id)
   self->app_id = g_strdup (app_id);
 }
 
+/**
+ * cm_pusher_get_device_display_name:
+ * @self: The pusher
+ *
+ * Get the display name of the device this pusher belongs to.
+ *
+ * Since: 0.0.1
+ */
 const char *
 cm_pusher_get_device_display_name (CmPusher *self)
 {
@@ -206,6 +311,15 @@ cm_pusher_get_device_display_name (CmPusher *self)
   return self->device_display_name;
 }
 
+/**
+ * cm_pusher_set_device_display_name:
+ * @self: The pusher
+ * @device_display_name: An display name for a device
+ *
+ * Set the display name of the device this pusher belongs to.
+ *
+ * Since: 0.0.1
+ */
 void
 cm_pusher_set_device_display_name (CmPusher *self, const char *device_display_name)
 {
@@ -215,6 +329,14 @@ cm_pusher_set_device_display_name (CmPusher *self, const char *device_display_na
   self->device_display_name = g_strdup (device_display_name);
 }
 
+/**
+ * cm_pusher_get_lang:
+ * @self: The pusher
+ *
+ * Get the language of this pusher.
+ *
+ * Since: 0.0.1
+ */
 const char *
 cm_pusher_get_lang (CmPusher *self)
 {
@@ -223,6 +345,15 @@ cm_pusher_get_lang (CmPusher *self)
   return self->lang;
 }
 
+/**
+ * cm_pusher_set_lang:
+ * @self: The pusher
+ * @lang: The language to use
+ *
+ * Set the preferred language for receiving notifications (e.g. `en-US`).
+ *
+ * Since: 0.0.1
+ */
 void
 cm_pusher_set_lang (CmPusher *self, const char *lang)
 {
@@ -232,6 +363,14 @@ cm_pusher_set_lang (CmPusher *self, const char *lang)
   self->lang = g_strdup (lang);
 }
 
+/**
+ * cm_pusher_get_profile_tag:
+ * @self: The pusher
+ *
+ * Get the profile tag for this pusher.
+ *
+ * Since: 0.0.1
+ */
 const char *
 cm_pusher_get_profile_tag (CmPusher *self)
 {
@@ -240,6 +379,16 @@ cm_pusher_get_profile_tag (CmPusher *self)
   return self->profile_tag;
 }
 
+/**
+ * cm_pusher_set_profile_tag:
+ * @self: The pusher
+ * @profile_tag: The profile tag to use
+ *
+ * Set the profile tag for this pusher. The profile tag specifies which
+ * set of device specific rules this pusher executes.
+ *
+ * Since: 0.0.1
+ */
 void
 cm_pusher_set_profile_tag (CmPusher *self, const char *profile_tag)
 {
@@ -249,6 +398,14 @@ cm_pusher_set_profile_tag (CmPusher *self, const char *profile_tag)
   self->profile_tag = g_strdup (profile_tag);
 }
 
+/**
+ * cm_pusher_get_pushkey:
+ * @self: The pusher
+ *
+ * Get the pushkey for this pusher.
+ *
+ * Since: 0.0.1
+ */
 const char *
 cm_pusher_get_pushkey (CmPusher *self)
 {
@@ -257,6 +414,16 @@ cm_pusher_get_pushkey (CmPusher *self)
   return self->pushkey;
 }
 
+/**
+ * cm_pusher_set_pushkey:
+ * @self: The pusher
+ * @pushkey: The pushkey to set
+ *
+ * Set the pushkey for this pusher. The pushkey is a unique identifier
+ * for this pusher.
+ *
+ * Since: 0.0.1
+ */
 void
 cm_pusher_set_pushkey (CmPusher *self, const char *pushkey)
 {
@@ -338,6 +505,8 @@ cm_pusher_check_valid_cb (GObject *object, GAsyncResult *result, gpointer user_d
  *
  * Checks if the given pusher is valid. For http pushers this means checking
  * the remote endpoint.
+ *
+ * Since: 0.0.1
  */
 void
 cm_pusher_check_valid (CmPusher            *self,
@@ -376,6 +545,21 @@ cm_pusher_check_valid (CmPusher            *self,
                                     g_steal_pointer (&task));
 }
 
+/**
+ * cm_pusher_check_valid_finish:
+ * @self: The pusher
+ * @result: `GAsyncResult`
+ * @error: The return location for a recoverable error.
+ *
+ * Finishes an asynchronous operation started with
+ * [method@Pusher.check_valid]. If the operation failed or the
+ * pusher is not valid `FALSE` is returned and `error` indicates
+ * the kind of error.
+ *
+ * Returns: `TRUE` if the pusher is valid otherwise `FALSE`
+ *
+ * Since: 0.0.1
+ */
 gboolean
 cm_pusher_check_valid_finish (CmPusher      *self,
                               GAsyncResult  *result,
