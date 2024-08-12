@@ -10,9 +10,7 @@
 
 #define G_LOG_DOMAIN "cm-enc"
 
-#ifdef HAVE_CONFIG_H
-# include "config.h"
-#endif
+#include "cm-config.h"
 
 #include <json-glib/json-glib.h>
 #include <olm/olm.h>

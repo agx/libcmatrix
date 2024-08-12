@@ -13,9 +13,7 @@
 #include <libsecret/secret.h>
 #include <glib/gi18n.h>
 
-#ifdef HAVE_CONFIG_H
-# include "config.h"
-#endif
+#include "cm-config.h"
 
 #include "cm-matrix-private.h"
 #include "cm-utils-private.h"

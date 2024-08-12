@@ -7,9 +7,7 @@
 #define G_LOG_DOMAIN "cm-utils"
 #define BUFFER_SIZE 256
 
-#ifdef HAVE_CONFIG_H
-# include "config.h"
-#endif
+#include "cm-config.h"
 
 #define __STDC_WANT_LIB_EXT1__ 1
 #include <stdio.h>

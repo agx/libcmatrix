@@ -51,11 +51,10 @@ libcmatrix_headers = [
 
 cmatrix_sources = [libcmatrix_headers, libcmatrix_sources, cmatrix_enums]
 
-# Currently we do only have static library and should be
-# used only as a subproject
-cmatrix_lib = static_library('cmatrix',
+cmatrix_lib = both_libraries('cmatrix',
                              cmatrix_sources,
                              include_directories: [ root_inc, src_inc ],
+                             soversion: '0u',
                              dependencies: cmatrix_deps,
                              install: install_lib,
 )
@@ -67,7 +66,7 @@ libcmatrix_dep = declare_dependency(
   ],
   include_directories: include_directories('.'),
   dependencies: cmatrix_deps,
-  link_with: cmatrix_lib
+  link_with: cmatrix_lib.get_static_lib(),
 )
 
 if install_lib
@@ -84,10 +83,11 @@ if install_lib
     version : meson.project_version(),
     description: 'Matrix client library',
     url: 'https://source.puri.sm/Librem5/libcmatrix',
+    requires: gio_dep,
   )
 endif
 
-if get_option('gtk_doc')
+if get_option('gtk_doc') or get_option('introspection')
   libcmatrix_gir_extra_args = [
     '-L@0@'.format(meson.current_build_dir()),
     '--quiet',
@@ -102,7 +102,7 @@ if get_option('gtk_doc')
        identifier_prefix: 'Cm',
                link_with: cmatrix_lib,
                 includes: ['Gio-2.0', 'Soup-3.0', 'Secret-1'],
-                 install: false,
+                 install: install_lib and get_option('introspection'),
               extra_args: libcmatrix_gir_extra_args,
           fatal_warnings: true,
    )

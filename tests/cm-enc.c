@@ -15,9 +15,7 @@
 #undef G_DISABLE_CAST_CHECKS
 #undef G_LOG_DOMAIN
 
-#ifdef HAVE_CONFIG_H
-# include "config.h"
-#endif
+#include "cm-config.h"
 
 #include <glib.h>
 #include <olm/olm.h>
@@ -136,19 +134,13 @@ test_cm_enc_new (void)
 
     data = enc[i];
 
-#ifdef HAVE_OLM3
     cm_enc = cm_enc_new (NULL, data.olm3_pickle, data.pickle_key);
     g_assert (CM_IS_ENC (cm_enc));
 
     pickle = cm_enc_get_pickle (cm_enc);
-# ifdef OLM_ACCOUNT_PICKLE_V4
     g_assert_cmpstr (pickle, ==, data.olm3_v4_pickle);
-# else
-    g_assert_cmpstr (pickle, ==, data.olm3_pickle);
-# endif
     g_clear_pointer (&pickle, g_free);
     g_object_unref (cm_enc);
-#endif
 
     cm_enc = cm_enc_new (NULL, data.olm2_pickle, data.pickle_key);
     g_assert (CM_IS_ENC (cm_enc));
@@ -160,15 +152,7 @@ test_cm_enc_new (void)
     g_assert_cmpstr (value, ==, data.ed_key);
 
     pickle = cm_enc_get_pickle (cm_enc);
-#ifdef HAVE_OLM3
-# ifdef OLM_ACCOUNT_PICKLE_V4
     g_assert_cmpstr (pickle, ==, data.olm3_v4_pickle);
-# else
-    g_assert_cmpstr (pickle, ==, data.olm3_pickle);
-# endif
-#else
-    g_assert_cmpstr (pickle, ==, data.olm2_pickle);
-#endif
     g_clear_pointer (&pickle, g_free);
   }
 }

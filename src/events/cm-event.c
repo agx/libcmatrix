@@ -6,9 +6,7 @@
 
 #define G_LOG_DOMAIN "cm-event"
 
-#ifdef HAVE_CONFIG_H
-# include "config.h"
-#endif
+#include "cm-config.h"
 
 #include "cm-room-private.h"
 #include "users/cm-account.h"

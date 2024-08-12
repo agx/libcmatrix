@@ -1,9 +1,12 @@
+libcmatrix (0.0.2~dev) UNRELEASED; urgency=medium
+
+  * UNRELEASED
+
+ -- Guido Günther <agx@sigxcpu.org>  Wed, 07 Aug 2024 10:22:48 +0200
+
 libcmatrix (0.0.1) experimental; urgency=medium
 
   * secret-store: Don't use gtk-doc style comments ('/**')
-    Use regular '/*' to silence the
-     ../src/cm-secret-store.c:48: Warning: CM: GTK-Doc comment block start token "/**" should not be followed by comment text:
-    warnings
   * treewide: Fix various doc comments.
     This allows them to get picked up by gir.
   * utils: Add transfer annotation for cm_utils_json_object_get_object.
@@ -11,9 +14,6 @@ libcmatrix (0.0.1) experimental; urgency=medium
   * room-message-event: Fix attachment download.
     In case of an `image`, `file` and `audio` the `file` element has the
     `uri` not the `body` itself.
-    Without this we see
-      15:12:07.2632 cm-room-message-event[981607]:CRITICAL: cm_room_message_event_get_file_async: assertion 'self->mxc_uri' failed
-    in the logs and the download spinner never stops.
     With this I can download images pasted with Element 1.11.64
   * client: Use g_object_unref()
     This avoids an unused variable warnings
