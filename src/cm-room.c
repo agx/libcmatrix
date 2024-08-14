@@ -495,7 +495,7 @@ cm_room_class_init (CmRoomClass *klass)
                          NULL,
                          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
   /**
-   * CmRoom::unread-count:
+   * CmRoom:unread-count:
    *
    * The number of unread notifications in this room
    *
