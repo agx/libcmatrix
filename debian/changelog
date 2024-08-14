@@ -1,8 +1,204 @@
-libcmatrix (0.0.2~dev) UNRELEASED; urgency=medium
+libcmatrix (0.0.2) experimental; urgency=medium
 
-  * UNRELEASED
+  [ Guido Günther ]
+  * README: Recommend meson subproject rather git submodule
+  * README: mention eigenvalue. Might be helpful as a simpler example
+  * build: Update instructions on how to use libcmatrix.
+    Use a meson wrap rather than a git submodule, use gtk_doc=false
+    and mention -DCMATRIX_USE_EXPERIMENTAL_API.
+  * room: Track unread notifications as property.
+    This allows clients to get keep track of unread notifications.
+  * cm-user: Log user ID when there are no keys.
+    Makes it easier to figure out which account goes wrong
+  * event: Document 'updated' signal
+  * client: Don't create unused task.
+    Finalizing a task that never invoked g_task_return* leads to
+    a critical (if a callback is set) or a debug message (when no
+    callback is set). The later is true for matrix_start_sync() when
+    the "*_loading" check is TRUE.
+    As the task is not used for anything avoid this printout which looks
+    scary as it can happen periodically.
+    Note that the branches
+      if (self->db_migrated && !self->{direct_,}room_list_loaded)
+    don't use task and hence can still trigger the warning.
+  * resync: Use g_timeout_add_once.
+    This makes it a bit more obvious that this is meant as one shot
+    operation.
+  * cm-matrix: Use g_timeout_add_once
+  * utils: Fix indent.
+    If we have `{` on a separate line at least indent it correctly
+  * room: Document cm_room_load_past_events_{async,finish}
+  * room: Add method to fetch past events synchronously
+  * doc: Add doc string for room event class
+  * event-list: Sort event members alphabetically.
+    This makes adding new events and checking for consistency less
+    error prone.
+  * room-event: Introduce a union for the content values.
+    We don't want to create a new derived object for every room event but we
+    also don't want to waste a lot of space for unset fields so use a union
+    to store the values.
+  * room: Allow to fetch topic.
+    The event list already tracked the topics, we just need to
+    wire it through to the room.
+  * device: Clear weak pointer to user.
+    If the device goes away before the user cleaning up the
+    weak pointer will overwrite free'd (and maybe then already
+    allocted again) memory.
+  * olm-sas: Always overwrite weak pointer.
+    If we don't do this we'd operate on an old client.
+  * olm-sas: Clear weak pointer to client.
+    If the object goes away before the client cleaning up the weak pointer
+    later will overwrite free'd (and maybe then already allocted again)
+    memory.
+  * user: Use g_set_weak_pointer.
+    It's a bit easier on the eyes due to fewer casts. We also overwrite the
+    client unconditionally as we don't want to operate on an outdated
+    client.
+  * user: Clear weak pointers to client.
+    If the object goes away before the clientcleaning up the weak pointers
+    later will overwrite free'd (and maybe then already allocated again)
+    memory.
+  * user-list: Switch to g_set_weak_pointer.
+    It's a bit easier on the eyes due to fewer casts and we canthen pair
+    with g_clear_weak_pointer.  It's the same under the hood.
+  * user-list: Clear weak pointers to client.
+    If the object goes away before the clientcleaning up the weak pointers
+    later will overwrite free'd (and maybe then already allocated again)
+    memory.
+  * room-event-list: Clear weak pointers to client and room.
+    If the object goes away before the client or room cleaning up the weak
+    pointers later will overwrite free'd (and maybe then already allocated
+    again) memory.
+  * build: Use subdir_done.
+    It's a bit nicer then cluttering the main meson file, especially
+    if we grow more options
+  * build: Allow to disable tests.
+    This lets the superprojects decide whether they want to run the tests.
+  * matrix: Make variables static.
+    We don't want them to be visisble outside the compilation unit.
+  * build-howto: Use blessed repo.
+    While at that demo how to disable the tests.
+  * Generate docs and push to github pages
+  * docs: Link to online API documentation
+  * matrix: Transfer ownership of client to pointer array.
+    The pointer array uses a `g_object_unref()` as cleanup func so we need
+    to add a ref'ed object to the array as `client` is marked as
+    `g_autoptr`.
+    This fixes a crash on shutdown in eignvalue when we unref the client we
+    get from the liststore returned by `cm_matrix_get_clients_list()` via
+    `g_list_model_get_item()` (which gives us a reference).
+  * client: Use gi-docgen style comment
+  * client: Add since annotations for 0.0.1
+  * room: Add since annotations for 0.0.2
+  * matrix: Add since annotation for 0.0.2
+  * utils: Add since annotations for 0.0.2
+  * doc: Drop duplicate word in description.
+    While at that also shorten it. It's obvious that it's using
+    GObject from the dependencies
+  * build: Bump version to 0.0.2-dev.
+    This makes it obvious that this is a development release and
+    also ensures since annotations don't look odd as the library
+    version is lower than what's in meson.build
+  * client: Make CmCallback work like other glib callbacks.
+    Instead of passing the user_data as first argument, pass it as last
+    argument like anywhere else. Instead we have the `client` as first
+    argument as one would expect.
+    Remove mentions of `user_data` being a `GObject` requirement. It's an
+    untyped pointer as `user_data` elsewhere.
+  * cm-client: Allow to pass `NULL` callback.
+    This allows to remove the callback
+  * client: Ensure callback is stopped and it's data free'd on finalize
+  * matrix: Separate summary and details.
+    This makes sure the class summary page has the short description
+    and the blurb is only displayed when looking at the details.
+  * pusher: Improve documentation
+  * docs: Add an initial contributing document
+  * build: Use a regular dep for olm
+    libolm2 is long gone
+  * build: Don't use config.h.
+    About all projects use a config.h so rather use cm-config.h to
+    make sure we include the right file.
+  * build: Drop unused package_subdir option
+  * build: No need to add CMATRIX_COMPILAITON twice.
+    It's already in the project arguments
+  * build: Drop required from libsoup dep.
+    It's the default. We specify a somewhat arbitrary minimum version
+    instead.
+  * build: Version json-glib dep.
+    The parsing got a bit stricter in recent versions so ensure a recent
+    version to get consistent behavior.
+  * build: Build shared library too.
+    This will be needed for users of introspection but is also sometimes
+    nice for development purposes.
+    We set a soversion of `0u` (u for unstable ABI) so that we have `0` for
+    the first ABI stable release.
+    We need to make gio a `Requires:` for that as we expose e.g.
+    `GListModel`.
+  * build: Allow to enable building and installing introspection data.
+    This makes e.g.
+    ```python
+    import gi
+    gi.require_version('CM', '0')
+    from gi.repository import CM
+    ```
+    work.
+  * packaging: Add introspection data.
+    For that we want to introduce a package containing the library so
+    introspection typelib doesn't depend on the dev package. This prompted
+    for some more packaging updates.
 
- -- Guido Günther <agx@sigxcpu.org>  Wed, 07 Aug 2024 10:22:48 +0200
+  [ Evangelos Ribeiro Tzaras ]
+  * gitignore: Add .meson-subproject-wrap-hash.txt.
+    When using libcmatrix as a subproject this file gets created.
+  * cm-enc: Guard against NULL pointer dereference.
+    If decryption fails for any reason we should bail
+    (and bubble up any errors)
+    instead of segfaulting.
+    Closes https://source.puri.sm/Librem5/libcmatrix/-/issues/29
+  * cm-enc: Remove g_return_val_if_fail() that will never get executed
+  * cm-user-list: Use weak instead of strong reference on CmClient.
+    This breaks a reference cycle keeping CmClient alive.
+  * cm-user: Use weak instead of strong reference on CmClient.
+    This breaks a reference cycle keeping CmClient alive.
+  * tests/client: Assert finalizing CmClient
+  * cm-user-list: Don't leak the device request queue
+  * cm-user-list: Take reference on users when adding to hashtable.
+    The hashtable g_object_unrefs the value, so we need to take a ref when inserting.
+  * cm-client: Don't leak user list and list of invited rooms
+  * Add leak-suppress.txt for running with address sanitization.
+    The test suite currently passes without it as no codepath
+    seems to leak memory. Still, we know that g_quark_init will leak,
+    so we can already add the suppresion.
+  * ci: Run testsuite with address sanitization
+  * matrix: Add docstring for cm_matrix_save_client_{async,finish}
+  * secret-store: Get rid of old chatty account handling.
+    When this code still lived in chatty the labels of secrets
+    were of the form "Chatty password for <username>".
+    This changed when chatty switch to using libcmatrix,
+    with 0.7.0~rc0 in October 2022 (and 0.7.0 in February 2023).
+    It's about time to get rid of this migration layer:
+    Greedily grabbing every secret matching the schema is a recipe for confusion
+    when there can be multiple applications on the same system using libcmatrix.
+  * matrix: Add sync variant of cm_matrix_save_client
+  * utils: Add sync version of cm_utils_get_homeserver()
+    And add it to the public API.
+  * client: Add cancellable to private {save,delete} secrets API
+  * matrix: Add cancellables to public {save,delete} client API
+  * client: Rename join room functions.
+    The old name suggested we could only join by the room id,
+    which is not true.
+    Neither under the old[0], nor new versions [1] of the spec.
+    [0] https://spec.matrix.org/legacy/client_server/r0.6.1#post-matrix-client-r0-join-roomidoralias
+    [1] https://spec.matrix.org/legacy/client_server/r0.6.1#post-matrix-client-r0-join-roomidoralias
+  * client: Add sync version of cm_client_join_room()
+  * cm-user: Don't try downloading empty string avatar URL.
+    This avoids the following critical:
+    cm-utils[ 4708]:CRITICAL: cm_utils_save_url_to_path_async: assertion 'uri && *uri' failed
+    Closes: https://source.puri.sm/Librem5/libcmatrix/-/issues/32
+  * cm-user: Check if avatar GInputStream is not NULL.
+    Otherwise g_object_ref() will raise a critical.
+
+ -- Guido Günther <agx@sigxcpu.org>  Wed, 14 Aug 2024 09:16:12 +0200
 
 libcmatrix (0.0.1) experimental; urgency=medium
 

@@ -1,3 +1,19 @@
+libcmatrix 0.0.2
+----------------
+Released August 2024
+* Lots of stability fixes, leak fixes, internal cleanups and
+  documentation improvements
+* More async APIs got corresponding sync variants
+* Generate and publish online docs
+* Allow to build and install GObject introspection data
+* Some minor API changes. See
+  https://source.puri.sm/Librem5/libcmatrix/-/issues/38
+* Contributors:
+    * Evangelos Ribeiro Tzaras
+    * Guido Günther
+* Issues fixed:
+    * https://source.puri.sm/Librem5/libcmatrix/-/issues/32
+
 libcmatrix 0.0.1
 ----------------
 Released July 2024
