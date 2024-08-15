@@ -1,3 +1,9 @@
+libcmatrix (0.0.3~dev) UNRELEASED; urgency=medium
+
+  * UNRELEASED
+
+ -- Guido Günther <agx@sigxcpu.org>  Wed, 14 Aug 2024 17:00:38 +0200
+
 libcmatrix (0.0.2) experimental; urgency=medium
 
   [ Guido Günther ]

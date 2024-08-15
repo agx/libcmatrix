@@ -1,5 +1,5 @@
 project('libcmatrix', 'c',
-          version: '0.0.2',
+          version: '0.0.3-dev',
           license: 'LGPL-2.1-or-later',
     meson_version: '>= 0.63.0',
   default_options: [ 'warning_level=2', 'buildtype=debugoptimized', 'c_std=gnu18' ],
