@@ -22,6 +22,7 @@
 #include "users/cm-user-private.h"
 #include "cm-device-private.h"
 #include "cm-enc-private.h"
+#include "cm-enum-types.h"
 #include "cm-olm-private.h"
 #include "cm-client-private.h"
 #include "cm-room-private.h"
@@ -2589,9 +2590,16 @@ db_add_room_events (CmDb  *self,
         }
       else
         {
-          g_warning ("Failed to save event: %s, error: %s",
+          GEnumClass *klass = g_type_class_peek (CM_TYPE_EVENT_TYPE);
+          CmEventType event_type = cm_event_get_m_type (event);
+          GEnumValue *value = g_enum_get_value (klass, event_type);
+
+          g_warning ("Failed to save event (status: %d, room: %s): %s (%s), error: %s",
+                     status,
+                     room ?: "Not a room",
                      cm_event_get_id (event),
-                     sqlite3_errmsg (self->db));
+                     value ? value->value_nick : "Type unknown",
+                     status == SQLITE_ERROR ? sqlite3_errmsg (self->db) : "Unknown error");
         }
 
       prepend ? (--sorted_event_id) : (++sorted_event_id);
