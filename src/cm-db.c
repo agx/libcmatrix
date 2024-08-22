@@ -2547,7 +2547,8 @@ db_add_room_events (CmDb  *self,
                           "event_type,event_uid,txnid,replaces_event_id,replaces_event_cache_id,"
                           /*   9           10             11          12         13*/
                           "event_state,state_key,origin_server_ts,decryption,json_data) "
-                          "VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)",
+                          "VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)"
+                          "ON CONFLICT (room_events.room_id, room_events.event_uid) DO NOTHING;",
                           -1, &stmt, NULL);
       matrix_bind_int (stmt, 1, sorted_event_id, "binding when adding event");
       matrix_bind_int (stmt, 2, room_id, "binding when adding event");
