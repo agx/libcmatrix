@@ -1499,6 +1499,14 @@ cm_client_get_next_batch (CmClient *self)
   return self->next_batch;
 }
 
+/**
+ * cm_client_get_user_list:
+ * @self: The client
+ *
+ * Get the list of users known to the client
+ *
+ * Returns: (transfer none): The list of users known to the client.
+ */
 CmUserList *
 cm_client_get_user_list (CmClient *self)
 {
