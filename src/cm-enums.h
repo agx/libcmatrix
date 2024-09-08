@@ -78,8 +78,15 @@ typedef enum {
 /**
  * CmContentType:
  * @CM_CONTENT_TYPE_UNKNOWN: The content type is unknown
- * @CM_CONTENT_TYPE_TEXT: The event has a text content
- * @CM_CONTENT_TYPE_IMAGE: The event has an image content
+ * @CM_CONTENT_TYPE_TEXT: A text, possibly including formatted text
+ * @CM_CONTENT_TYPE_EMOTE: An emote action (similar to /me in IRC)
+ * @CM_CONTENT_TYPE_NOTICE: A notice is similar to text that is usually used by automated messages from bots
+ * @CM_CONTENT_TYPE_IMAGE: An image
+ * @CM_CONTENT_TYPE_FILE: A generic file
+ * @CM_CONTENT_TYPE_LOCATION: Location information in the form of a geo URI (RFC5870)
+ * @CM_CONTENT_TYPE_AUDIO: An audio clip
+ * @CM_CONTENT_TYPE_VIDEO: A video clip
+ * @CM_CONTENT_TYPE_SERVER_NOTICE: A server notice
  */
 typedef enum {
   CM_CONTENT_TYPE_UNKNOWN,
