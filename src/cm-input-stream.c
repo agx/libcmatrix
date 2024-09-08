@@ -167,6 +167,8 @@ cm_input_stream_finalize (GObject *object)
   g_clear_pointer (&self->checksum, g_checksum_free);
 
   g_clear_pointer (&self->buffer, g_free);
+  g_clear_pointer (&self->aes_iv_base64, g_free);
+  g_clear_pointer (&self->aes_key_base64, g_free);
 
   g_clear_object (&self->file);
   g_clear_object (&self->file_info);
