@@ -360,7 +360,7 @@ cm_input_stream_get_content_type (CmInputStream *self)
   if (content_type && !self->encrypt)
     return content_type;
 
-  return "application/octect-stream";
+  return "application/octet-stream";
 }
 
 goffset
