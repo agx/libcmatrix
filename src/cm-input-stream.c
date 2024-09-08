@@ -164,13 +164,10 @@ cm_input_stream_finalize (GObject *object)
 {
   CmInputStream *self = (CmInputStream *)object;
 
-  if (self->cipher_hd)
-    gcry_cipher_close (self->cipher_hd);
+  g_clear_pointer (&self->cipher_hd, gcry_cipher_close);
+  g_clear_pointer (&self->checksum, g_checksum_free);
 
-  if (self->checksum)
-    g_checksum_free (self->checksum);
-
-  g_free (self->buffer);
+  g_clear_pointer (&self->buffer, g_free);
 
   g_clear_object (&self->file);
   g_clear_object (&self->file_info);
