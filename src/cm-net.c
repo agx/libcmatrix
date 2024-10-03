@@ -240,7 +240,6 @@ queue_data (CmNet      *self,
   g_autoptr(SoupMessage) message = NULL;
   g_autoptr(GUri) uri = NULL;
   GUri *old_uri;
-  g_autoptr(GBytes) content_data = NULL;
   GCancellable *cancellable;
   SoupMessagePriority msg_priority;
   int priority = 0;
@@ -294,8 +293,9 @@ queue_data (CmNet      *self,
   soup_message_set_priority (message, msg_priority);
 
   if (data) {
-      content_data = g_bytes_new_take (data, size);
-      soup_message_set_request_body_from_bytes (message, "application/json", content_data);
+    g_autoptr(GBytes) content_data = g_bytes_new_take (data, size);
+
+    soup_message_set_request_body_from_bytes (message, "application/json", content_data);
   }
 
   cancellable = g_task_get_cancellable (task);
