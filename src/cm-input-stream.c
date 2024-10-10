@@ -26,7 +26,6 @@ struct _CmInputStream
 
   char              *aes_key_base64;
   char              *aes_iv_base64;
-  char              *sha256_base64;
 
   /* For files that will be used to upload */
   GFile             *file;
