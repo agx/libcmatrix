@@ -1788,6 +1788,7 @@ cm_room_send_text_async (CmRoom              *self,
   cm_event_create_txn_id (CM_EVENT (message),
                           cm_client_pop_event_id (self->client));
   g_task_set_task_data (task, message, g_object_unref);
+  g_task_set_source_tag (task, cm_room_send_text_async);
 
   user = room_find_user (self, cm_client_get_user_id (self->client), TRUE);
   cm_event_set_sender (CM_EVENT (message), user);
@@ -1869,6 +1870,7 @@ cm_room_send_file_async (CmRoom                *self,
   cm_event_create_txn_id (CM_EVENT (message),
                           cm_client_pop_event_id (self->client));
   g_task_set_task_data (task, message, g_object_unref);
+  g_task_set_source_tag (task, cm_room_send_file_async);
 
   user = room_find_user (self, cm_client_get_user_id (self->client), TRUE);
   cm_event_set_sender (CM_EVENT (message), user);

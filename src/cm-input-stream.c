@@ -26,7 +26,6 @@ struct _CmInputStream
 
   char              *aes_key_base64;
   char              *aes_iv_base64;
-  char              *sha256_base64;
 
   /* For files that will be used to upload */
   GFile             *file;
@@ -164,13 +163,12 @@ cm_input_stream_finalize (GObject *object)
 {
   CmInputStream *self = (CmInputStream *)object;
 
-  if (self->cipher_hd)
-    gcry_cipher_close (self->cipher_hd);
+  g_clear_pointer (&self->cipher_hd, gcry_cipher_close);
+  g_clear_pointer (&self->checksum, g_checksum_free);
 
-  if (self->checksum)
-    g_checksum_free (self->checksum);
-
-  g_free (self->buffer);
+  g_clear_pointer (&self->buffer, g_free);
+  g_clear_pointer (&self->aes_iv_base64, g_free);
+  g_clear_pointer (&self->aes_key_base64, g_free);
 
   g_clear_object (&self->file);
   g_clear_object (&self->file_info);
@@ -362,7 +360,7 @@ cm_input_stream_get_content_type (CmInputStream *self)
   if (content_type && !self->encrypt)
     return content_type;
 
-  return "application/octect-stream";
+  return "application/octet-stream";
 }
 
 goffset
