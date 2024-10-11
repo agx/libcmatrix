@@ -1396,6 +1396,25 @@ cm_client_get_homeserver (CmClient *self)
 }
 
 /**
+ * cm_client_get_homeserver_versions:
+ * @self: A #CmClient
+ *
+ * Get the suppported Matrix protocol versions of the home server set
+ * for the client.
+ *
+ * Returns: (nullable): The home server versions
+ *
+ * Since: 0.0.3
+ */
+const char * const *
+cm_client_get_homeserver_versions (CmClient *self)
+{
+  g_return_val_if_fail (CM_IS_CLIENT (self), NULL);
+
+  return (const char * const *)self->homeserver_versions;
+}
+
+/**
  * cm_client_set_password:
  * @self: A #CmClient
  * @password: The password for the @self

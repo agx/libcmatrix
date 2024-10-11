@@ -64,6 +64,8 @@ GRefString   *cm_client_get_user_id                   (CmClient            *self
 gboolean      cm_client_set_homeserver                (CmClient            *self,
                                                        const char          *homeserver);
 const char   *cm_client_get_homeserver                (CmClient            *self);
+const char * const *
+              cm_client_get_homeserver_versions       (CmClient            *self);
 void          cm_client_set_password                  (CmClient            *self,
                                                        const char          *password);
 const char   *cm_client_get_password                  (CmClient            *self);
