@@ -49,6 +49,7 @@ void           cm_net_send_json_async     (CmNet                 *self,
 void           cm_net_get_file_async      (CmNet                 *self,
                                            const char            *uri,
                                            CmEncFileInfo         *file_info,
+                                           const char * const    *versions,
                                            GCancellable          *cancellable,
                                            GAsyncReadyCallback    callback,
                                            gpointer               user_data);

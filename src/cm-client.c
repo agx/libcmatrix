@@ -3143,7 +3143,9 @@ find_file_enc_cb (GObject      *object,
   uri = g_task_get_task_data (task);
 
   cm_net_get_file_async (self->cm_net,
-                         uri, file_info, cancellable,
+                         uri, file_info,
+                         cm_client_get_homeserver_versions (self),
+                         cancellable,
                          get_file_cb,
                          g_steal_pointer (&task));
 }

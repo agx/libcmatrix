@@ -1454,7 +1454,9 @@ find_file_enc_cb (GObject      *object,
   uri = g_object_get_data (user_data, "uri");
 
   cm_net_get_file_async (cm_client_get_net (client),
-                         uri, file_info, cancellable,
+                         uri, file_info,
+                         cm_client_get_homeserver_versions (client),
+                         cancellable,
                          get_file_cb,
                          g_steal_pointer (&task));
 }
