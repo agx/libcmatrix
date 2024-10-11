@@ -268,6 +268,7 @@ queue_data (CmNet      *self,
 
       old_uri = uri;
       query_hash = soup_form_encode_hash (query);
+      /* TODO: Using ?access_token is deprecated as of Matrix 1.11 */
       uri = soup_uri_copy (old_uri, SOUP_URI_QUERY, query_hash, SOUP_URI_NONE);
       g_clear_pointer (&old_uri, g_uri_unref);
     }
