@@ -268,6 +268,7 @@ queue_data (CmNet      *self,
 
       old_uri = uri;
       query_hash = soup_form_encode_hash (query);
+      /* TODO: Using ?access_token is deprecated as of Matrix 1.11 */
       uri = soup_uri_copy (old_uri, SOUP_URI_QUERY, query_hash, SOUP_URI_NONE);
       g_clear_pointer (&old_uri, g_uri_unref);
     }
@@ -515,6 +516,7 @@ void
 cm_net_get_file_async (CmNet                 *self,
                        const char            *uri,
                        CmEncFileInfo         *enc_file,
+                       const char * const    *versions,
                        GCancellable          *cancellable,
                        GAsyncReadyCallback    callback,
                        gpointer               user_data)
@@ -522,6 +524,7 @@ cm_net_get_file_async (CmNet                 *self,
   g_autofree char *url = NULL;
   SoupMessage *msg;
   GTask *task;
+  gboolean needs_auth = FALSE;
 
   g_return_if_fail (CM_IS_NET (self));
   g_return_if_fail (uri && *uri);
@@ -533,8 +536,16 @@ cm_net_get_file_async (CmNet                 *self,
     const char *file_url;
 
     file_url = uri + strlen ("mxc://");
-    url = g_strconcat (self->homeserver,
-                       "/_matrix/media/r0/download/", file_url, NULL);
+    if (versions && g_strv_contains (versions, "v1.11")) {
+      /* Endpoints for authenticated media
+       * https://matrix.org/blog/2024/06/20/matrix-v1.11-release/ */
+      url = g_strconcat (self->homeserver,
+                         "/_matrix/client/v1/media/download/", file_url, NULL);
+      needs_auth = TRUE;
+    } else {
+      url = g_strconcat (self->homeserver,
+                         "/_matrix/media/r0/download/", file_url, NULL);
+    }
   }
 
   if (!url)
@@ -546,6 +557,13 @@ cm_net_get_file_async (CmNet                 *self,
   g_object_set_data_full (G_OBJECT (task), "url", g_strdup (url), g_free);
   g_object_set_data (G_OBJECT (task), "file", enc_file);
   g_object_set_data_full (G_OBJECT (task), "msg", msg, g_object_unref);
+
+  if (needs_auth && self->access_token) {
+    SoupMessageHeaders *headers = soup_message_get_request_headers (msg);
+    g_autofree char *auth = g_strdup_printf ("Bearer %s", self->access_token);
+
+    soup_message_headers_replace (headers, "Authorization", auth);
+  }
 
   soup_session_send_async (self->file_session, msg, 0, cancellable,
                            net_get_file_stream_cb, task);

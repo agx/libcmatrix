@@ -80,7 +80,7 @@ void          cm_utils_verify_homeserver_async  (const char          *server,
                                                  GCancellable        *cancellable,
                                                  GAsyncReadyCallback  callback,
                                                  gpointer             user_data);
-gboolean      cm_utils_verify_homeserver_finish (GAsyncResult        *result,
+GStrv         cm_utils_verify_homeserver_finish (GAsyncResult        *result,
                                                  GError             **error);
 void          cm_utils_save_url_to_path_async     (CmClient              *client,
                                                    const char            *uri,

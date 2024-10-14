@@ -1247,6 +1247,7 @@ api_get_version_cb (GObject      *obj,
   GError *error = NULL;
   const char *server;
   gboolean valid;
+  g_auto(GStrv) versions = NULL;
 
   g_assert (G_IS_TASK (task));
 
@@ -1278,10 +1279,8 @@ api_get_version_cb (GObject      *obj,
 
   if (array)
     {
-      g_autoptr(GString) versions = NULL;
+      GStrvBuilder *builder = g_strv_builder_new ();
       guint length;
-
-      versions = g_string_new ("");
       length = json_array_get_length (array);
 
       for (guint i = 0; i < length; i++)
@@ -1289,20 +1288,21 @@ api_get_version_cb (GObject      *obj,
           const char *version;
 
           version = json_array_get_string_element (array, i);
-          g_string_append_printf (versions, " %s", version);
+          g_strv_builder_add (builder, version);
 
-          /* We have tested only with r0.6.x and r0.5.0 */
           if (g_str_has_prefix (version, "r0.5.") ||
               g_str_has_prefix (version, "r0.6.") ||
               g_str_has_prefix (version, "v1."))
             valid = TRUE;
         }
-
-      g_debug ("'%s' has versions:%s, valid: %d",
-               server, versions->str, valid);
+      versions = g_strv_builder_end (builder);
     }
 
-  g_task_return_boolean (task, valid);
+  if (valid)
+    g_task_return_pointer (task, g_steal_pointer (&versions), (GDestroyNotify)g_strfreev);
+  else
+    g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED,
+                             "No supported server version found");
 }
 
 void
@@ -1337,13 +1337,13 @@ cm_utils_verify_homeserver_async (const char          *server,
                            g_steal_pointer (&task));
 }
 
-gboolean
+GStrv
 cm_utils_verify_homeserver_finish (GAsyncResult  *result,
                                    GError       **error)
 {
   g_return_val_if_fail (G_IS_TASK (result), FALSE);
 
-  return g_task_propagate_boolean (G_TASK (result), error);
+  return g_task_propagate_pointer (G_TASK (result), error);
 }
 
 static void
@@ -1454,7 +1454,9 @@ find_file_enc_cb (GObject      *object,
   uri = g_object_get_data (user_data, "uri");
 
   cm_net_get_file_async (cm_client_get_net (client),
-                         uri, file_info, cancellable,
+                         uri, file_info,
+                         cm_client_get_homeserver_versions (client),
+                         cancellable,
                          get_file_cb,
                          g_steal_pointer (&task));
 }

@@ -63,6 +63,7 @@ struct _CmClient
   GObject         parent_instance;
 
   char           *homeserver;
+  GStrv           homeserver_versions;
   char           *password;
   char           *device_id;
   char           *device_name;
@@ -553,6 +554,7 @@ cm_client_finalize (GObject *object)
 
   g_hash_table_unref (self->direct_rooms);
 
+  g_clear_pointer (&self->homeserver_versions, g_strfreev);
   g_free (self->homeserver);
   g_free (self->device_id);
   g_free (self->device_name);
@@ -1394,6 +1396,25 @@ cm_client_get_homeserver (CmClient *self)
 }
 
 /**
+ * cm_client_get_homeserver_versions:
+ * @self: A #CmClient
+ *
+ * Get the suppported Matrix protocol versions of the home server set
+ * for the client.
+ *
+ * Returns: (nullable): The home server versions
+ *
+ * Since: 0.0.3
+ */
+const char * const *
+cm_client_get_homeserver_versions (CmClient *self)
+{
+  g_return_val_if_fail (CM_IS_CLIENT (self), NULL);
+
+  return (const char * const *)self->homeserver_versions;
+}
+
+/**
  * cm_client_set_password:
  * @self: A #CmClient
  * @password: The password for the @self
@@ -1869,7 +1890,9 @@ client_verify_homeserver_cb (GObject      *obj,
   g_assert (CM_IS_CLIENT (self));
 
   client_set_login_state (self, FALSE, FALSE);
-  self->homeserver_verified = cm_utils_verify_homeserver_finish (result, &error);
+  self->homeserver_versions = cm_utils_verify_homeserver_finish (result, &error);
+  self->homeserver_verified = self->homeserver_versions && self->homeserver_versions[0];
+
   g_object_set_data (G_OBJECT (task), "action", "verify-homeserver");
 
   g_debug ("(%p) Verify home server %s", self, CM_LOG_SUCCESS (!error));
@@ -3120,7 +3143,9 @@ find_file_enc_cb (GObject      *object,
   uri = g_task_get_task_data (task);
 
   cm_net_get_file_async (self->cm_net,
-                         uri, file_info, cancellable,
+                         uri, file_info,
+                         cm_client_get_homeserver_versions (self),
+                         cancellable,
                          get_file_cb,
                          g_steal_pointer (&task));
 }
