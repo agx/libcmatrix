@@ -253,8 +253,7 @@ queue_data (CmNet      *self,
             method == SOUP_METHOD_POST ||
             method == SOUP_METHOD_PUT);
 
-  uri = g_uri_parse (self->homeserver, SOUP_HTTP_URI_FLAGS, NULL);
-  old_uri = uri;
+  old_uri = g_uri_parse (self->homeserver, SOUP_HTTP_URI_FLAGS, NULL);
   uri = soup_uri_copy (old_uri, SOUP_URI_PATH, uri_path, SOUP_URI_NONE);
   g_clear_pointer (&old_uri, g_uri_unref);
 
