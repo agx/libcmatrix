@@ -261,13 +261,11 @@ queue_data (CmNet      *self,
     if (!query)
       query = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
 
-    g_hash_table_replace (query, g_strdup ("access_token"), g_strdup (self->access_token));
     {
       g_autofree char *query_hash = NULL;
 
       old_uri = uri;
       query_hash = soup_form_encode_hash (query);
-      /* TODO: Using ?access_token is deprecated as of Matrix 1.11 */
       uri = soup_uri_copy (old_uri, SOUP_URI_QUERY, query_hash, SOUP_URI_NONE);
       g_clear_pointer (&old_uri, g_uri_unref);
     }
@@ -276,6 +274,10 @@ queue_data (CmNet      *self,
 
   message = soup_message_new_from_uri (method, uri);
   soup_message_headers_append (soup_message_get_request_headers (message), "Accept-Encoding", "gzip");
+  if (self->access_token) {
+    g_autofree char *header = g_strdup_printf ("Bearer %s", self->access_token);
+    soup_message_headers_append (soup_message_get_request_headers (message), "Authorization", header);
+  }
 
   priority = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (task), "priority"));
 
