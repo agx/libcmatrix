@@ -2643,7 +2643,7 @@ cm_room_load_joined_members_async (CmRoom              *self,
   if (self->joined_members_loading)
     {
       g_debug ("(%p) Load joined members, members already being loaded", self);
-      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED,
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_PENDING,
                                "Members list are already loading");
       return;
     }
