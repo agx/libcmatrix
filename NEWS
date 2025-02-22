@@ -1,3 +1,17 @@
+libcmatrix 0.0.3
+----------------
+Released February 2025
+* Use endpoints for authenticated media
+* Use authorization header
+* Fix warning when accounts share rooms
+* Fix leaks
+* Issues fixed:
+    * https://source.puri.sm/Librem5/libcmatrix/-/issues/50
+    * https://source.puri.sm/Librem5/libcmatrix/-/issues/55
+* Contributors:
+    * Evangelos Ribeiro Tzaras
+    * Guido Günther
+
 libcmatrix 0.0.2
 ----------------
 Released August 2024

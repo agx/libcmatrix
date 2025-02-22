@@ -1,8 +1,48 @@
-libcmatrix (0.0.3~dev) UNRELEASED; urgency=medium
+libcmatrix (0.0.3) experimental; urgency=medium
 
-  * UNRELEASED
+  [ Guido Günther ]
+  * utils: Let verify_home_server return the supported versions.
+    This will allow clients to make decisions based on that.
+  * client: Allow to get homeserver versions.
+    We make this public as it might be interesting for clients to
+    present that information to the user.
+  * net: Use endpoints for authenticated media.
+    When the server supports it we want to use the endpoints for
+    authenticated media. See
+      <https://matrix.org/blog/2024/06/20/matrix-v1.11-release/>
+    Closes: https://source.puri.sm/Librem5/libcmatrix/-/issues/50
+  * net: Drop superfluous assignment.
+    No point in assigning to `uri` first
+  * net: Use Auhorization header.
+    The access token is deprecated, see:
+      <https://matrix.org/blog/2024/06/20/matrix-v1.11-release/>
+    We don't implement a fallback since using an auth header
+    is supported since 0.3.0.
+    Closes: https://source.puri.sm/Librem5/libcmatrix/-/issues/55
+  * net: Always process the query part.
+    This shouldn't be conditinal on the access token
 
- -- Guido Günther <agx@sigxcpu.org>  Wed, 14 Aug 2024 17:00:38 +0200
+  [ Evangelos Ribeiro Tzaras ]
+  * db: Include more information when failing to save event to DB.
+    This allows to learn more about the event that couldn't be saved.
+  * db: Ignore failed constraint when saving events.
+    This fixes a warning that occurs when multiple accounts share rooms and
+    therefore events.
+    The "INSERT INTO TABLE VALUES(..) ON CONFLICT ..." is a non-standard
+    SQL clause, usually referred to as "UPSERT", see the docs:
+    https://sqlite.org/lang_upsert.html
+  * enums: Complete CmContentType docs.
+    Looked up on
+    https://spec.matrix.org/v1.11/client-server-api/#mroommessage
+  * input-stream: Prefer g_clear_* instead of emulating it
+  * input-stream: Remove unused variable
+  * input-stream: Fix memory leaks
+  * input-stream: Fix typo in fallback content type
+  * room: Tag task when sending. Makes it easier to debug when things go
+    wrong.
+  * client: Add docstring
+
+ -- Guido Günther <agx@sigxcpu.org>  Sun, 16 Feb 2025 16:46:58 +0100
 
 libcmatrix (0.0.2) experimental; urgency=medium
 
