@@ -2626,7 +2626,7 @@ cm_room_load_joined_members_async (CmRoom              *self,
                                    gpointer             user_data)
 {
   g_autofree char *uri = NULL;
-  GTask *task;
+  g_autoptr (GTask) task = NULL;
 
   g_return_if_fail (CM_IS_ROOM (self));
 
@@ -2652,7 +2652,7 @@ cm_room_load_joined_members_async (CmRoom              *self,
 
   uri = g_strconcat ("/_matrix/client/r0/rooms/", self->room_id, "/joined_members", NULL);
   cm_net_send_json_async (cm_client_get_net (self->client), -1, NULL, uri, SOUP_METHOD_GET,
-                          NULL, cancellable, get_joined_members_cb, task);
+                          NULL, cancellable, get_joined_members_cb, g_steal_pointer (&task));
 }
 
 gboolean
