@@ -889,6 +889,9 @@ cm_room_get_joined_members (CmRoom *self)
 {
   g_return_val_if_fail (CM_IS_ROOM (self), NULL);
 
+  if (!self->joined_members_loaded)
+    cm_room_load_joined_members_async (self, NULL, NULL, NULL);
+
   return G_LIST_MODEL (self->joined_members);
 }
 
