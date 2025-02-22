@@ -1,3 +1,9 @@
+libcmatrix (0.0.4~dev) UNRELEASED; urgency=medium
+
+  * UNRELEASED
+
+ -- Evangelos Ribeiro Tzaras <devrtz@fortysixandtwo.eu>  Sat, 22 Feb 2025 08:12:37 +0100
+
 libcmatrix (0.0.3) experimental; urgency=medium
 
   [ Guido Günther ]
