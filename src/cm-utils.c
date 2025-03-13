@@ -502,10 +502,6 @@ cm_utils_user_name_valid (const char *matrix_user_id)
   if (!matrix_user_id || !*matrix_user_id)
     return FALSE;
 
-  /* GRegex is deprecated, but we can change this anytime:
-   * https://gitlab.gnome.org/GNOME/glib/-/merge_requests/1451
-   * https://gitlab.gnome.org/GNOME/glib/-/merge_requests/2529
-   */
   if (!g_regex_match_simple (MATRIX_USER_ID_RE, matrix_user_id, G_REGEX_CASELESS, 0))
     return FALSE;
 
