@@ -399,23 +399,13 @@ load_accounts_from_secrets (CmMatrix  *self,
       if (!client)
         continue;
 
-      if (!g_object_get_data (G_OBJECT (self->secret_store), "force-save")) {
-        g_list_store_append (self->clients_list, client);
+      g_list_store_append (self->clients_list, client);
 
-        if (!self->disable_auto_login)
-          cm_client_enable_as_in_store (client);
-      }
+      if (!self->disable_auto_login)
+        cm_client_enable_as_in_store (client);
 
       g_ptr_array_add (clients, g_steal_pointer (&client));
     }
-
-  if (g_object_get_data (G_OBJECT (self->secret_store), "force-save")) {
-    GTask *task;
-
-    task = g_task_new (self, NULL, NULL, NULL);
-    g_task_set_task_data (task, g_ptr_array_ref (clients), (GDestroyNotify)g_ptr_array_unref);
-    matrix_save_client (NULL, NULL, task);
-  }
 }
 
 static void
